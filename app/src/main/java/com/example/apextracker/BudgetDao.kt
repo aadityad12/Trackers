@@ -1,6 +1,7 @@
 package com.example.apextracker
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -14,6 +15,9 @@ interface BudgetDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertItem(item: BudgetItem): Long
+
+    @Delete
+    suspend fun deleteItem(item: BudgetItem)
 
     @Query("SELECT * FROM budget_items WHERE date = :date")
     fun getItemsByDate(date: LocalDate): Flow<List<BudgetItem>>

@@ -22,4 +22,10 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
             )
         }
     }
+
+    fun deleteItem(item: BudgetItem) {
+        viewModelScope.launch {
+            budgetDao.deleteItem(item)
+        }
+    }
 }

@@ -16,6 +16,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -85,7 +86,7 @@ fun BudgetTrackerApp(viewModel: BudgetViewModel = viewModel()) {
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             if (currentScreen == Screen.List) {
-                BudgetListView(items)
+                BudgetListView(items, onDelete = { viewModel.deleteItem(it) })
             } else {
                 CalendarView(items)
             }
@@ -104,15 +105,13 @@ fun BudgetTrackerApp(viewModel: BudgetViewModel = viewModel()) {
 }
 
 @Composable
-fun BudgetListView(items: List<BudgetItem>) {
+fun BudgetListView(items: List<BudgetItem>, onDelete: (BudgetItem) -> Unit) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // items is already sorted by date DESC from the DAO
         val groupedItems = items.groupBy { it.date }
-        // Sorting keys descending ensures newest date is first
         groupedItems.keys.sortedDescending().forEach { date ->
             val itemsForDate = groupedItems[date] ?: emptyList()
             item {
@@ -123,7 +122,7 @@ fun BudgetListView(items: List<BudgetItem>) {
                 )
             }
             items(itemsForDate) { item ->
-                BudgetListItem(item)
+                BudgetListItem(item, onDelete = { onDelete(item) })
             }
             item {
                 val dailyTotal = itemsForDate.sumOf { it.amount }
@@ -293,26 +292,39 @@ fun DayBreakdownDialog(date: LocalDate, items: List<BudgetItem>, onDismiss: () -
 }
 
 @Composable
-fun BudgetListItem(item: BudgetItem) {
+fun BudgetListItem(item: BudgetItem, onDelete: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(text = item.title, style = MaterialTheme.typography.titleLarge)
-                Text(
-                    text = "$${String.format(Locale.US, "%.2f", item.amount)}",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.primary
-                )
+        Row(
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(text = item.title, style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        text = "$${String.format(Locale.US, "%.2f", item.amount)}",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                if (!item.description.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = item.description, style = MaterialTheme.typography.bodyMedium)
+                }
             }
-            if (!item.description.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(text = item.description, style = MaterialTheme.typography.bodyMedium)
+            
+            IconButton(onClick = onDelete) {
+                Icon(
+                    Icons.Default.Delete, 
+                    contentDescription = "Delete Item",
+                    tint = MaterialTheme.colorScheme.error
+                )
             }
         }
     }
