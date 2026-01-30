@@ -15,9 +15,9 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
@@ -28,7 +28,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -55,7 +54,7 @@ class MainActivity : ComponentActivity() {
 }
 
 enum class Screen {
-    List, Calendar, Categories
+    List, Calendar, Settings
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,7 +71,7 @@ fun BudgetTrackerApp(viewModel: BudgetViewModel = viewModel()) {
                 Text(when(currentScreen) {
                     Screen.List -> "Budget Tracker"
                     Screen.Calendar -> "Calendar View"
-                    Screen.Categories -> "Manage Categories"
+                    Screen.Settings -> "Settings"
                 }) 
             })
         },
@@ -91,15 +90,15 @@ fun BudgetTrackerApp(viewModel: BudgetViewModel = viewModel()) {
                     label = { Text("Calendar") }
                 )
                 NavigationBarItem(
-                    selected = currentScreen == Screen.Categories,
-                    onClick = { currentScreen = Screen.Categories },
-                    icon = { Icon(Icons.Default.Settings, contentDescription = "Categories") },
-                    label = { Text("Categories") }
+                    selected = currentScreen == Screen.Settings,
+                    onClick = { currentScreen = Screen.Settings },
+                    icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
+                    label = { Text("Settings") }
                 )
             }
         },
         floatingActionButton = {
-            if (currentScreen != Screen.Categories) {
+            if (currentScreen != Screen.Settings) {
                 FloatingActionButton(onClick = { showAddDialog = true }) {
                     Icon(Icons.Default.Add, contentDescription = "Add Item")
                 }
@@ -110,10 +109,7 @@ fun BudgetTrackerApp(viewModel: BudgetViewModel = viewModel()) {
             when (currentScreen) {
                 Screen.List -> BudgetListView(items, categories, onDelete = { viewModel.deleteItem(it) })
                 Screen.Calendar -> CalendarView(items, categories)
-                Screen.Categories -> CategoriesView(categories, 
-                    onAdd = { name, color -> viewModel.addCategory(name, color) },
-                    onDelete = { viewModel.deleteCategory(it) }
-                )
+                Screen.Settings -> SettingsView(categories, viewModel)
             }
         }
 
@@ -126,6 +122,57 @@ fun BudgetTrackerApp(viewModel: BudgetViewModel = viewModel()) {
                     showAddDialog = false
                 }
             )
+        }
+    }
+}
+
+@Composable
+fun SettingsView(categories: List<Category>, viewModel: BudgetViewModel) {
+    var showCategories by remember { mutableStateOf(false) }
+
+    if (showCategories) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { showCategories = false }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                }
+                Text(
+                    text = "Manage Categories",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
+            }
+            HorizontalDivider()
+            CategoriesView(
+                categories = categories,
+                onAdd = { name, color -> viewModel.addCategory(name, color) },
+                onDelete = { viewModel.deleteCategory(it) }
+            )
+        }
+    } else {
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showCategories = true },
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Manage Categories", style = MaterialTheme.typography.bodyLarge)
+                    Text(">", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.outline)
+                }
+            }
         }
     }
 }
