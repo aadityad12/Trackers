@@ -11,5 +11,6 @@ data class BudgetItem(
     val title: String,
     val amount: Double,
     val description: String? = null,
-    val date: LocalDate = LocalDate.now()
+    val date: LocalDate = LocalDate.now(),
+    val categoryId: Long? = null
 )
