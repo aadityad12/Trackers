@@ -410,8 +410,7 @@ fun CategoriesView(
             items(categories) { category ->
                 CategoryItem(
                     category = category, 
-                    onEdit = { categoryToEdit = category },
-                    onDelete = { onDelete(category) }
+                    onEdit = { categoryToEdit = category }
                 )
             }
         }
@@ -434,13 +433,17 @@ fun CategoriesView(
             onConfirm = { name, color ->
                 onUpdate(categoryToEdit!!.copy(name = name, colorHex = color))
                 categoryToEdit = null
+            },
+            onDelete = {
+                onDelete(categoryToEdit!!)
+                categoryToEdit = null
             }
         )
     }
 }
 
 @Composable
-fun CategoryItem(category: Category, onEdit: () -> Unit, onDelete: () -> Unit) {
+fun CategoryItem(category: Category, onEdit: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -456,13 +459,8 @@ fun CategoryItem(category: Category, onEdit: () -> Unit, onDelete: () -> Unit) {
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(category.name, style = MaterialTheme.typography.bodyLarge)
             }
-            Row {
-                IconButton(onClick = onEdit) {
-                    Icon(Icons.Default.Edit, contentDescription = "Edit")
-                }
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
-                }
+            IconButton(onClick = onEdit) {
+                Icon(Icons.Default.Edit, contentDescription = "Edit")
             }
         }
     }
@@ -474,7 +472,8 @@ fun CategoryDialog(
     initialName: String = "",
     initialColor: String? = null,
     onDismiss: () -> Unit,
-    onConfirm: (String, String) -> Unit
+    onConfirm: (String, String) -> Unit,
+    onDelete: (() -> Unit)? = null
 ) {
     var name by remember { mutableStateOf(initialName) }
     // Gmail-inspired colors (24 colors)
@@ -488,7 +487,16 @@ fun CategoryDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        title = { 
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(title)
+                if (onDelete != null) {
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 OutlinedTextField(
