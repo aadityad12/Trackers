@@ -48,6 +48,7 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
     val items by viewModel.allItems.collectAsState(initial = emptyList())
     val categories by viewModel.allCategories.collectAsState(initial = emptyList())
     var showAddDialog by remember { mutableStateOf(false) }
+    var itemToEdit by remember { mutableStateOf<BudgetItem?>(null) }
     var currentScreen by remember { mutableStateOf(BudgetScreen.Overview) }
 
     Scaffold(
@@ -99,14 +100,15 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             when (currentScreen) {
-                BudgetScreen.Overview -> OverviewView(items, categories, onDelete = { viewModel.deleteItem(it) })
+                BudgetScreen.Overview -> OverviewView(items, categories, onEdit = { itemToEdit = it })
                 BudgetScreen.Calendar -> BudgetCalendarView(items, categories)
                 BudgetScreen.Settings -> BudgetSettingsView(categories, viewModel)
             }
         }
 
         if (showAddDialog) {
-            AddBudgetItemDialog(
+            BudgetItemDialog(
+                title = "Add Budget Item",
                 categories = categories,
                 onDismiss = { showAddDialog = false },
                 onConfirm = { title, amount, description, date, categoryId ->
@@ -115,11 +117,38 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
                 }
             )
         }
+
+        if (itemToEdit != null) {
+            BudgetItemDialog(
+                title = "Edit Budget Item",
+                initialTitle = itemToEdit!!.title,
+                initialAmount = itemToEdit!!.amount.toString(),
+                initialDescription = itemToEdit!!.description ?: "",
+                initialDate = itemToEdit!!.date,
+                initialCategoryId = itemToEdit!!.categoryId,
+                categories = categories,
+                onDismiss = { itemToEdit = null },
+                onConfirm = { title, amount, description, date, categoryId ->
+                    viewModel.updateItem(itemToEdit!!.copy(
+                        title = title,
+                        amount = amount,
+                        description = description,
+                        date = date,
+                        categoryId = categoryId
+                    ))
+                    itemToEdit = null
+                },
+                onDelete = {
+                    viewModel.deleteItem(itemToEdit!!)
+                    itemToEdit = null
+                }
+            )
+        }
     }
 }
 
 @Composable
-fun OverviewView(items: List<BudgetItem>, categories: List<Category>, onDelete: (BudgetItem) -> Unit) {
+fun OverviewView(items: List<BudgetItem>, categories: List<Category>, onEdit: (BudgetItem) -> Unit) {
     var selectedMonth by remember { mutableStateOf(YearMonth.now()) }
     
     val availableMonths = items.map { YearMonth.from(it.date) }.distinct().sortedDescending()
@@ -159,7 +188,7 @@ fun OverviewView(items: List<BudgetItem>, categories: List<Category>, onDelete: 
                         ExpandableCategorySection(
                             category = category,
                             items = catItems,
-                            onDelete = onDelete
+                            onEdit = onEdit
                         )
                     }
                 }
@@ -222,7 +251,7 @@ fun ExpenditureCard(totalExpenditure: Double, monthItems: List<BudgetItem>, cate
 }
 
 @Composable
-fun ExpandableCategorySection(category: Category?, items: List<BudgetItem>, onDelete: (BudgetItem) -> Unit) {
+fun ExpandableCategorySection(category: Category?, items: List<BudgetItem>, onEdit: (BudgetItem) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     val catColor = category?.let { Color(android.graphics.Color.parseColor(it.colorHex)) } ?: Color.Gray
 
@@ -261,7 +290,7 @@ fun ExpandableCategorySection(category: Category?, items: List<BudgetItem>, onDe
         AnimatedVisibility(visible = expanded) {
             Column(modifier = Modifier.padding(top = 4.dp)) {
                 items.sortedByDescending { it.date }.forEach { item ->
-                    BudgetListItem(item, category, onDelete = { onDelete(item) })
+                    BudgetListItem(item, category, onClick = { onEdit(item) })
                     Spacer(modifier = Modifier.height(4.dp))
                 }
             }
@@ -642,10 +671,10 @@ fun TotalRow(total: Double) {
 }
 
 @Composable
-fun BudgetListItem(item: BudgetItem, category: Category?, onDelete: () -> Unit) {
+fun BudgetListItem(item: BudgetItem, category: Category?, onClick: () -> Unit) {
     val catColor = category?.let { Color(android.graphics.Color.parseColor(it.colorHex)) } ?: MaterialTheme.colorScheme.surface
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(containerColor = if (category != null) catColor.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface)
     ) {
@@ -659,9 +688,6 @@ fun BudgetListItem(item: BudgetItem, category: Category?, onDelete: () -> Unit) 
                 if (category != null) {
                     Text(text = category.name, style = MaterialTheme.typography.labelSmall, color = catColor)
                 }
-            }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete Item", tint = MaterialTheme.colorScheme.error)
             }
         }
     }
@@ -683,12 +709,23 @@ fun BudgetListItemHeader(item: BudgetItem, category: Category?) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddBudgetItemDialog(categories: List<Category>, onDismiss: () -> Unit, onConfirm: (String, Double, String?, LocalDate, Long?) -> Unit) {
-    var title by remember { mutableStateOf("") }
-    var amount by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var date by remember { mutableStateOf(LocalDate.now()) }
-    var selectedCategory by remember { mutableStateOf<Category?>(null) }
+fun BudgetItemDialog(
+    title: String,
+    initialTitle: String = "",
+    initialAmount: String = "",
+    initialDescription: String = "",
+    initialDate: LocalDate = LocalDate.now(),
+    initialCategoryId: Long? = null,
+    categories: List<Category>,
+    onDismiss: () -> Unit,
+    onConfirm: (String, Double, String?, LocalDate, Long?) -> Unit,
+    onDelete: (() -> Unit)? = null
+) {
+    var itemTitle by remember { mutableStateOf(initialTitle) }
+    var amount by remember { mutableStateOf(initialAmount) }
+    var description by remember { mutableStateOf(initialDescription) }
+    var date by remember { mutableStateOf(initialDate) }
+    var selectedCategory by remember { mutableStateOf(categories.find { it.id == initialCategoryId }) }
     var expanded by remember { mutableStateOf(false) }
     
     val context = LocalContext.current
@@ -698,17 +735,26 @@ fun AddBudgetItemDialog(categories: List<Category>, onDismiss: () -> Unit, onCon
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Budget Item") },
+        title = { 
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(title)
+                if (onDelete != null) {
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = itemTitle, onValueChange = { itemTitle = it }, label = { Text("Title") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = amount, onValueChange = { if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d{0,2}$"))) amount = it }, label = { Text("Amount") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
                 CategoryDropdown(categories, selectedCategory, expanded, onExpandedChange = { expanded = it }, onCategorySelected = { selectedCategory = it; expanded = false })
                 OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description (Optional)") }, modifier = Modifier.fillMaxWidth())
                 TextButton(onClick = { datePickerDialog.show() }, modifier = Modifier.fillMaxWidth()) { Text("Date: ${date.format(DateTimeFormatter.ISO_LOCAL_DATE)}") }
             }
         },
-        confirmButton = { Button(onClick = { if (title.isNotBlank()) onConfirm(title, amount.toDoubleOrNull() ?: 0.0, description.ifBlank { null }, date, selectedCategory?.id) }) { Text("Add") } },
+        confirmButton = { Button(onClick = { if (itemTitle.isNotBlank()) onConfirm(itemTitle, amount.toDoubleOrNull() ?: 0.0, description.ifBlank { null }, date, selectedCategory?.id) }) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }

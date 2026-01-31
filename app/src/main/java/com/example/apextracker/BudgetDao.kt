@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
 
@@ -15,6 +16,9 @@ interface BudgetDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertItem(item: BudgetItem): Long
+
+    @Update
+    suspend fun updateItem(item: BudgetItem)
 
     @Delete
     suspend fun deleteItem(item: BudgetItem)

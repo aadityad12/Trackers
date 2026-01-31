@@ -29,6 +29,12 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun updateItem(item: BudgetItem) {
+        viewModelScope.launch {
+            budgetDao.updateItem(item)
+        }
+    }
+
     fun deleteItem(item: BudgetItem) {
         viewModelScope.launch {
             budgetDao.deleteItem(item)
