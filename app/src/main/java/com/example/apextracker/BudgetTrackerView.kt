@@ -17,6 +17,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -98,8 +100,8 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             when (currentScreen) {
                 BudgetScreen.Overview -> OverviewView(items, categories, onDelete = { viewModel.deleteItem(it) })
-                BudgetScreen.Calendar -> CalendarView(items, categories)
-                BudgetScreen.Settings -> SettingsView(categories, viewModel)
+                BudgetScreen.Calendar -> BudgetCalendarView(items, categories)
+                BudgetScreen.Settings -> BudgetSettingsView(categories, viewModel)
             }
         }
 
@@ -174,14 +176,14 @@ fun MonthSelector(currentMonth: YearMonth, onMonthChange: (YearMonth) -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = { onMonthChange(currentMonth.minusMonths(1)) }) {
-            Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "Previous Month")
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous Month")
         }
         Text(
             text = currentMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
             style = MaterialTheme.typography.titleLarge
         )
         IconButton(onClick = { onMonthChange(currentMonth.plusMonths(1)) }) {
-            Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Next Month")
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next Month")
         }
     }
 }
@@ -314,7 +316,7 @@ fun ExpensePieChart(items: List<BudgetItem>, categories: List<Category>) {
 }
 
 @Composable
-fun SettingsView(categories: List<Category>, viewModel: BudgetViewModel) {
+fun BudgetSettingsView(categories: List<Category>, viewModel: BudgetViewModel) {
     var showCategories by remember { mutableStateOf(false) }
 
     if (showCategories) {
@@ -332,6 +334,7 @@ fun SettingsView(categories: List<Category>, viewModel: BudgetViewModel) {
             CategoriesView(
                 categories = categories,
                 onAdd = { name, color -> viewModel.addCategory(name, color) },
+                onUpdate = { viewModel.updateCategory(it) },
                 onDelete = { viewModel.deleteCategory(it) }
             )
         }
@@ -354,14 +357,20 @@ fun BudgetSettingsItem(label: String, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(label, style = MaterialTheme.typography.bodyLarge)
-            Icon(Icons.Default.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
         }
     }
 }
 
 @Composable
-fun CategoriesView(categories: List<Category>, onAdd: (String, String) -> Unit, onDelete: (Category) -> Unit) {
+fun CategoriesView(
+    categories: List<Category>, 
+    onAdd: (String, String) -> Unit, 
+    onUpdate: (Category) -> Unit,
+    onDelete: (Category) -> Unit
+) {
     var showAddDialog by remember { mutableStateOf(false) }
+    var categoryToEdit by remember { mutableStateOf<Category?>(null) }
     
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Button(onClick = { showAddDialog = true }, modifier = Modifier.fillMaxWidth()) {
@@ -370,36 +379,75 @@ fun CategoriesView(categories: List<Category>, onAdd: (String, String) -> Unit, 
         Spacer(modifier = Modifier.height(16.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(categories) { category ->
-                CategoryItem(category, onDelete = { onDelete(category) })
+                CategoryItem(
+                    category = category, 
+                    onEdit = { categoryToEdit = category },
+                    onDelete = { onDelete(category) }
+                )
             }
         }
     }
-    if (showAddDialog) AddCategoryDialog(onDismiss = { showAddDialog = false }, onConfirm = onAdd)
+
+    if (showAddDialog) {
+        CategoryDialog(
+            title = "New Category",
+            onDismiss = { showAddDialog = false },
+            onConfirm = { name, color -> onAdd(name, color) }
+        )
+    }
+    
+    if (categoryToEdit != null) {
+        CategoryDialog(
+            title = "Edit Category",
+            initialName = categoryToEdit!!.name,
+            initialColor = categoryToEdit!!.colorHex,
+            onDismiss = { categoryToEdit = null },
+            onConfirm = { name, color ->
+                onUpdate(categoryToEdit!!.copy(name = name, colorHex = color))
+                categoryToEdit = null
+            }
+        )
+    }
 }
 
 @Composable
-fun CategoryItem(category: Category, onDelete: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+fun CategoryItem(category: Category, onEdit: () -> Unit, onDelete: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onEdit)
+    ) {
         Row(
             modifier = Modifier.padding(16.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                 Box(modifier = Modifier.size(24.dp).background(Color(android.graphics.Color.parseColor(category.colorHex)), CircleShape))
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(category.name, style = MaterialTheme.typography.bodyLarge)
             }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+            Row {
+                IconButton(onClick = onEdit) {
+                    Icon(Icons.Default.Edit, contentDescription = "Edit")
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                }
             }
         }
     }
 }
 
 @Composable
-fun AddCategoryDialog(onDismiss: () -> Unit, onConfirm: (String, String) -> Unit) {
-    var name by remember { mutableStateOf("") }
+fun CategoryDialog(
+    title: String,
+    initialName: String = "",
+    initialColor: String? = null,
+    onDismiss: () -> Unit,
+    onConfirm: (String, String) -> Unit
+) {
+    var name by remember { mutableStateOf(initialName) }
     // Gmail-inspired colors (24 colors)
     val colors = listOf(
         "#ac725e", "#d06b64", "#f83a22", "#fa573c", "#ff7537", "#ffad46",
@@ -407,20 +455,27 @@ fun AddCategoryDialog(onDismiss: () -> Unit, onConfirm: (String, String) -> Unit
         "#92e1c0", "#9fe1e7", "#9fc6e7", "#4986e7", "#9a9cff", "#b99aff",
         "#c2c2c2", "#cabdbf", "#cca6ac", "#f691b2", "#cd74e6", "#a47ae2"
     )
-    var selectedColor by remember { mutableStateOf(colors[15]) } // Default to a nice blue (#4986e7)
+    var selectedColor by remember { mutableStateOf(initialColor ?: colors[15]) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("New Category") },
+        title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Category Name") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(
+                    value = name, 
+                    onValueChange = { name = it }, 
+                    label = { Text("Category Name") }, 
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Text("Select Color:")
                 ColorGrid(colors, selectedColor) { selectedColor = it }
             }
         },
         confirmButton = {
-            Button(onClick = { if (name.isNotBlank()) onConfirm(name, selectedColor); onDismiss() }) { Text("Create") }
+            Button(onClick = { if (name.isNotBlank()) onConfirm(name, selectedColor); onDismiss() }) { 
+                Text(if (initialName.isEmpty()) "Create" else "Save") 
+            }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
@@ -451,7 +506,7 @@ fun ColorGrid(colors: List<String>, selectedColor: String, onColorSelected: (Str
 }
 
 @Composable
-fun CalendarView(items: List<BudgetItem>, categories: List<Category>) {
+fun BudgetCalendarView(items: List<BudgetItem>, categories: List<Category>) {
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
     var selectedDayItems by remember { mutableStateOf<List<BudgetItem>?>(null) }
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
@@ -462,7 +517,7 @@ fun CalendarView(items: List<BudgetItem>, categories: List<Category>) {
     val paddingDays = (0 until firstDayOfMonth).toList()
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        MonthSelector(currentMonth = currentMonth, onMonthChange = { currentMonth = it })
+        BudgetMonthSelector(currentMonth = currentMonth, onMonthChange = { currentMonth = it })
         Spacer(modifier = Modifier.height(16.dp))
         WeekdayHeaders()
         Spacer(modifier = Modifier.height(8.dp))
@@ -477,6 +532,26 @@ fun CalendarView(items: List<BudgetItem>, categories: List<Category>) {
             selectedDayItems = null
             selectedDate = null
         })
+    }
+}
+
+@Composable
+fun BudgetMonthSelector(currentMonth: YearMonth, onMonthChange: (YearMonth) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = { onMonthChange(currentMonth.minusMonths(1)) }) {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous Month")
+        }
+        Text(
+            text = currentMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
+            style = MaterialTheme.typography.titleLarge
+        )
+        IconButton(onClick = { onMonthChange(currentMonth.plusMonths(1)) }) {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next Month")
+        }
     }
 }
 

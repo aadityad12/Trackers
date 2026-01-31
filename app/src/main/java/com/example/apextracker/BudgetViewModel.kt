@@ -41,6 +41,12 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun updateCategory(category: Category) {
+        viewModelScope.launch {
+            categoryDao.updateCategory(category)
+        }
+    }
+
     fun deleteCategory(category: Category) {
         viewModelScope.launch {
             categoryDao.deleteCategory(category)
