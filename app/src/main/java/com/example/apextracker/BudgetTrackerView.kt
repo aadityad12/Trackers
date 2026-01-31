@@ -400,8 +400,14 @@ fun CategoryItem(category: Category, onDelete: () -> Unit) {
 @Composable
 fun AddCategoryDialog(onDismiss: () -> Unit, onConfirm: (String, String) -> Unit) {
     var name by remember { mutableStateOf("") }
-    var selectedColor by remember { mutableStateOf("#FF0000") }
-    val colors = listOf("#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF", "#FFA500", "#800080", "#008000")
+    // Gmail-inspired colors (24 colors)
+    val colors = listOf(
+        "#ac725e", "#d06b64", "#f83a22", "#fa573c", "#ff7537", "#ffad46",
+        "#42d692", "#16a765", "#7bd148", "#b3dc6c", "#fbe983", "#fad165",
+        "#92e1c0", "#9fe1e7", "#9fc6e7", "#4986e7", "#9a9cff", "#b99aff",
+        "#c2c2c2", "#cabdbf", "#cca6ac", "#f691b2", "#cd74e6", "#a47ae2"
+    )
+    var selectedColor by remember { mutableStateOf(colors[15]) } // Default to a nice blue (#4986e7)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -422,15 +428,20 @@ fun AddCategoryDialog(onDismiss: () -> Unit, onConfirm: (String, String) -> Unit
 
 @Composable
 fun ColorGrid(colors: List<String>, selectedColor: String, onColorSelected: (String) -> Unit) {
+    val columns = 6
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf(colors.take(5), colors.drop(5)).forEach { rowColors ->
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        colors.chunked(columns).forEach { rowColors ->
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 rowColors.forEach { color ->
                     Box(
                         modifier = Modifier
                             .size(32.dp)
                             .background(Color(android.graphics.Color.parseColor(color)), CircleShape)
-                            .border(if (selectedColor == color) 2.dp else 0.dp, Color.Black, CircleShape)
+                            .border(
+                                width = if (selectedColor == color) 2.dp else 1.dp,
+                                color = if (selectedColor == color) MaterialTheme.colorScheme.primary else Color.LightGray.copy(alpha = 0.5f),
+                                shape = CircleShape
+                            )
                             .clickable { onColorSelected(color) }
                     )
                 }
