@@ -182,27 +182,19 @@ fun OverviewView(items: List<BudgetItem>, categories: List<Category>, onEdit: (B
             }
 
             if (monthItems.isNotEmpty()) {
-                item {
-                    Text(
-                        text = "Breakdown",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
-
-                val itemsByCategory = monthItems.groupBy { it.categoryId }
-                itemsByCategory.forEach { (catId, catItems) ->
-                    val category = if (catId == -1L) {
-                        Category(id = -1L, name = "Subscriptions", colorHex = "#FFD700") // Gold color for subs
+                val sortedItems = monthItems.sortedByDescending { it.date }
+                
+                item { Spacer(modifier = Modifier.height(16.dp)) }
+                
+                items(sortedItems) { item ->
+                    val category = if (item.categoryId == -1L) {
+                        Category(id = -1L, name = "Subscriptions", colorHex = "#FFD700")
                     } else {
-                        categories.find { it.id == catId }
+                        categories.find { it.id == item.categoryId }
                     }
-                    item {
-                        ExpandableCategorySection(
-                            category = category,
-                            items = catItems,
-                            onEdit = onEdit
-                        )
+                    
+                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                        BudgetListItem(item, category, onClick = { onEdit(item) })
                     }
                 }
             }
@@ -508,7 +500,6 @@ fun CategoryDialog(
     onDelete: (() -> Unit)? = null
 ) {
     var name by remember { mutableStateOf(initialName) }
-    // Gmail-inspired colors (24 colors)
     val colors = listOf(
         "#ac725e", "#d06b64", "#f83a22", "#fa573c", "#ff7537", "#ffad46",
         "#42d692", "#16a765", "#7bd148", "#b3dc6c", "#fbe983", "#fad165",
@@ -791,7 +782,7 @@ fun DayBreakdownDialog(date: LocalDate, items: List<BudgetItem>, categories: Lis
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items.forEach { item ->
                     val category = if (item.categoryId == -1L) {
-                        Category(name = "Subscriptions", colorHex = "#FFD700")
+                        Category(id = -1L, name = "Subscriptions", colorHex = "#FFD700")
                     } else {
                         categories.find { it.id == item.categoryId }
                     }
