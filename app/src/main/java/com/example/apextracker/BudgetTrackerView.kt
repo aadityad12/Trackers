@@ -62,8 +62,17 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
                     }) 
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBackToMenu) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to Menu")
+                    IconButton(onClick = {
+                        if (currentScreen == BudgetScreen.Overview) {
+                            onBackToMenu()
+                        } else {
+                            currentScreen = BudgetScreen.Overview
+                        }
+                    }) {
+                        Icon(
+                            imageVector = if (currentScreen == BudgetScreen.Overview) Icons.Default.Home else Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = if (currentScreen == BudgetScreen.Overview) "Home" else "Back to Overview"
+                        )
                     }
                 }
             )
