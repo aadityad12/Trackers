@@ -192,7 +192,11 @@ fun OverviewView(items: List<BudgetItem>, categories: List<Category>, onEdit: (B
 
                 val itemsByCategory = monthItems.groupBy { it.categoryId }
                 itemsByCategory.forEach { (catId, catItems) ->
-                    val category = categories.find { it.id == catId }
+                    val category = if (catId == -1L) {
+                        Category(id = -1L, name = "Subscriptions", colorHex = "#FFD700") // Gold color for subs
+                    } else {
+                        categories.find { it.id == catId }
+                    }
                     item {
                         ExpandableCategorySection(
                             category = category,
@@ -313,7 +317,11 @@ fun ExpensePieChart(items: List<BudgetItem>, categories: List<Category>) {
     val total = items.sumOf { it.amount }
     
     val chartData = itemsByCategory.map { (catId, catItems) ->
-        val category = categories.find { it.id == catId }
+        val category = if (catId == -1L) {
+            Category(name = "Subscriptions", colorHex = "#FFD700")
+        } else {
+            categories.find { it.id == catId }
+        }
         val color = category?.let { Color(android.graphics.Color.parseColor(it.colorHex)) } ?: Color.Gray
         val amount = catItems.sumOf { it.amount }
         Triple(category?.name ?: "Uncategorized", amount.toFloat(), color)
@@ -355,32 +363,47 @@ fun ExpensePieChart(items: List<BudgetItem>, categories: List<Category>) {
 
 @Composable
 fun BudgetSettingsView(categories: List<Category>, viewModel: BudgetViewModel) {
-    var showCategories by remember { mutableStateOf(false) }
+    var activeSubScreen by remember { mutableStateOf<String?>(null) }
 
-    if (showCategories) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = { showCategories = false }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                }
-                Text(text = "Manage Categories", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 8.dp))
+    when (activeSubScreen) {
+        "categories" -> {
+            Column(modifier = Modifier.fillMaxSize()) {
+                SettingsHeader("Manage Categories") { activeSubScreen = null }
+                CategoriesView(
+                    categories = categories,
+                    onAdd = { name, color -> viewModel.addCategory(name, color) },
+                    onUpdate = { viewModel.updateCategory(it) },
+                    onDelete = { viewModel.deleteCategory(it) }
+                )
             }
-            HorizontalDivider()
-            CategoriesView(
-                categories = categories,
-                onAdd = { name, color -> viewModel.addCategory(name, color) },
-                onUpdate = { viewModel.updateCategory(it) },
-                onDelete = { viewModel.deleteCategory(it) }
-            )
         }
-    } else {
-        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-            BudgetSettingsItem("Manage Categories") { showCategories = true }
+        "subscriptions" -> {
+            Column(modifier = Modifier.fillMaxSize()) {
+                SettingsHeader("Manage Subscriptions") { activeSubScreen = null }
+                SubscriptionsView(viewModel)
+            }
+        }
+        else -> {
+            Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                BudgetSettingsItem("Manage Categories") { activeSubScreen = "categories" }
+                BudgetSettingsItem("Manage Subscriptions") { activeSubScreen = "subscriptions" }
+            }
         }
     }
+}
+
+@Composable
+fun SettingsHeader(title: String, onBack: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+        }
+        Text(text = title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 8.dp))
+    }
+    HorizontalDivider()
 }
 
 @Composable
@@ -552,6 +575,122 @@ fun ColorGrid(colors: List<String>, selectedColor: String, onColorSelected: (Str
 }
 
 @Composable
+fun SubscriptionsView(viewModel: BudgetViewModel) {
+    val subscriptions by viewModel.allSubscriptions.collectAsState(initial = emptyList())
+    var showAddDialog by remember { mutableStateOf(false) }
+    var subToEdit by remember { mutableStateOf<Subscription?>(null) }
+
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Button(onClick = { showAddDialog = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("Add New Subscription")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(subscriptions) { sub ->
+                SubscriptionItem(sub) { subToEdit = sub }
+            }
+        }
+    }
+
+    if (showAddDialog) {
+        SubscriptionDialog(
+            title = "New Subscription",
+            onDismiss = { showAddDialog = false },
+            onConfirm = { name, amount, date, notes ->
+                viewModel.addSubscription(name, amount, date, notes)
+            }
+        )
+    }
+
+    if (subToEdit != null) {
+        SubscriptionDialog(
+            title = "Edit Subscription",
+            initialName = subToEdit!!.name,
+            initialAmount = subToEdit!!.amount.toString(),
+            initialDate = subToEdit!!.renewalDate,
+            initialNotes = subToEdit!!.notes ?: "",
+            onDismiss = { subToEdit = null },
+            onConfirm = { name, amount, date, notes ->
+                viewModel.updateSubscription(subToEdit!!.copy(name = name, amount = amount, renewalDate = date, notes = notes))
+            },
+            onDelete = {
+                viewModel.deleteSubscription(subToEdit!!)
+                subToEdit = null
+            }
+        )
+    }
+}
+
+@Composable
+fun SubscriptionItem(subscription: Subscription, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(subscription.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("Renews: ${subscription.renewalDate.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))}", style = MaterialTheme.typography.bodySmall)
+            }
+            Text("$${String.format(Locale.US, "%.2f", subscription.amount)}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+        }
+    }
+}
+
+@Composable
+fun SubscriptionDialog(
+    title: String,
+    initialName: String = "",
+    initialAmount: String = "",
+    initialDate: LocalDate = LocalDate.now(),
+    initialNotes: String = "",
+    onDismiss: () -> Unit,
+    onConfirm: (String, Double, LocalDate, String?) -> Unit,
+    onDelete: (() -> Unit)? = null
+) {
+    var name by remember { mutableStateOf(initialName) }
+    var amount by remember { mutableStateOf(initialAmount) }
+    var date by remember { mutableStateOf(initialDate) }
+    var notes by remember { mutableStateOf(initialNotes) }
+
+    val context = LocalContext.current
+    val datePickerDialog = remember {
+        DatePickerDialog(context, { _, y, m, d -> date = LocalDate.of(y, m + 1, d) }, date.year, date.monthValue - 1, date.dayOfMonth)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(title)
+                if (onDelete != null) {
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = amount, onValueChange = { if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d{0,2}$"))) amount = it }, label = { Text("Amount") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
+                TextButton(onClick = { datePickerDialog.show() }, modifier = Modifier.fillMaxWidth()) { Text("Next Renewal: ${date.format(DateTimeFormatter.ISO_LOCAL_DATE)}") }
+                OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Notes (Optional)") }, modifier = Modifier.fillMaxWidth())
+            }
+        },
+        confirmButton = {
+            Button(onClick = { if (name.isNotBlank()) onConfirm(name, amount.toDoubleOrNull() ?: 0.0, date, notes.ifBlank { null }); onDismiss() }) {
+                Text("Save")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+@Composable
 fun BudgetCalendarView(items: List<BudgetItem>, categories: List<Category>) {
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
     var selectedDayItems by remember { mutableStateOf<List<BudgetItem>?>(null) }
@@ -651,7 +790,11 @@ fun DayBreakdownDialog(date: LocalDate, items: List<BudgetItem>, categories: Lis
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items.forEach { item ->
-                    val category = categories.find { it.id == item.categoryId }
+                    val category = if (item.categoryId == -1L) {
+                        Category(name = "Subscriptions", colorHex = "#FFD700")
+                    } else {
+                        categories.find { it.id == item.categoryId }
+                    }
                     DayBreakdownItem(item, category)
                     HorizontalDivider()
                 }
@@ -703,7 +846,7 @@ fun BudgetListItem(item: BudgetItem, category: Category?, onClick: () -> Unit) {
                     Text(text = item.description, style = MaterialTheme.typography.bodyMedium)
                 }
                 if (category != null) {
-                    Text(text = category.name, style = MaterialTheme.typography.labelSmall, color = catColor)
+                    Text(text = category.name, style = MaterialTheme.typography.labelSmall, color = if (category.id == -1L) Color(android.graphics.Color.parseColor("#B8860B")) else catColor)
                 }
             }
         }

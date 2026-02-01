@@ -11,9 +11,49 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
     private val database = AppDatabase.getDatabase(application)
     private val budgetDao = database.budgetDao()
     private val categoryDao = database.categoryDao()
+    private val subscriptionDao = database.subscriptionDao()
 
     val allItems: Flow<List<BudgetItem>> = budgetDao.getAllItems()
     val allCategories: Flow<List<Category>> = categoryDao.getAllCategories()
+    val allSubscriptions: Flow<List<Subscription>> = subscriptionDao.getAllSubscriptions()
+
+    init {
+        checkAndAddSubscriptions()
+    }
+
+    private fun checkAndAddSubscriptions() {
+        viewModelScope.launch {
+            val subscriptions = subscriptionDao.getAllSubscriptionsSync()
+            val today = LocalDate.now()
+            
+            subscriptions.forEach { subscription ->
+                var currentRenewal = subscription.renewalDate
+                var updatedSub = subscription
+                
+                // Catch up on any missed renewals
+                while (currentRenewal.isBefore(today) || currentRenewal.isEqual(today)) {
+                    // Add the expense to the tracker using the actual renewal date
+                    budgetDao.insertItem(
+                        BudgetItem(
+                            title = "[Subscription] ${updatedSub.name}",
+                            amount = updatedSub.amount,
+                            description = updatedSub.notes,
+                            date = currentRenewal,
+                            categoryId = -1L // Special ID for Subscriptions
+                        )
+                    )
+                    
+                    // Move to next month
+                    currentRenewal = currentRenewal.plusMonths(1)
+                    updatedSub = updatedSub.copy(
+                        renewalDate = currentRenewal,
+                        lastAddedDate = today
+                    )
+                    subscriptionDao.updateSubscription(updatedSub)
+                }
+            }
+        }
+    }
 
     fun addItem(title: String, amount: Double, description: String?, date: LocalDate, categoryId: Long?) {
         viewModelScope.launch {
@@ -56,6 +96,29 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
     fun deleteCategory(category: Category) {
         viewModelScope.launch {
             categoryDao.deleteCategory(category)
+        }
+    }
+
+    // Subscription actions
+    fun addSubscription(name: String, amount: Double, renewalDate: LocalDate, notes: String?) {
+        viewModelScope.launch {
+            subscriptionDao.insertSubscription(
+                Subscription(name = name, amount = amount, renewalDate = renewalDate, notes = notes)
+            )
+            checkAndAddSubscriptions()
+        }
+    }
+
+    fun updateSubscription(subscription: Subscription) {
+        viewModelScope.launch {
+            subscriptionDao.updateSubscription(subscription)
+            checkAndAddSubscriptions()
+        }
+    }
+
+    fun deleteSubscription(subscription: Subscription) {
+        viewModelScope.launch {
+            subscriptionDao.deleteSubscription(subscription)
         }
     }
 }
