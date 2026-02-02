@@ -6,6 +6,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -26,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -37,6 +39,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.atan2
 
 enum class BudgetScreen {
     Overview, Calendar, Settings
@@ -47,6 +50,7 @@ enum class BudgetScreen {
 fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = viewModel()) {
     val items by viewModel.allItems.collectAsState(initial = emptyList())
     val categories by viewModel.allCategories.collectAsState(initial = emptyList())
+    val subscriptions by viewModel.allSubscriptions.collectAsState(initial = emptyList())
     var showAddDialog by remember { mutableStateOf(false) }
     var itemToEdit by remember { mutableStateOf<BudgetItem?>(null) }
     var currentScreen by remember { mutableStateOf(BudgetScreen.Overview) }
@@ -109,7 +113,7 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             when (currentScreen) {
-                BudgetScreen.Overview -> OverviewView(items, categories, onEdit = { itemToEdit = it })
+                BudgetScreen.Overview -> OverviewView(items, categories, subscriptions, onEdit = { itemToEdit = it })
                 BudgetScreen.Calendar -> BudgetCalendarView(items, categories)
                 BudgetScreen.Settings -> BudgetSettingsView(categories, viewModel)
             }
@@ -157,7 +161,12 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
 }
 
 @Composable
-fun OverviewView(items: List<BudgetItem>, categories: List<Category>, onEdit: (BudgetItem) -> Unit) {
+fun OverviewView(
+    items: List<BudgetItem>, 
+    categories: List<Category>, 
+    subscriptions: List<Subscription>,
+    onEdit: (BudgetItem) -> Unit
+) {
     var selectedMonth by remember { mutableStateOf(YearMonth.now()) }
     
     val availableMonths = items.map { YearMonth.from(it.date) }.distinct().sortedDescending()
@@ -165,6 +174,13 @@ fun OverviewView(items: List<BudgetItem>, categories: List<Category>, onEdit: (B
                          else availableMonths.firstOrNull() ?: selectedMonth
 
     val monthItems = items.filter { YearMonth.from(it.date) == monthToDisplay }
+    
+    val pendingSubs = if (monthToDisplay == YearMonth.now()) {
+        subscriptions.filter { sub ->
+            YearMonth.from(sub.renewalDate) == monthToDisplay && sub.renewalDate.isAfter(LocalDate.now())
+        }
+    } else emptyList()
+
     val totalExpenditure = monthItems.sumOf { it.amount }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -178,14 +194,26 @@ fun OverviewView(items: List<BudgetItem>, categories: List<Category>, onEdit: (B
             contentPadding = PaddingValues(bottom = 16.dp)
         ) {
             item {
-                ExpenditureCard(totalExpenditure, monthItems, categories)
+                ExpenditureCard(totalExpenditure, monthItems, categories, pendingSubs)
             }
 
-            if (monthItems.isNotEmpty()) {
+            if (monthItems.isNotEmpty() || pendingSubs.isNotEmpty()) {
                 val sortedItems = monthItems.sortedByDescending { it.date }
                 
                 item { Spacer(modifier = Modifier.height(16.dp)) }
                 
+                items(pendingSubs.sortedBy { it.renewalDate }) { sub ->
+                    val category = Category(id = -1L, name = "Pending Subscription", colorHex = "#FFD700")
+                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                        BudgetListItem(
+                            BudgetItem(title = sub.name, amount = sub.amount, date = sub.renewalDate, categoryId = -1L), 
+                            category, 
+                            onClick = {},
+                            isPending = true
+                        )
+                    }
+                }
+
                 items(sortedItems) { item ->
                     val category = if (item.categoryId == -1L) {
                         Category(id = -1L, name = "Subscriptions", colorHex = "#FFD700")
@@ -223,7 +251,12 @@ fun MonthSelector(currentMonth: YearMonth, onMonthChange: (YearMonth) -> Unit) {
 }
 
 @Composable
-fun ExpenditureCard(totalExpenditure: Double, monthItems: List<BudgetItem>, categories: List<Category>) {
+fun ExpenditureCard(
+    totalExpenditure: Double, 
+    monthItems: List<BudgetItem>, 
+    categories: List<Category>,
+    pendingSubs: List<Subscription>
+) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
@@ -240,9 +273,9 @@ fun ExpenditureCard(totalExpenditure: Double, monthItems: List<BudgetItem>, cate
                 color = MaterialTheme.colorScheme.primary
             )
             
-            if (monthItems.isNotEmpty()) {
+            if (monthItems.isNotEmpty() || pendingSubs.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(24.dp))
-                ExpensePieChart(monthItems, categories)
+                ExpensePieChart(monthItems, categories, pendingSubs)
             } else {
                 Text(
                     text = "No expenses recorded for this month.",
@@ -304,30 +337,66 @@ fun ExpandableCategorySection(category: Category?, items: List<BudgetItem>, onEd
 }
 
 @Composable
-fun ExpensePieChart(items: List<BudgetItem>, categories: List<Category>) {
+fun ExpensePieChart(
+    items: List<BudgetItem>, 
+    categories: List<Category>,
+    pendingSubs: List<Subscription>
+) {
     val itemsByCategory = items.groupBy { it.categoryId }
-    val total = items.sumOf { it.amount }
+    val totalExpenses = items.sumOf { it.amount }
+    val totalPending = pendingSubs.sumOf { it.amount }
+    val totalCombined = totalExpenses + totalPending
     
-    val chartData = itemsByCategory.map { (catId, catItems) ->
+    if (totalCombined == 0.0) return
+
+    var showPendingBreakdown by remember { mutableStateOf(false) }
+
+    val chartData = mutableListOf<Triple<String, Float, Color>>()
+    
+    itemsByCategory.forEach { (catId, catItems) ->
         val category = if (catId == -1L) {
-            Category(name = "Subscriptions", colorHex = "#FFD700")
+            Category(id = -1L, name = "Subscriptions", colorHex = "#FFD700")
         } else {
             categories.find { it.id == catId }
         }
         val color = category?.let { Color(android.graphics.Color.parseColor(it.colorHex)) } ?: Color.Gray
         val amount = catItems.sumOf { it.amount }
-        Triple(category?.name ?: "Uncategorized", amount.toFloat(), color)
-    }.sortedByDescending { it.second }
+        chartData.add(Triple(category?.name ?: "Uncategorized", amount.toFloat(), color))
+    }
+
+    if (totalPending > 0) {
+        chartData.add(Triple("Pending Subscriptions", totalPending.toFloat(), Color(android.graphics.Color.parseColor("#FFD700")).copy(alpha = 0.4f)))
+    }
+
+    val sortedData = chartData.sortedByDescending { it.second }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
-        Canvas(modifier = Modifier.size(180.dp)) {
+        Canvas(modifier = Modifier.size(180.dp).pointerInput(Unit) {
+            detectTapGestures { offset ->
+                val centerX = size.width / 2f
+                val centerY = size.height / 2f
+                val angle = Math.toDegrees(atan2((offset.y - centerY).toDouble(), (offset.x - centerX).toDouble())).toFloat()
+                val normalizedAngle = (angle + 90f + 360f) % 360f
+                
+                var currentAngle = 0f
+                sortedData.forEach { (name, amount, _) ->
+                    val sweepAngle = (amount / totalCombined.toFloat()) * 360f
+                    if (normalizedAngle >= currentAngle && normalizedAngle <= currentAngle + sweepAngle) {
+                        if (name == "Pending Subscriptions") {
+                            showPendingBreakdown = true
+                        }
+                    }
+                    currentAngle += sweepAngle
+                }
+            }
+        }) {
             var startAngle = -90f
-            chartData.forEach { (_, amount, color) ->
-                val sweepAngle = (amount / total.toFloat()) * 360f
+            sortedData.forEach { (_, amount, color) ->
+                val sweepAngle = (amount / totalCombined.toFloat()) * 360f
                 drawArc(color = color, startAngle = startAngle, sweepAngle = sweepAngle, useCenter = true)
                 drawArc(color = Color.White, startAngle = startAngle, sweepAngle = sweepAngle, useCenter = true, style = Stroke(width = 2.dp.toPx()))
                 startAngle += sweepAngle
@@ -338,19 +407,54 @@ fun ExpensePieChart(items: List<BudgetItem>, categories: List<Category>) {
         Spacer(modifier = Modifier.width(24.dp))
         
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            chartData.take(5).forEach { (name, amount, color) ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            sortedData.take(6).forEach { (name, amount, color) ->
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable(enabled = name == "Pending Subscriptions") {
+                    if (name == "Pending Subscriptions") showPendingBreakdown = true
+                }) {
                     Box(modifier = Modifier.size(10.dp).background(color, CircleShape))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "$name (${String.format(Locale.US, "%.0f%%", (amount / total.toFloat()) * 100)})",
-                        style = MaterialTheme.typography.labelSmall
+                        text = "$name (${String.format(Locale.US, "%.0f%%", (amount / totalCombined.toFloat()) * 100)})",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = if (name == "Pending Subscriptions") FontWeight.Bold else FontWeight.Normal,
+                        textDecoration = if (name == "Pending Subscriptions") androidx.compose.ui.text.style.TextDecoration.Underline else null
                     )
                 }
             }
-            if (chartData.size > 5) Text(text = "...", style = MaterialTheme.typography.labelSmall)
+            if (sortedData.size > 6) Text(text = "...", style = MaterialTheme.typography.labelSmall)
         }
     }
+
+    if (showPendingBreakdown) {
+        PendingSubscriptionsDialog(pendingSubs) { showPendingBreakdown = false }
+    }
+}
+
+@Composable
+fun PendingSubscriptionsDialog(subscriptions: List<Subscription>, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Upcoming Subscriptions") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                subscriptions.sortedBy { it.renewalDate }.forEach { sub ->
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column {
+                            Text(sub.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                            Text("Renewal: ${sub.renewalDate.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))}", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Text("$${String.format(Locale.US, "%.2f", sub.amount)}", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+                    }
+                    HorizontalDivider()
+                }
+                Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Total Pending", fontWeight = FontWeight.Bold)
+                    Text("$${String.format(Locale.US, "%.2f", subscriptions.sumOf { it.amount })}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+    )
 }
 
 @Composable
@@ -822,22 +926,33 @@ fun TotalRow(total: Double) {
 }
 
 @Composable
-fun BudgetListItem(item: BudgetItem, category: Category?, onClick: () -> Unit) {
+fun BudgetListItem(
+    item: BudgetItem, 
+    category: Category?, 
+    onClick: () -> Unit,
+    isPending: Boolean = false
+) {
     val catColor = category?.let { Color(android.graphics.Color.parseColor(it.colorHex)) } ?: MaterialTheme.colorScheme.surface
+    val displayColor = if (isPending) catColor.copy(alpha = 0.4f) else catColor
+    
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = if (category != null) catColor.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = if (category != null) displayColor.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface)
     ) {
         Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                BudgetListItemHeader(item, category)
+                BudgetListItemHeader(item, category, isPending)
                 if (!item.description.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(text = item.description, style = MaterialTheme.typography.bodyMedium)
                 }
                 if (category != null) {
-                    Text(text = category.name, style = MaterialTheme.typography.labelSmall, color = if (category.id == -1L) Color(android.graphics.Color.parseColor("#B8860B")) else catColor)
+                    Text(
+                        text = if (isPending) "Pending: ${category.name}" else category.name, 
+                        style = MaterialTheme.typography.labelSmall, 
+                        color = if (category.id == -1L) Color(android.graphics.Color.parseColor("#B8860B")) else displayColor
+                    )
                 }
             }
         }
@@ -845,16 +960,21 @@ fun BudgetListItem(item: BudgetItem, category: Category?, onClick: () -> Unit) {
 }
 
 @Composable
-fun BudgetListItemHeader(item: BudgetItem, category: Category?) {
+fun BudgetListItemHeader(item: BudgetItem, category: Category?, isPending: Boolean) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (category != null) {
-                Box(modifier = Modifier.size(12.dp).background(Color(android.graphics.Color.parseColor(category.colorHex)), CircleShape))
+                val color = Color(android.graphics.Color.parseColor(category.colorHex))
+                Box(modifier = Modifier.size(12.dp).background(if (isPending) color.copy(alpha = 0.4f) else color, CircleShape))
                 Spacer(modifier = Modifier.width(8.dp))
             }
             Text(text = item.title, style = MaterialTheme.typography.titleLarge)
         }
-        Text(text = "$${String.format(Locale.US, "%.2f", item.amount)}", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+        Text(
+            text = "$${String.format(Locale.US, "%.2f", item.amount)}", 
+            style = MaterialTheme.typography.titleLarge, 
+            color = if (isPending) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.primary
+        )
     }
 }
 

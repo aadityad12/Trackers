@@ -11,6 +11,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -53,6 +55,11 @@ fun AppNavigation() {
                 onBackToMenu = { navController.popBackStack() }
             )
         }
+        composable("study_tracker") {
+            StudyTrackerView(
+                onBackToMenu = { navController.popBackStack() }
+            )
+        }
     }
 }
 
@@ -75,17 +82,16 @@ fun MainMenu(onModuleSelected: (String) -> Unit) {
             route = "budget_tracker"
         ),
         AppModule(
-            title = "Screen Time Tracker",
-            description = "Coming Soon",
-            icon = Icons.Default.AccountBalanceWallet, // placeholder
-            route = "screen_time",
-            enabled = false
+            title = "Study Tracker",
+            description = "Daily study stopwatch with history",
+            icon = Icons.Default.Timer,
+            route = "study_tracker"
         ),
         AppModule(
-            title = "Study Tracker",
+            title = "Screen Time Tracker",
             description = "Coming Soon",
-            icon = Icons.Default.AccountBalanceWallet, // placeholder
-            route = "study_tracker",
+            icon = Icons.Default.School, // placeholder
+            route = "screen_time",
             enabled = false
         )
     )
