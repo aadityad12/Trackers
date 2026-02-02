@@ -10,8 +10,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.LocalTime
 
 class StudyViewModel(application: Application) : AndroidViewModel(application) {
     private val database = AppDatabase.getDatabase(application)
@@ -44,18 +42,17 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
             while (true) {
                 val now = LocalDate.now()
                 if (now.isAfter(lastResetDate)) {
-                    resetTimerAuto()
+                    // Date changed while app was open (even if paused)
+                    // Save whatever was there to the previous date and reset
+                    saveSessionForDate(lastResetDate, _timeSeconds.value)
+                    _timeSeconds.value = 0L
+                    _isRunning.value = false
+                    timerJob?.cancel()
                     lastResetDate = now
                 }
-                delay(60000) // Check every minute
+                delay(30000) // Check every 30 seconds
             }
         }
-    }
-
-    private fun resetTimerAuto() {
-        _isRunning.value = false
-        timerJob?.cancel()
-        _timeSeconds.value = 0L
     }
 
     fun toggleTimer() {
@@ -69,10 +66,21 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
     private fun startTimer() {
         _isRunning.value = true
         timerJob = viewModelScope.launch {
+            var currentDate = LocalDate.now()
             while (_isRunning.value) {
                 delay(1000)
+                val now = LocalDate.now()
+                
+                if (now.isAfter(currentDate)) {
+                    // Date changed during active tracking
+                    saveSessionForDate(currentDate, _timeSeconds.value)
+                    _timeSeconds.value = 0L
+                    currentDate = now
+                    lastResetDate = now
+                }
+                
                 _timeSeconds.value++
-                saveSession()
+                saveSessionForDate(currentDate, _timeSeconds.value)
             }
         }
     }
@@ -80,20 +88,20 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
     private fun pauseTimer() {
         _isRunning.value = false
         timerJob?.cancel()
-        saveSession()
+        saveSessionForDate(LocalDate.now(), _timeSeconds.value)
     }
 
     fun resetTimerManual() {
         _isRunning.value = false
         timerJob?.cancel()
+        // Save 0 to today's date to reset the stored total
+        saveSessionForDate(LocalDate.now(), 0L)
         _timeSeconds.value = 0L
-        saveSession()
     }
 
-    private fun saveSession() {
+    private fun saveSessionForDate(date: LocalDate, duration: Long) {
         viewModelScope.launch {
-            val today = LocalDate.now()
-            val session = StudySession(date = today, durationSeconds = _timeSeconds.value)
+            val session = StudySession(date = date, durationSeconds = duration)
             studySessionDao.insertSession(session)
         }
     }
