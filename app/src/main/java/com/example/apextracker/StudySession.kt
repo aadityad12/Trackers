@@ -6,8 +6,7 @@ import java.time.LocalDate
 
 @Entity(tableName = "study_sessions")
 data class StudySession(
-    @PrimaryKey(autoGenerate = true)
-    val id: Long = 0,
+    @PrimaryKey
     val date: LocalDate,
     val durationSeconds: Long
 )

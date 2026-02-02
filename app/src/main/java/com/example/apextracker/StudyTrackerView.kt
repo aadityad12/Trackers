@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -23,6 +24,12 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
     val timeSeconds by viewModel.timeSeconds.collectAsState()
     val isRunning by viewModel.isRunning.collectAsState()
     val allSessions by viewModel.getAllSessions().collectAsState(initial = emptyList())
+    
+    // Filter to only show sessions from previous days
+    val pastSessions = remember(allSessions) {
+        val today = LocalDate.now()
+        allSessions.filter { it.date.isBefore(today) }
+    }
 
     Scaffold(
         topBar = {
@@ -102,13 +109,19 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
                 modifier = Modifier.align(Alignment.Start)
             )
             
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(allSessions) { session ->
-                    SessionItem(session)
+            if (pastSessions.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No past data recorded yet", color = MaterialTheme.colorScheme.outline)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(pastSessions) { session ->
+                        SessionItem(session)
+                    }
                 }
             }
         }
