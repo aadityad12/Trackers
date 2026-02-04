@@ -11,7 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -60,6 +60,11 @@ fun AppNavigation() {
                 onBackToMenu = { navController.popBackStack() }
             )
         }
+        composable("screen_time") {
+            ScreenTimeTrackerView(
+                onBackToMenu = { navController.popBackStack() }
+            )
+        }
     }
 }
 
@@ -89,10 +94,9 @@ fun MainMenu(onModuleSelected: (String) -> Unit) {
         ),
         AppModule(
             title = "Screen Time Tracker",
-            description = "Coming Soon",
-            icon = Icons.Default.School, // placeholder
-            route = "screen_time",
-            enabled = false
+            description = "Monitor your daily device usage",
+            icon = Icons.Default.Monitor,
+            route = "screen_time"
         )
     )
 
