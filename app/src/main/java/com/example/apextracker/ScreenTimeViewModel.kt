@@ -2,6 +2,7 @@ package com.example.apextracker
 
 import android.app.Application
 import android.app.AppOpsManager
+import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
@@ -23,7 +24,8 @@ data class AppUsageInfo(
     val packageName: String,
     val appName: String,
     val icon: Drawable?,
-    val isExcluded: Boolean
+    val isExcluded: Boolean,
+    val usageTimeMillis: Long = 0L
 )
 
 class ScreenTimeViewModel(application: Application) : AndroidViewModel(application) {
@@ -41,10 +43,14 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _installedApps = MutableStateFlow<List<AppUsageInfo>>(emptyList())
-    val installedApps: StateFlow<List<AppUsageInfo>> = combine(_installedApps, _excludedApps) { installed, excluded ->
+    val installedApps: StateFlow<List<AppUsageInfo>> = combine(_installedApps, _excludedApps, _todayScreenTimeMillis) { installed, excluded, _ ->
+        val currentStats = calculateAppSpecificUsage()
         installed.map { app ->
-            app.copy(isExcluded = excluded.any { it.packageName == app.packageName })
-        }
+            app.copy(
+                isExcluded = excluded.any { it.packageName == app.packageName },
+                usageTimeMillis = currentStats[app.packageName] ?: 0L
+            )
+        }.sortedByDescending { it.usageTimeMillis }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
@@ -72,12 +78,8 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
     private fun loadInstalledApps() {
         viewModelScope.launch(Dispatchers.IO) {
             val pm = getApplication<Application>().packageManager
-            // Use MATCH_ALL to find all installed applications
             val apps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
                 .filter { app ->
-                    // Filter for apps that the user actually interacts with:
-                    // 1. It's not a system app OR
-                    // 2. It's a pre-installed app that has a launcher entry (like Chrome, YouTube, etc.)
                     val isSystemApp = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0
                     val hasLauncher = pm.getLaunchIntentForPackage(app.packageName) != null
                     !isSystemApp || hasLauncher
@@ -91,7 +93,6 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
                     )
                 }
                 .distinctBy { it.packageName }
-                .sortedBy { it.appName }
             _installedApps.value = apps
         }
     }
@@ -103,7 +104,6 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
             } else {
                 excludedAppDao.excludeApp(ExcludedApp(app.packageName))
             }
-            // Trigger recalculation immediately
             updateScreenTime()
         }
     }
@@ -114,20 +114,35 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
                 if (_hasPermission.value) {
                     updateScreenTime()
                 }
-                delay(30000) // Update every 30 seconds
+                delay(10000)
             }
         }
     }
 
     private suspend fun updateScreenTime() {
-        val totalTime = calculateTodayScreenTime()
-        _todayScreenTimeMillis.value = totalTime
-        saveTodayScreenTime(totalTime)
+        val usageMap = calculateAppSpecificUsage()
+        val excludedPackageNames = _excludedApps.value.map { it.packageName }.toSet()
+        val myPackageName = getApplication<Application>().packageName
+        
+        val launcherPackage = try {
+            val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            val resolveInfo = getApplication<Application>().packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            resolveInfo?.activityInfo?.packageName
+        } catch (e: Exception) { null }
+
+        val totalFilteredTime = usageMap.filter { (pkg, _) ->
+            pkg !in excludedPackageNames && 
+            pkg != myPackageName &&
+            pkg != launcherPackage &&
+            pkg != "com.android.systemui"
+        }.values.sum()
+
+        _todayScreenTimeMillis.value = totalFilteredTime
+        saveTodayScreenTime(totalFilteredTime)
     }
 
-    private fun calculateTodayScreenTime(): Long {
+    private fun calculateAppSpecificUsage(): Map<String, Long> {
         val usageStatsManager = getApplication<Application>().getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        
         val calendar = Calendar.getInstance()
         calendar.set(Calendar.HOUR_OF_DAY, 0)
         calendar.set(Calendar.MINUTE, 0)
@@ -136,17 +151,47 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
         val startTime = calendar.timeInMillis
         val endTime = System.currentTimeMillis()
 
-        val stats = usageStatsManager.queryUsageStats(
-            UsageStatsManager.INTERVAL_DAILY,
-            startTime,
-            endTime
-        )
+        val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
+        val event = UsageEvents.Event()
+        
+        val appUsageMap = mutableMapOf<String, Long>()
+        val lastEventTime = mutableMapOf<String, Long>()
+        var currentForegroundApp: String? = null
 
-        val excludedPackageNames = _excludedApps.value.map { it.packageName }.toSet()
+        while (usageEvents.hasNextEvent()) {
+            usageEvents.getNextEvent(event)
+            
+            when (event.eventType) {
+                UsageEvents.Event.ACTIVITY_RESUMED -> {
+                    // App came to foreground
+                    currentForegroundApp = event.packageName
+                    lastEventTime[event.packageName] = event.timeStamp
+                }
+                UsageEvents.Event.ACTIVITY_PAUSED, UsageEvents.Event.ACTIVITY_STOPPED -> {
+                    // App went to background
+                    val startTimeForApp = lastEventTime[event.packageName]
+                    if (startTimeForApp != null) {
+                        val duration = event.timeStamp - startTimeForApp
+                        appUsageMap[event.packageName] = (appUsageMap[event.packageName] ?: 0L) + duration
+                        lastEventTime.remove(event.packageName)
+                    }
+                    if (currentForegroundApp == event.packageName) {
+                        currentForegroundApp = null
+                    }
+                }
+            }
+        }
 
-        // Filter out excluded apps AND the tracker app itself if desired
-        return stats?.filter { it.packageName !in excludedPackageNames && it.packageName != getApplication<Application>().packageName }
-            ?.sumOf { it.totalTimeInForeground } ?: 0L
+        // Add duration for the app currently in foreground
+        currentForegroundApp?.let { pkg ->
+            val startTimeForApp = lastEventTime[pkg]
+            if (startTimeForApp != null) {
+                val duration = endTime - startTimeForApp
+                appUsageMap[pkg] = (appUsageMap[pkg] ?: 0L) + duration
+            }
+        }
+
+        return appUsageMap
     }
 
     private suspend fun saveTodayScreenTime(millis: Long) {
