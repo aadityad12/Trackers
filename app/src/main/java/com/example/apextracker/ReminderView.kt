@@ -214,25 +214,32 @@ fun AddReminderDialog(
 
     val context = LocalContext.current
     
-    val datePickerDialog = DatePickerDialog(
-        context,
-        { _, year, month, dayOfMonth ->
-            date = LocalDate.of(year, month + 1, dayOfMonth)
-        },
-        date.year,
-        date.monthValue - 1,
-        date.dayOfMonth
-    )
+    val datePickerDialog = remember(date) {
+        DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                date = LocalDate.of(year, month + 1, dayOfMonth)
+            },
+            date.year,
+            date.monthValue - 1,
+            date.dayOfMonth
+        )
+    }
 
-    val timePickerDialog = TimePickerDialog(
-        context,
-        { _, hourOfDay, minute ->
-            time = LocalTime.of(hourOfDay, minute)
-        },
-        time?.hour ?: 12,
-        time?.minute ?: 0,
-        false
-    )
+    val timePickerDialog = remember(time) {
+        val currentTime = LocalTime.now()
+        val initialHour = time?.hour ?: currentTime.hour
+        val initialMinute = time?.minute ?: currentTime.minute
+        TimePickerDialog(
+            context,
+            { _, hourOfDay, minute ->
+                time = LocalTime.of(hourOfDay, minute)
+            },
+            initialHour,
+            initialMinute,
+            false
+        )
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
