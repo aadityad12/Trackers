@@ -1,39 +1,34 @@
 package com.example.apextracker
 
-import android.app.DatePickerDialog
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.LocalDate
 import java.time.YearMonth
@@ -194,7 +189,13 @@ fun OverviewView(
             contentPadding = PaddingValues(bottom = 16.dp)
         ) {
             item {
-                ExpenditureCard(totalExpenditure, monthItems, categories, pendingSubs)
+                Surface(
+                    tonalElevation = 2.dp,
+                    modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
+                    shape = CardDefaults.shape
+                ) {
+                    ExpenditureCard(totalExpenditure, monthItems, categories, pendingSubs)
+                }
             }
 
             if (monthItems.isNotEmpty() || pendingSubs.isNotEmpty()) {
@@ -258,7 +259,7 @@ fun ExpenditureCard(
     pendingSubs: List<Subscription>
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(
@@ -289,54 +290,6 @@ fun ExpenditureCard(
 }
 
 @Composable
-fun ExpandableCategorySection(category: Category?, items: List<BudgetItem>, onEdit: (BudgetItem) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    val catColor = category?.let { Color(android.graphics.Color.parseColor(it.colorHex)) } ?: Color.Gray
-
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
-        Card(
-            modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
-            colors = CardDefaults.cardColors(containerColor = catColor.copy(alpha = 0.1f))
-        ) {
-            Row(
-                modifier = Modifier.padding(12.dp).fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(12.dp).background(catColor, CircleShape))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = category?.name ?: "Uncategorized",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "$${String.format(Locale.US, "%.2f", items.sumOf { it.amount })}",
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                    Icon(
-                        if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                        contentDescription = null
-                    )
-                }
-            }
-        }
-        
-        AnimatedVisibility(visible = expanded) {
-            Column(modifier = Modifier.padding(top = 4.dp)) {
-                items.sortedByDescending { it.date }.forEach { item ->
-                    BudgetListItem(item, category, onClick = { onEdit(item) })
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
-            }
-        }
-    }
-}
-
-@Composable
 fun ExpensePieChart(
     items: List<BudgetItem>, 
     categories: List<Category>,
@@ -349,6 +302,7 @@ fun ExpensePieChart(
     
     if (totalCombined == 0.0) return
 
+    val haptic = LocalHapticFeedback.current
     var showPendingBreakdown by remember { mutableStateOf(false) }
 
     val chartData = mutableListOf<Triple<String, Float, Color>>()
@@ -365,7 +319,7 @@ fun ExpensePieChart(
     }
 
     if (totalPending > 0) {
-        chartData.add(Triple("Pending Subscriptions", totalPending.toFloat(), Color(android.graphics.Color.parseColor("#FFD700")).copy(alpha = 0.4f)))
+        chartData.add(Triple("Pending Subscriptions", totalPending.toFloat(), Color(0xFFFFD700).copy(alpha = 0.4f)))
     }
 
     val sortedData = chartData.sortedByDescending { it.second }
@@ -386,6 +340,7 @@ fun ExpensePieChart(
                 sortedData.forEach { (name, amount, _) ->
                     val sweepAngle = (amount / totalCombined.toFloat()) * 360f
                     if (normalizedAngle >= currentAngle && normalizedAngle <= currentAngle + sweepAngle) {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         if (name == "Pending Subscriptions") {
                             showPendingBreakdown = true
                         }
@@ -417,7 +372,7 @@ fun ExpensePieChart(
                         text = "$name (${String.format(Locale.US, "%.0f%%", (amount / totalCombined.toFloat()) * 100)})",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = if (name == "Pending Subscriptions") FontWeight.Bold else FontWeight.Normal,
-                        textDecoration = if (name == "Pending Subscriptions") androidx.compose.ui.text.style.TextDecoration.Underline else null
+                        textDecoration = if (name == "Pending Subscriptions") TextDecoration.Underline else null
                     )
                 }
             }
@@ -455,600 +410,4 @@ fun PendingSubscriptionsDialog(subscriptions: List<Subscription>, onDismiss: () 
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
     )
-}
-
-@Composable
-fun BudgetSettingsView(categories: List<Category>, viewModel: BudgetViewModel) {
-    var activeSubScreen by remember { mutableStateOf<String?>(null) }
-
-    when (activeSubScreen) {
-        "categories" -> {
-            Column(modifier = Modifier.fillMaxSize()) {
-                SettingsHeader("Manage Categories") { activeSubScreen = null }
-                CategoriesView(
-                    categories = categories,
-                    onAdd = { name, color -> viewModel.addCategory(name, color) },
-                    onUpdate = { viewModel.updateCategory(it) },
-                    onDelete = { viewModel.deleteCategory(it) }
-                )
-            }
-        }
-        "subscriptions" -> {
-            Column(modifier = Modifier.fillMaxSize()) {
-                SettingsHeader("Manage Subscriptions") { activeSubScreen = null }
-                SubscriptionsView(viewModel)
-            }
-        }
-        else -> {
-            Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                BudgetSettingsItem("Manage Categories") { activeSubScreen = "categories" }
-                BudgetSettingsItem("Manage Subscriptions") { activeSubScreen = "subscriptions" }
-            }
-        }
-    }
-}
-
-@Composable
-fun SettingsHeader(title: String, onBack: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-        }
-        Text(text = title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 8.dp))
-    }
-    HorizontalDivider()
-}
-
-@Composable
-fun BudgetSettingsItem(label: String, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
-        }
-    }
-}
-
-@Composable
-fun CategoriesView(
-    categories: List<Category>, 
-    onAdd: (String, String) -> Unit, 
-    onUpdate: (Category) -> Unit,
-    onDelete: (Category) -> Unit
-) {
-    var showAddDialog by remember { mutableStateOf(false) }
-    var categoryToEdit by remember { mutableStateOf<Category?>(null) }
-    
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Button(onClick = { showAddDialog = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("Create New Category")
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(categories) { category ->
-                CategoryItem(
-                    category = category, 
-                    onEdit = { categoryToEdit = category }
-                )
-            }
-        }
-    }
-
-    if (showAddDialog) {
-        CategoryDialog(
-            title = "New Category",
-            onDismiss = { showAddDialog = false },
-            onConfirm = { name, color -> onAdd(name, color) }
-        )
-    }
-    
-    if (categoryToEdit != null) {
-        CategoryDialog(
-            title = "Edit Category",
-            initialName = categoryToEdit!!.name,
-            initialColor = categoryToEdit!!.colorHex,
-            onDismiss = { categoryToEdit = null },
-            onConfirm = { name, color ->
-                onUpdate(categoryToEdit!!.copy(name = name, colorHex = color))
-                categoryToEdit = null
-            },
-            onDelete = {
-                onDelete(categoryToEdit!!)
-                categoryToEdit = null
-            }
-        )
-    }
-}
-
-@Composable
-fun CategoryItem(category: Category, onEdit: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onEdit)
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                Box(modifier = Modifier.size(24.dp).background(Color(android.graphics.Color.parseColor(category.colorHex)), CircleShape))
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(category.name, style = MaterialTheme.typography.bodyLarge)
-            }
-            IconButton(onClick = onEdit) {
-                Icon(Icons.Default.Edit, contentDescription = "Edit")
-            }
-        }
-    }
-}
-
-@Composable
-fun CategoryDialog(
-    title: String,
-    initialName: String = "",
-    initialColor: String? = null,
-    onDismiss: () -> Unit,
-    onConfirm: (String, String) -> Unit,
-    onDelete: (() -> Unit)? = null
-) {
-    var name by remember { mutableStateOf(initialName) }
-    val colors = listOf(
-        "#ac725e", "#d06b64", "#f83a22", "#fa573c", "#ff7537", "#ffad46",
-        "#42d692", "#16a765", "#7bd148", "#b3dc6c", "#fbe983", "#fad165",
-        "#92e1c0", "#9fe1e7", "#9fc6e7", "#4986e7", "#9a9cff", "#b99aff",
-        "#c2c2c2", "#cabdbf", "#cca6ac", "#f691b2", "#cd74e6", "#a47ae2"
-    )
-    var selectedColor by remember { mutableStateOf(initialColor ?: colors[15]) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(title)
-                if (onDelete != null) {
-                    IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
-                    }
-                }
-            }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                OutlinedTextField(
-                    value = name, 
-                    onValueChange = { name = it }, 
-                    label = { Text("Category Name") }, 
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Text("Select Color:")
-                ColorGrid(colors, selectedColor) { selectedColor = it }
-            }
-        },
-        confirmButton = {
-            Button(onClick = { if (name.isNotBlank()) onConfirm(name, selectedColor); onDismiss() }) { 
-                Text(if (initialName.isEmpty()) "Create" else "Save") 
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
-}
-
-@Composable
-fun ColorGrid(colors: List<String>, selectedColor: String, onColorSelected: (String) -> Unit) {
-    val columns = 6
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        colors.chunked(columns).forEach { rowColors ->
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                rowColors.forEach { color ->
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .background(Color(android.graphics.Color.parseColor(color)), CircleShape)
-                            .border(
-                                width = if (selectedColor == color) 2.dp else 1.dp,
-                                color = if (selectedColor == color) MaterialTheme.colorScheme.primary else Color.LightGray.copy(alpha = 0.5f),
-                                shape = CircleShape
-                            )
-                            .clickable { onColorSelected(color) }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun SubscriptionsView(viewModel: BudgetViewModel) {
-    val subscriptions by viewModel.allSubscriptions.collectAsState(initial = emptyList())
-    var showAddDialog by remember { mutableStateOf(false) }
-    var subToEdit by remember { mutableStateOf<Subscription?>(null) }
-
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Button(onClick = { showAddDialog = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("Add New Subscription")
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(subscriptions) { sub ->
-                SubscriptionItem(sub) { subToEdit = sub }
-            }
-        }
-    }
-
-    if (showAddDialog) {
-        SubscriptionDialog(
-            title = "New Subscription",
-            onDismiss = { showAddDialog = false },
-            onConfirm = { name, amount, date, notes ->
-                viewModel.addSubscription(name, amount, date, notes)
-            }
-        )
-    }
-
-    if (subToEdit != null) {
-        SubscriptionDialog(
-            title = "Edit Subscription",
-            initialName = subToEdit!!.name,
-            initialAmount = subToEdit!!.amount.toString(),
-            initialDate = subToEdit!!.renewalDate,
-            initialNotes = subToEdit!!.notes ?: "",
-            onDismiss = { subToEdit = null },
-            onConfirm = { name, amount, date, notes ->
-                viewModel.updateSubscription(subToEdit!!.copy(name = name, amount = amount, renewalDate = date, notes = notes))
-            },
-            onDelete = {
-                viewModel.deleteSubscription(subToEdit!!)
-                subToEdit = null
-            }
-        )
-    }
-}
-
-@Composable
-fun SubscriptionItem(subscription: Subscription, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(subscription.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("Renews: ${subscription.renewalDate.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))}", style = MaterialTheme.typography.bodySmall)
-            }
-            Text("$${String.format(Locale.US, "%.2f", subscription.amount)}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-        }
-    }
-}
-
-@Composable
-fun SubscriptionDialog(
-    title: String,
-    initialName: String = "",
-    initialAmount: String = "",
-    initialDate: LocalDate = LocalDate.now(),
-    initialNotes: String = "",
-    onDismiss: () -> Unit,
-    onConfirm: (String, Double, LocalDate, String?) -> Unit,
-    onDelete: (() -> Unit)? = null
-) {
-    var name by remember { mutableStateOf(initialName) }
-    var amount by remember { mutableStateOf(initialAmount) }
-    var date by remember { mutableStateOf(initialDate) }
-    var notes by remember { mutableStateOf(initialNotes) }
-
-    val context = LocalContext.current
-    val datePickerDialog = remember {
-        DatePickerDialog(context, { _, y, m, d -> date = LocalDate.of(y, m + 1, d) }, date.year, date.monthValue - 1, date.dayOfMonth)
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(title)
-                if (onDelete != null) {
-                    IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
-                    }
-                }
-            }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = amount, onValueChange = { if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d{0,2}$"))) amount = it }, label = { Text("Amount") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
-                TextButton(onClick = { datePickerDialog.show() }, modifier = Modifier.fillMaxWidth()) { Text("Next Renewal: ${date.format(DateTimeFormatter.ISO_LOCAL_DATE)}") }
-                OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Notes (Optional)") }, modifier = Modifier.fillMaxWidth())
-            }
-        },
-        confirmButton = {
-            Button(onClick = { if (name.isNotBlank()) onConfirm(name, amount.toDoubleOrNull() ?: 0.0, date, notes.ifBlank { null }); onDismiss() }) {
-                Text("Save")
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
-}
-
-@Composable
-fun BudgetCalendarView(items: List<BudgetItem>, categories: List<Category>) {
-    var currentMonth by remember { mutableStateOf(YearMonth.now()) }
-    var selectedDayItems by remember { mutableStateOf<List<BudgetItem>?>(null) }
-    var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
-
-    val daysInMonth = currentMonth.lengthOfMonth()
-    val firstDayOfMonth = currentMonth.atDay(1).dayOfWeek.value % 7
-    val days = (1..daysInMonth).toList()
-    val paddingDays = (0 until firstDayOfMonth).toList()
-
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        BudgetMonthSelector(currentMonth = currentMonth, onMonthChange = { currentMonth = it })
-        Spacer(modifier = Modifier.height(16.dp))
-        WeekdayHeaders()
-        Spacer(modifier = Modifier.height(8.dp))
-        CalendarGrid(days, paddingDays, currentMonth, items, onDayClick = { date, dayItems ->
-            selectedDate = date
-            selectedDayItems = dayItems
-        })
-    }
-
-    if (selectedDayItems != null && selectedDate != null) {
-        DayBreakdownDialog(date = selectedDate!!, items = selectedDayItems!!, categories = categories, onDismiss = {
-            selectedDayItems = null
-            selectedDate = null
-        })
-    }
-}
-
-@Composable
-fun BudgetMonthSelector(currentMonth: YearMonth, onMonthChange: (YearMonth) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IconButton(onClick = { onMonthChange(currentMonth.minusMonths(1)) }) {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous Month")
-        }
-        Text(
-            text = currentMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
-            style = MaterialTheme.typography.titleLarge
-        )
-        IconButton(onClick = { onMonthChange(currentMonth.plusMonths(1)) }) {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next Month")
-        }
-    }
-}
-
-@Composable
-fun WeekdayHeaders() {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat").forEach { day ->
-            Text(text = day, modifier = Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-fun CalendarGrid(days: List<Int>, paddingDays: List<Int>, currentMonth: YearMonth, items: List<BudgetItem>, onDayClick: (LocalDate, List<BudgetItem>) -> Unit) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(7),
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        items(paddingDays) { Box(modifier = Modifier.aspectRatio(1f)) }
-        items(days) { day ->
-            val date = currentMonth.atDay(day)
-            val itemsForDay = items.filter { it.date == date }
-            val totalSpent = itemsForDay.sumOf { it.amount }
-            CalendarDayCard(day, date, totalSpent, onClick = { onDayClick(date, itemsForDay) })
-        }
-    }
-}
-
-@Composable
-fun CalendarDayCard(day: Int, date: LocalDate, totalSpent: Double, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.aspectRatio(0.8f).clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = if (date == LocalDate.now()) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        Column(modifier = Modifier.padding(2.dp).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Text(text = day.toString(), style = MaterialTheme.typography.bodyMedium)
-            if (totalSpent > 0) {
-                Text(text = "$${String.format(Locale.US, "%.2f", totalSpent)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontSize = 9.sp, maxLines = 1)
-            }
-        }
-    }
-}
-
-@Composable
-fun DayBreakdownDialog(date: LocalDate, items: List<BudgetItem>, categories: List<Category>, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Breakdown for ${date.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))}") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items.forEach { item ->
-                    val category = if (item.categoryId == -1L) {
-                        Category(id = -1L, name = "Subscriptions", colorHex = "#FFD700")
-                    } else {
-                        categories.find { it.id == item.categoryId }
-                    }
-                    DayBreakdownItem(item, category)
-                    HorizontalDivider()
-                }
-                TotalRow(items.sumOf { it.amount })
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
-    )
-}
-
-@Composable
-fun DayBreakdownItem(item: BudgetItem, category: Category?) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (category != null) {
-                    Box(modifier = Modifier.size(8.dp).background(Color(android.graphics.Color.parseColor(category.colorHex)), CircleShape))
-                    Spacer(modifier = Modifier.width(4.dp))
-                }
-                Text(text = item.title, style = MaterialTheme.typography.bodyLarge)
-            }
-            if (!item.description.isNullOrBlank()) Text(text = item.description, style = MaterialTheme.typography.bodySmall)
-        }
-        Text(text = "$${String.format(Locale.US, "%.2f", item.amount)}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-    }
-}
-
-@Composable
-fun TotalRow(total: Double) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(text = "Total", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Text(text = "$${String.format(Locale.US, "%.2f", total)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-    }
-}
-
-@Composable
-fun BudgetListItem(
-    item: BudgetItem, 
-    category: Category?, 
-    onClick: () -> Unit,
-    isPending: Boolean = false
-) {
-    val catColor = category?.let { Color(android.graphics.Color.parseColor(it.colorHex)) } ?: MaterialTheme.colorScheme.surface
-    val displayColor = if (isPending) catColor.copy(alpha = 0.4f) else catColor
-    
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = if (category != null) displayColor.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface)
-    ) {
-        Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                BudgetListItemHeader(item, category, isPending)
-                if (!item.description.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(text = item.description, style = MaterialTheme.typography.bodyMedium)
-                }
-                if (category != null) {
-                    Text(
-                        text = if (isPending) "Pending: ${category.name}" else category.name, 
-                        style = MaterialTheme.typography.labelSmall, 
-                        color = if (category.id == -1L) Color(android.graphics.Color.parseColor("#B8860B")) else displayColor
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun BudgetListItemHeader(item: BudgetItem, category: Category?, isPending: Boolean) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (category != null) {
-                val color = Color(android.graphics.Color.parseColor(category.colorHex))
-                Box(modifier = Modifier.size(12.dp).background(if (isPending) color.copy(alpha = 0.4f) else color, CircleShape))
-                Spacer(modifier = Modifier.width(8.dp))
-            }
-            Text(text = item.title, style = MaterialTheme.typography.titleLarge)
-        }
-        Text(
-            text = "$${String.format(Locale.US, "%.2f", item.amount)}", 
-            style = MaterialTheme.typography.titleLarge, 
-            color = if (isPending) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.primary
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun BudgetItemDialog(
-    title: String,
-    initialTitle: String = "",
-    initialAmount: String = "",
-    initialDescription: String = "",
-    initialDate: LocalDate = LocalDate.now(),
-    initialCategoryId: Long? = null,
-    categories: List<Category>,
-    onDismiss: () -> Unit,
-    onConfirm: (String, Double, String?, LocalDate, Long?) -> Unit,
-    onDelete: (() -> Unit)? = null
-) {
-    var itemTitle by remember { mutableStateOf(initialTitle) }
-    var amount by remember { mutableStateOf(initialAmount) }
-    var description by remember { mutableStateOf(initialDescription) }
-    var date by remember { mutableStateOf(initialDate) }
-    var selectedCategory by remember { mutableStateOf(categories.find { it.id == initialCategoryId }) }
-    var expanded by remember { mutableStateOf(false) }
-    
-    val context = LocalContext.current
-    val datePickerDialog = remember {
-        DatePickerDialog(context, { _, y, m, d -> date = LocalDate.of(y, m + 1, d) }, date.year, date.monthValue - 1, date.dayOfMonth)
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(title)
-                if (onDelete != null) {
-                    IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
-                    }
-                }
-            }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = itemTitle, onValueChange = { itemTitle = it }, label = { Text("Title") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = amount, onValueChange = { if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d{0,2}$"))) amount = it }, label = { Text("Amount") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
-                CategoryDropdown(categories, selectedCategory, expanded, onExpandedChange = { expanded = it }, onCategorySelected = { selectedCategory = it; expanded = false })
-                OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description (Optional)") }, modifier = Modifier.fillMaxWidth())
-                TextButton(onClick = { datePickerDialog.show() }, modifier = Modifier.fillMaxWidth()) { Text("Date: ${date.format(DateTimeFormatter.ISO_LOCAL_DATE)}") }
-            }
-        },
-        confirmButton = { Button(onClick = { if (itemTitle.isNotBlank()) onConfirm(itemTitle, amount.toDoubleOrNull() ?: 0.0, description.ifBlank { null }, date, selectedCategory?.id) }) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun CategoryDropdown(categories: List<Category>, selectedCategory: Category?, expanded: Boolean, onExpandedChange: (Boolean) -> Unit, onCategorySelected: (Category?) -> Unit) {
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = onExpandedChange) {
-        OutlinedTextField(value = selectedCategory?.name ?: "No Category", onValueChange = {}, readOnly = true, label = { Text("Category") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) }, modifier = Modifier.menuAnchor().fillMaxWidth())
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { onExpandedChange(false) }) {
-            DropdownMenuItem(text = { Text("No Category") }, onClick = { onCategorySelected(null) })
-            categories.forEach { category ->
-                DropdownMenuItem(
-                    text = { 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(12.dp).background(Color(android.graphics.Color.parseColor(category.colorHex)), CircleShape))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(category.name)
-                        }
-                    },
-                    onClick = { onCategorySelected(category) }
-                )
-            }
-        }
-    }
 }

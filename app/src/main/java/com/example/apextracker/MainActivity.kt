@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Monitor
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -65,6 +66,11 @@ fun AppNavigation() {
                 onBackToMenu = { navController.popBackStack() }
             )
         }
+        composable("reminders") {
+            ReminderView(
+                onBackToMenu = { navController.popBackStack() }
+            )
+        }
     }
 }
 
@@ -97,6 +103,12 @@ fun MainMenu(onModuleSelected: (String) -> Unit) {
             description = "Monitor your daily device usage",
             icon = Icons.Default.Monitor,
             route = "screen_time"
+        ),
+        AppModule(
+            title = "Reminders",
+            description = "Manage your daily tasks and reminders",
+            icon = Icons.Default.Notifications,
+            route = "reminders"
         )
     )
 
