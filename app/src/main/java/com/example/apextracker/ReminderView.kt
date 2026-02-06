@@ -16,12 +16,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -32,6 +34,14 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
     val completedReminders by viewModel.completedReminders.collectAsState(initial = emptyList())
     var showAddDialog by remember { mutableStateOf(false) }
     var showCompletedReminders by remember { mutableStateOf(false) }
+
+    val now = LocalDateTime.now()
+    
+    val sortedActiveReminders = remember(activeReminders, now) {
+        activeReminders.sortedWith(compareByDescending<Reminder> { 
+            it.isOverdue(now) 
+        }.thenBy { it.date }.thenBy { it.time ?: LocalTime.MAX })
+    }
 
     Scaffold(
         topBar = {
@@ -59,16 +69,17 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
         ) {
             item { Spacer(modifier = Modifier.height(8.dp)) }
 
-            if (activeReminders.isEmpty()) {
+            if (sortedActiveReminders.isEmpty()) {
                 item {
                     Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                         Text("No active reminders", color = MaterialTheme.colorScheme.outline)
                     }
                 }
             } else {
-                items(activeReminders) { reminder ->
+                items(sortedActiveReminders) { reminder ->
                     ReminderItem(
                         reminder = reminder,
+                        isOverdue = reminder.isOverdue(now),
                         onToggle = { viewModel.toggleCompletion(reminder) },
                         onDelete = { viewModel.deleteReminder(reminder) }
                     )
@@ -95,6 +106,7 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                     items(completedReminders) { reminder ->
                         ReminderItem(
                             reminder = reminder,
+                            isOverdue = false,
                             onToggle = { viewModel.toggleCompletion(reminder) },
                             onDelete = { viewModel.deleteReminder(reminder) }
                         )
@@ -117,17 +129,26 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
     }
 }
 
+fun Reminder.isOverdue(now: LocalDateTime): Boolean {
+    if (isCompleted) return false
+    val reminderDateTime = LocalDateTime.of(date, time ?: LocalTime.MAX)
+    return reminderDateTime.isBefore(now)
+}
+
 @Composable
 fun ReminderItem(
     reminder: Reminder,
+    isOverdue: Boolean,
     onToggle: () -> Unit,
     onDelete: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = if (reminder.isCompleted) 
-            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            else CardDefaults.cardColors()
+        colors = when {
+            reminder.isCompleted -> CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            isOverdue -> CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f))
+            else -> CardDefaults.cardColors()
+        }
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -135,7 +156,10 @@ fun ReminderItem(
         ) {
             Checkbox(
                 checked = reminder.isCompleted,
-                onCheckedChange = { onToggle() }
+                onCheckedChange = { onToggle() },
+                colors = if (isOverdue && !reminder.isCompleted) 
+                    CheckboxDefaults.colors(uncheckedColor = MaterialTheme.colorScheme.error)
+                    else CheckboxDefaults.colors()
             )
             
             Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
@@ -143,21 +167,23 @@ fun ReminderItem(
                     text = reminder.name,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    textDecoration = if (reminder.isCompleted) TextDecoration.LineThrough else null
+                    textDecoration = if (reminder.isCompleted) TextDecoration.LineThrough else null,
+                    color = if (isOverdue && !reminder.isCompleted) MaterialTheme.colorScheme.error else Color.Unspecified
                 )
                 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    val iconTint = if (isOverdue && !reminder.isCompleted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline
                     Icon(
                         imageVector = Icons.Default.Event,
                         contentDescription = null,
                         modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.outline
+                        tint = iconTint
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = reminder.date.format(DateTimeFormatter.ofPattern("MMM dd, yyyy")),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline
+                        color = iconTint
                     )
                     
                     reminder.time?.let { time ->
@@ -166,20 +192,30 @@ fun ReminderItem(
                             imageVector = Icons.Default.AccessTime,
                             contentDescription = null,
                             modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.outline
+                            tint = iconTint
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = time.format(DateTimeFormatter.ofPattern("hh:mm a")),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline
+                            color = iconTint
                         )
                     } ?: run {
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "All Day",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline
+                            color = iconTint
+                        )
+                    }
+
+                    if (isOverdue && !reminder.isCompleted) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "OVERDUE",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.error
                         )
                     }
                 }
@@ -188,14 +224,18 @@ fun ReminderItem(
                     Text(
                         text = reminder.description,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (isOverdue && !reminder.isCompleted) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp)
                     )
                 }
             }
             
             IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                Icon(
+                    imageVector = Icons.Default.Delete, 
+                    contentDescription = "Delete", 
+                    tint = if (isOverdue && !reminder.isCompleted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
+                )
             }
         }
     }
