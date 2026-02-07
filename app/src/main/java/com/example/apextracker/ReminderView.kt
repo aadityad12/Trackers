@@ -3,8 +3,6 @@ package com.example.apextracker
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -32,8 +30,13 @@ import java.time.format.DateTimeFormatter
 fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewModel()) {
     val activeReminders by viewModel.activeReminders.collectAsState(initial = emptyList())
     val completedReminders by viewModel.completedReminders.collectAsState(initial = emptyList())
+    val notificationsEnabled by viewModel.notificationsEnabled.collectAsState(initial = true)
+    val allDayTime by viewModel.allDayNotificationTime.collectAsState(initial = LocalTime.NOON)
+    val offset by viewModel.specificTimeOffsetMinutes.collectAsState(initial = 30)
+
     var showAddDialog by remember { mutableStateOf(false) }
     var showCompletedReminders by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
 
     val now = LocalDateTime.now()
     
@@ -50,6 +53,11 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                 navigationIcon = {
                     IconButton(onClick = onBackToMenu) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showSettingsDialog = true }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Reminder Settings")
                     }
                 }
             )
@@ -126,7 +134,76 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                 }
             )
         }
+
+        if (showSettingsDialog) {
+            ReminderSettingsDialog(
+                enabled = notificationsEnabled,
+                allDayTime = allDayTime,
+                offset = offset,
+                onDismiss = { showSettingsDialog = false },
+                onToggleEnabled = { viewModel.setNotificationsEnabled(it) },
+                onSetAllDayTime = { viewModel.setAllDayTime(it) },
+                onSetOffset = { viewModel.setOffset(it) }
+            )
+        }
     }
+}
+
+@Composable
+fun ReminderSettingsDialog(
+    enabled: Boolean,
+    allDayTime: LocalTime,
+    offset: Int,
+    onDismiss: () -> Unit,
+    onToggleEnabled: (Boolean) -> Unit,
+    onSetAllDayTime: (LocalTime) -> Unit,
+    onSetOffset: (Int) -> Unit
+) {
+    val context = LocalContext.current
+    val timePickerDialog = remember(allDayTime) {
+        TimePickerDialog(context, { _, h, m -> onSetAllDayTime(LocalTime.of(h, m)) }, allDayTime.hour, allDayTime.minute, false)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Reminder Settings") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text("Enable Notifications", modifier = Modifier.weight(1f))
+                    Switch(checked = enabled, onCheckedChange = onToggleEnabled)
+                }
+
+                if (enabled) {
+                    Divider()
+                    Column {
+                        Text("All-Day Reminder Time", style = MaterialTheme.typography.labelMedium)
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { timePickerDialog.show() }.padding(vertical = 8.dp)) {
+                            Icon(Icons.Default.AccessTime, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(allDayTime.format(DateTimeFormatter.ofPattern("hh:mm a")), style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+
+                    Column {
+                        Text("Notification Lead Time", style = MaterialTheme.typography.labelMedium)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Slider(
+                                value = offset.toFloat(),
+                                onValueChange = { onSetOffset(it.toInt()) },
+                                valueRange = 0f..120f,
+                                steps = 11,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text("${offset}m", modifier = Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium)
+                        }
+                        Text("Receive alert $offset minutes before task is due.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
+    )
 }
 
 fun Reminder.isOverdue(now: LocalDateTime): Boolean {
