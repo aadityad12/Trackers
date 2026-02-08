@@ -91,7 +91,6 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                         reminder = reminder,
                         isOverdue = reminder.isOverdue(now),
                         onToggle = { viewModel.toggleCompletion(reminder) },
-                        onDelete = { viewModel.deleteReminder(reminder) },
                         onEdit = { reminderToEdit = reminder }
                     )
                 }
@@ -119,7 +118,6 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                             reminder = reminder,
                             isOverdue = false,
                             onToggle = { viewModel.toggleCompletion(reminder) },
-                            onDelete = { viewModel.deleteReminder(reminder) },
                             onEdit = { reminderToEdit = reminder }
                         )
                     }
@@ -155,6 +153,10 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                         time = time,
                         description = description
                     ))
+                    reminderToEdit = null
+                },
+                onDelete = {
+                    viewModel.deleteReminder(reminderToEdit!!)
                     reminderToEdit = null
                 }
             )
@@ -242,7 +244,6 @@ fun ReminderItem(
     reminder: Reminder,
     isOverdue: Boolean,
     onToggle: () -> Unit,
-    onDelete: () -> Unit,
     onEdit: () -> Unit
 ) {
     Card(
@@ -333,21 +334,12 @@ fun ReminderItem(
                 }
             }
             
-            Row {
-                IconButton(onClick = onEdit) {
-                    Icon(
-                        imageVector = Icons.Default.Edit, 
-                        contentDescription = "Edit",
-                        tint = if (isOverdue && !reminder.isCompleted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                    )
-                }
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        imageVector = Icons.Default.Delete, 
-                        contentDescription = "Delete", 
-                        tint = if (isOverdue && !reminder.isCompleted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
-                    )
-                }
+            IconButton(onClick = onEdit) {
+                Icon(
+                    imageVector = Icons.Default.Edit, 
+                    contentDescription = "Edit",
+                    tint = if (isOverdue && !reminder.isCompleted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                )
             }
         }
     }
@@ -361,7 +353,8 @@ fun ReminderEditDialog(
     initialDate: LocalDate = LocalDate.now(),
     initialTime: LocalTime? = null,
     onDismiss: () -> Unit,
-    onConfirm: (String, LocalDate, LocalTime?, String?) -> Unit
+    onConfirm: (String, LocalDate, LocalTime?, String?) -> Unit,
+    onDelete: (() -> Unit)? = null
 ) {
     var name by remember { mutableStateOf(initialName) }
     var description by remember { mutableStateOf(initialDescription) }
@@ -400,7 +393,20 @@ fun ReminderEditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        title = { 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(title)
+                if (onDelete != null) {
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
