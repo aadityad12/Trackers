@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -35,6 +36,7 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
     val offset by viewModel.specificTimeOffsetMinutes.collectAsState(initial = 30)
 
     var showAddDialog by remember { mutableStateOf(false) }
+    var reminderToEdit by remember { mutableStateOf<Reminder?>(null) }
     var showCompletedReminders by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
 
@@ -89,7 +91,8 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                         reminder = reminder,
                         isOverdue = reminder.isOverdue(now),
                         onToggle = { viewModel.toggleCompletion(reminder) },
-                        onDelete = { viewModel.deleteReminder(reminder) }
+                        onDelete = { viewModel.deleteReminder(reminder) },
+                        onEdit = { reminderToEdit = reminder }
                     )
                 }
             }
@@ -116,7 +119,8 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                             reminder = reminder,
                             isOverdue = false,
                             onToggle = { viewModel.toggleCompletion(reminder) },
-                            onDelete = { viewModel.deleteReminder(reminder) }
+                            onDelete = { viewModel.deleteReminder(reminder) },
+                            onEdit = { reminderToEdit = reminder }
                         )
                     }
                 }
@@ -126,11 +130,32 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
         }
 
         if (showAddDialog) {
-            AddReminderDialog(
+            ReminderEditDialog(
+                title = "New Reminder",
                 onDismiss = { showAddDialog = false },
                 onConfirm = { name, date, time, description ->
                     viewModel.addReminder(name, date, time, description)
                     showAddDialog = false
+                }
+            )
+        }
+
+        if (reminderToEdit != null) {
+            ReminderEditDialog(
+                title = "Edit Reminder",
+                initialName = reminderToEdit!!.name,
+                initialDescription = reminderToEdit!!.description ?: "",
+                initialDate = reminderToEdit!!.date,
+                initialTime = reminderToEdit!!.time,
+                onDismiss = { reminderToEdit = null },
+                onConfirm = { name, date, time, description ->
+                    viewModel.updateReminder(reminderToEdit!!.copy(
+                        name = name,
+                        date = date,
+                        time = time,
+                        description = description
+                    ))
+                    reminderToEdit = null
                 }
             )
         }
@@ -175,7 +200,7 @@ fun ReminderSettingsDialog(
                 }
 
                 if (enabled) {
-                    Divider()
+                    HorizontalDivider()
                     Column {
                         Text("All-Day Reminder Time", style = MaterialTheme.typography.labelMedium)
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { timePickerDialog.show() }.padding(vertical = 8.dp)) {
@@ -217,10 +242,11 @@ fun ReminderItem(
     reminder: Reminder,
     isOverdue: Boolean,
     onToggle: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onEdit: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable { onEdit() },
         colors = when {
             reminder.isCompleted -> CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
             isOverdue -> CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f))
@@ -307,27 +333,41 @@ fun ReminderItem(
                 }
             }
             
-            IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = Icons.Default.Delete, 
-                    contentDescription = "Delete", 
-                    tint = if (isOverdue && !reminder.isCompleted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
-                )
+            Row {
+                IconButton(onClick = onEdit) {
+                    Icon(
+                        imageVector = Icons.Default.Edit, 
+                        contentDescription = "Edit",
+                        tint = if (isOverdue && !reminder.isCompleted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                    )
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        imageVector = Icons.Default.Delete, 
+                        contentDescription = "Delete", 
+                        tint = if (isOverdue && !reminder.isCompleted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-fun AddReminderDialog(
+fun ReminderEditDialog(
+    title: String,
+    initialName: String = "",
+    initialDescription: String = "",
+    initialDate: LocalDate = LocalDate.now(),
+    initialTime: LocalTime? = null,
     onDismiss: () -> Unit,
     onConfirm: (String, LocalDate, LocalTime?, String?) -> Unit
 ) {
-    var name by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var date by remember { mutableStateOf(LocalDate.now()) }
-    var time by remember { mutableStateOf<LocalTime?>(null) }
-    var isAllDay by remember { mutableStateOf(true) }
+    var name by remember { mutableStateOf(initialName) }
+    var description by remember { mutableStateOf(initialDescription) }
+    var date by remember { mutableStateOf(initialDate) }
+    var time by remember { mutableStateOf(initialTime) }
+    var isAllDay by remember { mutableStateOf(initialTime == null) }
 
     val context = LocalContext.current
     
@@ -360,7 +400,7 @@ fun AddReminderDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("New Reminder") },
+        title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
@@ -422,7 +462,7 @@ fun AddReminderDialog(
                 },
                 enabled = name.isNotBlank()
             ) {
-                Text("Add")
+                Text(if (title.startsWith("New")) "Add" else "Save")
             }
         },
         dismissButton = {
