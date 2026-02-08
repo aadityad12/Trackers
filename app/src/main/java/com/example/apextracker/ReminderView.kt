@@ -3,8 +3,6 @@ package com.example.apextracker
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
@@ -43,6 +41,7 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
     var reminderToEdit by remember { mutableStateOf<Reminder?>(null) }
     var showCompletedReminders by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showClearAllConfirm by remember { mutableStateOf(false) }
     
     var selectedCompletedIds by remember { mutableStateOf(setOf<Long>()) }
     var isSelectionMode by remember { mutableStateOf(false) }
@@ -151,7 +150,7 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                         
                         if (showCompletedReminders && !isSelectionMode) {
                             TextButton(
-                                onClick = { viewModel.clearAllCompleted() },
+                                onClick = { showClearAllConfirm = true },
                                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                             ) {
                                 Text("Clear All")
@@ -235,6 +234,30 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                 onToggleEnabled = { viewModel.setNotificationsEnabled(it) },
                 onSetAllDayTime = { viewModel.setAllDayTime(it) },
                 onSetOffset = { viewModel.setOffset(it) }
+            )
+        }
+
+        if (showClearAllConfirm) {
+            AlertDialog(
+                onDismissRequest = { showClearAllConfirm = false },
+                title = { Text("Clear All Completed?") },
+                text = { Text("This will permanently delete all completed reminders. This action cannot be undone.") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.clearAllCompleted()
+                            showClearAllConfirm = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Delete All")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showClearAllConfirm = false }) {
+                        Text("Cancel")
+                    }
+                }
             )
         }
     }
