@@ -68,6 +68,18 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun clearAllCompleted() {
+        viewModelScope.launch {
+            reminderDao.clearAllCompleted()
+        }
+    }
+
+    fun deleteReminders(ids: List<Long>) {
+        viewModelScope.launch {
+            reminderDao.deleteByIds(ids)
+        }
+    }
+
     fun setNotificationsEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settings.setNotificationsEnabled(enabled)

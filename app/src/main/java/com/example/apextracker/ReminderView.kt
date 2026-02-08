@@ -3,6 +3,10 @@ package com.example.apextracker
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,7 +30,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewModel()) {
     val activeReminders by viewModel.activeReminders.collectAsState(initial = emptyList())
@@ -39,6 +43,9 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
     var reminderToEdit by remember { mutableStateOf<Reminder?>(null) }
     var showCompletedReminders by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    
+    var selectedCompletedIds by remember { mutableStateOf(setOf<Long>()) }
+    var isSelectionMode by remember { mutableStateOf(false) }
 
     val now = LocalDateTime.now()
     
@@ -51,22 +58,49 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Reminders", fontWeight = FontWeight.Bold) },
+                title = { 
+                    if (isSelectionMode) {
+                        Text("${selectedCompletedIds.size} Selected")
+                    } else {
+                        Text("Reminders", fontWeight = FontWeight.Bold)
+                    }
+                },
                 navigationIcon = {
-                    IconButton(onClick = onBackToMenu) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    if (isSelectionMode) {
+                        IconButton(onClick = { 
+                            isSelectionMode = false
+                            selectedCompletedIds = emptySet()
+                        }) {
+                            Icon(Icons.Default.Close, contentDescription = "Exit selection")
+                        }
+                    } else {
+                        IconButton(onClick = onBackToMenu) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showSettingsDialog = true }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Reminder Settings")
+                    if (isSelectionMode) {
+                        IconButton(onClick = {
+                            viewModel.deleteReminders(selectedCompletedIds.toList())
+                            isSelectionMode = false
+                            selectedCompletedIds = emptySet()
+                        }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete selected")
+                        }
+                    } else {
+                        IconButton(onClick = { showSettingsDialog = true }) {
+                            Icon(Icons.Default.Settings, contentDescription = "Reminder Settings")
+                        }
                     }
                 }
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Add Reminder")
+            if (!isSelectionMode) {
+                FloatingActionButton(onClick = { showAddDialog = true }) {
+                    Icon(Icons.Default.Add, contentDescription = "Add Reminder")
+                }
             }
         }
     ) { innerPadding ->
@@ -98,16 +132,30 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
 
             if (completedReminders.isNotEmpty()) {
                 item {
-                    TextButton(
-                        onClick = { showCompletedReminders = !showCompletedReminders },
-                        modifier = Modifier.fillMaxWidth()
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(if (showCompletedReminders) "Hide Completed" else "Show Completed (${completedReminders.size})")
-                            Icon(
-                                if (showCompletedReminders) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                contentDescription = null
-                            )
+                        TextButton(
+                            onClick = { showCompletedReminders = !showCompletedReminders }
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(if (showCompletedReminders) "Hide Completed" else "Show Completed (${completedReminders.size})")
+                                Icon(
+                                    if (showCompletedReminders) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                    contentDescription = null
+                                )
+                            }
+                        }
+                        
+                        if (showCompletedReminders && !isSelectionMode) {
+                            TextButton(
+                                onClick = { viewModel.clearAllCompleted() },
+                                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                            ) {
+                                Text("Clear All")
+                            }
                         }
                     }
                 }
@@ -118,7 +166,23 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                             reminder = reminder,
                             isOverdue = false,
                             onToggle = { viewModel.toggleCompletion(reminder) },
-                            onEdit = { reminderToEdit = reminder }
+                            onEdit = { /* No editing for completed */ },
+                            isSelected = selectedCompletedIds.contains(reminder.id),
+                            isSelectionMode = isSelectionMode,
+                            onLongClick = {
+                                isSelectionMode = true
+                                selectedCompletedIds = selectedCompletedIds + reminder.id
+                            },
+                            onClick = {
+                                if (isSelectionMode) {
+                                    selectedCompletedIds = if (selectedCompletedIds.contains(reminder.id)) {
+                                        selectedCompletedIds - reminder.id
+                                    } else {
+                                        selectedCompletedIds + reminder.id
+                                    }
+                                    if (selectedCompletedIds.isEmpty()) isSelectionMode = false
+                                }
+                            }
                         )
                     }
                 }
@@ -239,32 +303,51 @@ fun Reminder.isOverdue(now: LocalDateTime): Boolean {
     return reminderDateTime.isBefore(now)
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ReminderItem(
     reminder: Reminder,
     isOverdue: Boolean,
     onToggle: () -> Unit,
-    onEdit: () -> Unit
+    onEdit: () -> Unit = {},
+    isSelected: Boolean = false,
+    isSelectionMode: Boolean = false,
+    onLongClick: () -> Unit = {},
+    onClick: () -> Unit = {}
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { onEdit() },
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = { 
+                    if (isSelectionMode) onClick() 
+                    else if (!reminder.isCompleted) onEdit() 
+                },
+                onLongClick = { if (reminder.isCompleted) onLongClick() }
+            ),
         colors = when {
+            isSelected -> CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
             reminder.isCompleted -> CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
             isOverdue -> CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f))
             else -> CardDefaults.cardColors()
-        }
+        },
+        border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Checkbox(
-                checked = reminder.isCompleted,
-                onCheckedChange = { onToggle() },
-                colors = if (isOverdue && !reminder.isCompleted) 
-                    CheckboxDefaults.colors(uncheckedColor = MaterialTheme.colorScheme.error)
-                    else CheckboxDefaults.colors()
-            )
+            if (isSelectionMode && reminder.isCompleted) {
+                Checkbox(checked = isSelected, onCheckedChange = { onClick() })
+            } else {
+                Checkbox(
+                    checked = reminder.isCompleted,
+                    onCheckedChange = { onToggle() },
+                    colors = if (isOverdue && !reminder.isCompleted) 
+                        CheckboxDefaults.colors(uncheckedColor = MaterialTheme.colorScheme.error)
+                        else CheckboxDefaults.colors()
+                )
+            }
             
             Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
                 Text(
@@ -334,12 +417,14 @@ fun ReminderItem(
                 }
             }
             
-            IconButton(onClick = onEdit) {
-                Icon(
-                    imageVector = Icons.Default.Edit, 
-                    contentDescription = "Edit",
-                    tint = if (isOverdue && !reminder.isCompleted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                )
+            if (!reminder.isCompleted && !isSelectionMode) {
+                IconButton(onClick = onEdit) {
+                    Icon(
+                        imageVector = Icons.Default.Edit, 
+                        contentDescription = "Edit",
+                        tint = if (isOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                    )
+                }
             }
         }
     }

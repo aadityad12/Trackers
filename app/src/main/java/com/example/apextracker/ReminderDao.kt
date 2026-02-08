@@ -19,4 +19,10 @@ interface ReminderDao {
 
     @Delete
     suspend fun delete(reminder: Reminder)
+
+    @Query("DELETE FROM reminders WHERE isCompleted = 1")
+    suspend fun clearAllCompleted()
+
+    @Query("DELETE FROM reminders WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Long>)
 }
