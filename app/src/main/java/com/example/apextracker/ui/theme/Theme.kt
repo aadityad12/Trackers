@@ -1,48 +1,42 @@
 package com.example.apextracker.ui.theme
 
 import android.app.Activity
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = ElectricCyan,
-    secondary = VividBlue,
-    tertiary = SoftCyan,
-    background = MidnightBlack,
-    surface = DeepSurface,
+    primary = ApexWhite,
+    secondary = ApexSilver,
+    tertiary = ApexGray,
+    background = ApexCharcoal,
+    surface = ApexSteel,
     onPrimary = Color.Black,
-    onSecondary = Color.White,
-    onTertiary = Color.Black,
-    onBackground = TextWhite,
-    onSurface = TextWhite,
-    error = ErrorCrimson,
+    onSecondary = Color.Black,
+    onTertiary = Color.White,
+    onBackground = ApexWhite,
+    onSurface = ApexWhite,
+    error = ApexError,
     onError = Color.White,
     errorContainer = Color(0xFF5C0000),
     onErrorContainer = Color(0xFFFFDAD6),
-    surfaceVariant = CardBackground,
-    onSurfaceVariant = TextDim,
-    outline = TextMuted
+    surfaceVariant = ApexGray,
+    onSurfaceVariant = ApexSilver,
+    outline = ApexMuted
 )
 
-// Keep a basic light theme for anyone who might switch to it
 private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF006978),
-    secondary = Color(0xFF006978),
-    tertiary = Color(0xFF006978)
+    primary = Color(0xFF1E1E1E),
+    secondary = Color(0xFF454545),
+    tertiary = Color(0xFF666666)
 )
 
 @Composable
 fun ApexTrackerTheme(
-    darkTheme: Boolean = true, // App is designed for a dark aesthetic
-    dynamicColor: Boolean = false, // Disable to maintain our custom theme
+    darkTheme: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
