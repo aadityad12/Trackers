@@ -4,7 +4,14 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.*
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,8 +24,11 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -45,7 +55,35 @@ class MainActivity : ComponentActivity() {
 fun AppNavigation() {
     val navController = rememberNavController()
 
-    NavHost(navController = navController, startDestination = "menu") {
+    // Transitions that feel like "entering" and "exiting" 3D space
+    // 400ms with FastOutSlowInEasing creates a smooth, weighted motion
+    val enterAnimSpec = tween<Float>(durationMillis = 400, easing = FastOutSlowInEasing)
+    val exitAnimSpec = tween<Float>(durationMillis = 350, easing = FastOutSlowInEasing)
+
+    NavHost(
+        navController = navController, 
+        startDestination = "menu",
+        // When going "into" a module: scale up + fade in
+        enterTransition = {
+            fadeIn(animationSpec = enterAnimSpec) + 
+            scaleIn(initialScale = 0.94f, animationSpec = enterAnimSpec)
+        },
+        // When menu is being replaced: scale up further + fade out (moving "past" the camera)
+        exitTransition = {
+            fadeOut(animationSpec = exitAnimSpec) + 
+            scaleOut(targetScale = 1.06f, animationSpec = exitAnimSpec)
+        },
+        // When coming "back" to menu: scale down + fade in
+        popEnterTransition = {
+            fadeIn(animationSpec = enterAnimSpec) + 
+            scaleIn(initialScale = 1.06f, animationSpec = enterAnimSpec)
+        },
+        // When module is closing: scale down + fade out (moving "away" from camera)
+        popExitTransition = {
+            fadeOut(animationSpec = exitAnimSpec) + 
+            scaleOut(targetScale = 0.94f, animationSpec = exitAnimSpec)
+        }
+    ) {
         composable("menu") {
             MainMenu(
                 onModuleSelected = { moduleRoute ->
@@ -117,7 +155,14 @@ fun MainMenu(onModuleSelected: (String) -> Unit) {
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("APEX TRACKER", fontWeight = FontWeight.Black, style = MaterialTheme.typography.headlineSmall) },
+                title = { 
+                    Text(
+                        "APEX TRACKER", 
+                        fontWeight = FontWeight.Black, 
+                        style = MaterialTheme.typography.headlineSmall,
+                        letterSpacing = 2.sp
+                    ) 
+                },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
                 )
@@ -138,27 +183,48 @@ fun MainMenu(onModuleSelected: (String) -> Unit) {
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.secondary
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
             items(modules) { module ->
                 ModuleCard(module, onModuleSelected)
             }
+            item { Spacer(modifier = Modifier.height(32.dp)) }
         }
     }
 }
 
 @Composable
 fun ModuleCard(module: AppModule, onModuleSelected: (String) -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    
+    // Subtle scale for a more "professional" feel
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1.0f,
+        animationSpec = tween(100),
+        label = "scale"
+    )
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = module.enabled) { onModuleSelected(module.route) },
-        colors = if (module.enabled) CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant) 
-                 else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+            .scale(scale)
+            .clickable(
+                enabled = module.enabled,
+                interactionSource = interactionSource,
+                indication = LocalIndication.current
+            ) { onModuleSelected(module.route) },
+        colors = if (module.enabled) CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)) 
+                 else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)),
         shape = MaterialTheme.shapes.extraLarge,
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 0.dp,
+            pressedElevation = 0.dp,
+            hoveredElevation = 2.dp
+        )
     ) {
         Row(
             modifier = Modifier
@@ -204,7 +270,7 @@ fun ModuleCard(module: AppModule, onModuleSelected: (String) -> Unit) {
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowRight,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
                     modifier = Modifier.size(24.dp)
                 )
             }

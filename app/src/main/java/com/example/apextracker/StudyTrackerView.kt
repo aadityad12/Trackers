@@ -1,5 +1,10 @@
 package com.example.apextracker
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -9,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -30,7 +36,6 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
     
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Detect when user leaves the app or navigates away
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP) {
@@ -43,7 +48,6 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
         }
     }
 
-    // Filter to only show sessions from previous days
     val pastSessions = remember(allSessions) {
         val today = LocalDate.now()
         allSessions.filter { it.date.isBefore(today) }
@@ -52,7 +56,7 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Study Tracker") },
+                title = { Text("Study Tracker", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBackToMenu) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -68,12 +72,13 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(32.dp))
             
             Text(
-                text = "Today's Study Time",
+                text = "Today's Study Session",
                 style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.outline
+                color = MaterialTheme.colorScheme.secondary,
+                fontWeight = FontWeight.Medium
             )
             
             Spacer(modifier = Modifier.height(16.dp))
@@ -82,48 +87,56 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
                 text = formatTime(timeSeconds),
                 style = MaterialTheme.typography.displayLarge.copy(
                     fontSize = 72.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Black
                 ),
                 color = if (isRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
             )
             
-            Spacer(modifier = Modifier.height(64.dp))
+            Spacer(modifier = Modifier.height(48.dp))
             
+            val buttonInteractionSource = remember { MutableInteractionSource() }
+            val isButtonPressed by buttonInteractionSource.collectIsPressedAsState()
+            val buttonScale by animateFloatAsState(if (isButtonPressed) 0.94f else 1.0f, label = "buttonScale")
+
             Button(
                 onClick = { viewModel.toggleTimer() },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(100.dp),
+                    .height(100.dp)
+                    .scale(buttonScale),
+                interactionSource = buttonInteractionSource,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isRunning) Color(0xFFF44336) else Color(0xFF4CAF50)
+                    containerColor = if (isRunning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                 ),
-                shape = MaterialTheme.shapes.extraLarge
+                shape = MaterialTheme.shapes.extraLarge,
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp, pressedElevation = 0.dp)
             ) {
                 Text(
-                    text = if (isRunning) "PAUSE" else "START",
-                    style = MaterialTheme.typography.headlineMedium,
+                    text = if (isRunning) "PAUSE" else "START STUDYING",
+                    style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Black
                 )
             }
             
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             
             TextButton(
                 onClick = { viewModel.resetTimerManual() },
                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.outline)
             ) {
-                Text("RESET TIMER")
+                Text("RESET TODAY'S PROGRESS", fontWeight = FontWeight.Bold)
             }
             
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(32.dp))
             
-            HorizontalDivider()
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 32.dp))
             
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
             
             Text(
                 text = "Past Sessions",
                 style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
                 modifier = Modifier.align(Alignment.Start)
             )
             
@@ -134,8 +147,8 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth().weight(1f),
-                    contentPadding = PaddingValues(vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    contentPadding = PaddingValues(vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(pastSessions) { session ->
                         SessionItem(session)
@@ -150,25 +163,33 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
 fun SessionItem(session: StudySession) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
     ) {
         Row(
             modifier = Modifier
-                .padding(16.dp)
+                .padding(20.dp)
                 .fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = session.date.format(DateTimeFormatter.ofPattern("MMM dd, yyyy")),
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium
-            )
+            Column {
+                Text(
+                    text = session.date.format(DateTimeFormatter.ofPattern("EEEE")),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = session.date.format(DateTimeFormatter.ofPattern("MMM dd, yyyy")),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
             Text(
                 text = formatTime(session.durationSeconds),
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Black
             )
         }
     }

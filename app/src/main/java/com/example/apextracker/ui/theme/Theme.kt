@@ -13,33 +13,36 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = PrimaryNeon,
-    secondary = SecondaryNeon,
-    tertiary = AccentOrange,
-    background = DeepBlack,
-    surface = SurfaceDark,
+    primary = ElectricCyan,
+    secondary = VividBlue,
+    tertiary = SoftCyan,
+    background = MidnightBlack,
+    surface = DeepSurface,
     onPrimary = Color.Black,
-    onSecondary = Color.Black,
+    onSecondary = Color.White,
     onTertiary = Color.Black,
-    onBackground = TextPrimary,
-    onSurface = TextPrimary,
-    error = ErrorRed,
-    errorContainer = Color(0xFF400000),
+    onBackground = TextWhite,
+    onSurface = TextWhite,
+    error = ErrorCrimson,
+    onError = Color.White,
+    errorContainer = Color(0xFF5C0000),
     onErrorContainer = Color(0xFFFFDAD6),
-    surfaceVariant = CardDark,
-    onSurfaceVariant = TextSecondary
+    surfaceVariant = CardBackground,
+    onSurfaceVariant = TextDim,
+    outline = TextMuted
 )
 
+// Keep a basic light theme for anyone who might switch to it
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
+    primary = Color(0xFF006978),
+    secondary = Color(0xFF006978),
+    tertiary = Color(0xFF006978)
 )
 
 @Composable
 fun ApexTrackerTheme(
-    darkTheme: Boolean = true, // Force dark theme for a better aesthetic
-    dynamicColor: Boolean = false, // Disable dynamic color to maintain the custom dark aesthetic
+    darkTheme: Boolean = true, // App is designed for a dark aesthetic
+    dynamicColor: Boolean = false, // Disable to maintain our custom theme
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
