@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.KeyboardArrowRight
@@ -18,10 +19,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -114,22 +116,31 @@ fun MainMenu(onModuleSelected: (String) -> Unit) {
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Apex Tracker", fontWeight = FontWeight.Bold) })
+            CenterAlignedTopAppBar(
+                title = { Text("APEX TRACKER", fontWeight = FontWeight.Black, style = MaterialTheme.typography.headlineSmall) },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
+            )
         }
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
+                Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = "My Modules",
+                    text = "Control Center",
                     style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
                 )
+                Spacer(modifier = Modifier.height(8.dp))
             }
             items(modules) { module ->
                 ModuleCard(module, onModuleSelected)
@@ -144,18 +155,20 @@ fun ModuleCard(module: AppModule, onModuleSelected: (String) -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = module.enabled) { onModuleSelected(module.route) },
-        colors = if (module.enabled) CardDefaults.cardColors() 
-                 else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        colors = if (module.enabled) CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant) 
+                 else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+        shape = MaterialTheme.shapes.extraLarge,
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier
-                .padding(16.dp)
+                .padding(20.dp)
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                modifier = Modifier.size(48.dp),
-                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.size(56.dp),
+                shape = CircleShape,
                 color = if (module.enabled) MaterialTheme.colorScheme.primaryContainer 
                         else MaterialTheme.colorScheme.outlineVariant
             ) {
@@ -163,25 +176,27 @@ fun ModuleCard(module: AppModule, onModuleSelected: (String) -> Unit) {
                     Icon(
                         imageVector = module.icon,
                         contentDescription = null,
+                        modifier = Modifier.size(28.dp),
                         tint = if (module.enabled) MaterialTheme.colorScheme.onPrimaryContainer 
                                else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
             
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(20.dp))
             
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = module.title,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = if (module.enabled) Color.Unspecified else MaterialTheme.colorScheme.outline
+                    fontWeight = FontWeight.ExtraBold,
+                    color = if (module.enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline
                 )
                 Text(
                     text = module.description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 16.sp
                 )
             }
             
@@ -189,7 +204,8 @@ fun ModuleCard(module: AppModule, onModuleSelected: (String) -> Unit) {
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowRight,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.outline
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
                 )
             }
         }
