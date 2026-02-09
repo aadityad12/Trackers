@@ -61,7 +61,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
-    var showSplash by remember { mutableStateOf(true) }
+    var showSplash by remember { mutableStateOf(false) }
 
     if (showSplash) {
         SplashScreen(onFinished = { showSplash = false })
