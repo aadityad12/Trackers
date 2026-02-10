@@ -14,7 +14,6 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -38,7 +37,7 @@ import java.util.Locale
 import kotlin.math.atan2
 
 enum class BudgetScreen {
-    Overview, Calendar, Settings
+    Overview, Settings
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -57,7 +56,6 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
                 title = { 
                     Text(when(currentScreen) {
                         BudgetScreen.Overview -> "Overview"
-                        BudgetScreen.Calendar -> "Calendar View"
                         BudgetScreen.Settings -> "Settings"
                     }) 
                 },
@@ -86,12 +84,6 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
                     label = { Text("Overview") }
                 )
                 NavigationBarItem(
-                    selected = currentScreen == BudgetScreen.Calendar,
-                    onClick = { currentScreen = BudgetScreen.Calendar },
-                    icon = { Icon(Icons.Default.DateRange, contentDescription = "Calendar") },
-                    label = { Text("Calendar") }
-                )
-                NavigationBarItem(
                     selected = currentScreen == BudgetScreen.Settings,
                     onClick = { currentScreen = BudgetScreen.Settings },
                     icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
@@ -110,7 +102,6 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             when (currentScreen) {
                 BudgetScreen.Overview -> OverviewView(items, categories, subscriptions, onEdit = { itemToEdit = it })
-                BudgetScreen.Calendar -> BudgetCalendarView(items, categories)
                 BudgetScreen.Settings -> BudgetSettingsView(categories, viewModel)
             }
         }
