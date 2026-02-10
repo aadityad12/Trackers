@@ -7,7 +7,6 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
-import java.time.LocalDate
 
 @Dao
 interface BudgetDao {
@@ -22,7 +21,4 @@ interface BudgetDao {
 
     @Delete
     suspend fun deleteItem(item: BudgetItem)
-
-    @Query("SELECT * FROM budget_items WHERE date = :date")
-    fun getItemsByDate(date: LocalDate): Flow<List<BudgetItem>>
 }

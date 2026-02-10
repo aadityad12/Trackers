@@ -30,6 +30,9 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
                 var currentRenewal = subscription.renewalDate
                 var updatedSub = subscription
                 
+                // Special ID for Subscriptions
+                val subscriptionCategoryId = -1L
+
                 // Catch up on any missed renewals
                 while (currentRenewal.isBefore(today) || currentRenewal.isEqual(today)) {
                     // Add the expense to the tracker using the actual renewal date
@@ -39,7 +42,7 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
                             amount = updatedSub.amount,
                             description = updatedSub.notes,
                             date = currentRenewal,
-                            categoryId = -1L // Special ID for Subscriptions
+                            categoryId = subscriptionCategoryId
                         )
                     )
                     

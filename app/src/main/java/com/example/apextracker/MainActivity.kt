@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.KeyboardArrowRight
@@ -27,11 +26,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -61,7 +58,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
-    var showSplash by remember { mutableStateOf(false) }
+    var showSplash by remember { mutableStateOf(true) }
 
     if (showSplash) {
         SplashScreen(onFinished = { showSplash = false })
@@ -117,10 +114,11 @@ fun SplashScreen(onFinished: () -> Unit) {
     var startAnimation by remember { mutableStateOf(false) }
     val alphaAnim = animateFloatAsState(
         targetValue = if (startAnimation) 1f else 0f,
-        animationSpec = tween(durationMillis = 800)
+        animationSpec = tween(durationMillis = 800),
+        label = "splashAlpha"
     )
 
-    LaunchedEffect(key1 = true) {
+    LaunchedEffect(Unit) {
         startAnimation = true
         delay(2000)
         onFinished()
@@ -155,22 +153,6 @@ fun ApexLogo(modifier: Modifier = Modifier, color: Color = MaterialTheme.colorSc
         val w = size.width
         val h = size.height
         
-        // Drawing the "A" logo shape from the image provided
-        val path = Path().apply {
-            // Main triangle body
-            moveTo(w * 0.1f, h * 0.85f)
-            lineTo(w * 0.5f, h * 0.15f)
-            lineTo(w * 0.9f, h * 0.85f)
-            
-            // The cross bar
-            moveTo(w * 0.32f, h * 0.58f)
-            lineTo(w * 0.68f, h * 0.58f)
-            
-            // The separation cut
-            moveTo(w * 0.45f, h * 0.35f)
-            lineTo(w * 0.55f, h * 0.45f)
-        }
-
         drawPath(
             path = Path().apply {
                 // Bottom left leg
@@ -207,32 +189,34 @@ data class AppModule(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainMenu(onModuleSelected: (String) -> Unit) {
-    val modules = listOf(
-        AppModule(
-            title = "Budget Tracker",
-            description = "Track your expenses and manage categories",
-            icon = Icons.Default.AccountBalanceWallet,
-            route = "budget_tracker"
-        ),
-        AppModule(
-            title = "Study Tracker",
-            description = "Daily study stopwatch with history",
-            icon = Icons.Default.Timer,
-            route = "study_tracker"
-        ),
-        AppModule(
-            title = "Screen Time Tracker",
-            description = "Monitor your daily device usage",
-            icon = Icons.Default.Monitor,
-            route = "screen_time"
-        ),
-        AppModule(
-            title = "Reminders",
-            description = "Manage your daily tasks and reminders",
-            icon = Icons.Default.Notifications,
-            route = "reminders"
+    val modules = remember {
+        listOf(
+            AppModule(
+                title = "Budget Tracker",
+                description = "Track your expenses and manage categories",
+                icon = Icons.Default.AccountBalanceWallet,
+                route = "budget_tracker"
+            ),
+            AppModule(
+                title = "Study Tracker",
+                description = "Daily study stopwatch with history",
+                icon = Icons.Default.Timer,
+                route = "study_tracker"
+            ),
+            AppModule(
+                title = "Screen Time Tracker",
+                description = "Monitor your daily device usage",
+                icon = Icons.Default.Monitor,
+                route = "screen_time"
+            ),
+            AppModule(
+                title = "Reminders",
+                description = "Manage your daily tasks and reminders",
+                icon = Icons.Default.Notifications,
+                route = "reminders"
+            )
         )
-    )
+    }
 
     Scaffold(
         topBar = {
@@ -302,8 +286,10 @@ fun ModuleCard(module: AppModule, onModuleSelected: (String) -> Unit) {
                 interactionSource = interactionSource,
                 indication = LocalIndication.current
             ) { onModuleSelected(module.route) },
-        colors = if (module.enabled) CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)) 
-                 else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)),
+        colors = CardDefaults.cardColors(
+            containerColor = if (module.enabled) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f) 
+                             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+        ),
         shape = MaterialTheme.shapes.extraLarge,
         elevation = CardDefaults.cardElevation(
             defaultElevation = 0.dp,
