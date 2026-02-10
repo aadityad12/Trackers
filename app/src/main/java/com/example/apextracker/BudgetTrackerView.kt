@@ -27,6 +27,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -189,11 +190,7 @@ fun OverviewView(
             contentPadding = PaddingValues(bottom = 16.dp)
         ) {
             item {
-                Surface(
-                    tonalElevation = 2.dp,
-                    modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
-                    shape = CardDefaults.shape
-                ) {
+                Box(modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
                     ExpenditureCard(totalExpenditure, monthItems, categories, pendingSubs)
                 }
             }
@@ -266,12 +263,17 @@ fun ExpenditureCard(
             modifier = Modifier.padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(text = "Total Expenditure This Month:", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = "Total Expenditure This Month:", 
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center
+            )
             Text(
                 text = "$${String.format(Locale.US, "%.2f", totalExpenditure)}",
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center
             )
             
             if (monthItems.isNotEmpty() || pendingSubs.isNotEmpty()) {
@@ -280,9 +282,10 @@ fun ExpenditureCard(
             } else {
                 Text(
                     text = "No expenses recorded for this month.",
-                    modifier = Modifier.padding(vertical = 32.dp),
+                    modifier = Modifier.padding(vertical = 32.dp).fillMaxWidth(),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.outline
+                    color = MaterialTheme.colorScheme.outline,
+                    textAlign = TextAlign.Center
                 )
             }
         }
