@@ -12,7 +12,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
@@ -36,10 +35,6 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.atan2
 
-enum class BudgetScreen {
-    Overview, Settings
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = viewModel()) {
@@ -48,62 +43,34 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
     val subscriptions by viewModel.allSubscriptions.collectAsState(initial = emptyList())
     var showAddDialog by remember { mutableStateOf(false) }
     var itemToEdit by remember { mutableStateOf<BudgetItem?>(null) }
-    var currentScreen by remember { mutableStateOf(BudgetScreen.Overview) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { 
-                    Text(when(currentScreen) {
-                        BudgetScreen.Overview -> "Overview"
-                        BudgetScreen.Settings -> "Settings"
-                    }) 
+                    Text("Budget Tracker", fontWeight = FontWeight.Bold) 
                 },
                 navigationIcon = {
-                    IconButton(onClick = {
-                        if (currentScreen == BudgetScreen.Overview) {
-                            onBackToMenu()
-                        } else {
-                            currentScreen = BudgetScreen.Overview
-                        }
-                    }) {
-                        Icon(
-                            imageVector = if (currentScreen == BudgetScreen.Overview) Icons.Default.Home else Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = if (currentScreen == BudgetScreen.Overview) "Home" else "Back to Overview"
-                        )
+                    IconButton(onClick = onBackToMenu) {
+                        Icon(Icons.Default.Home, contentDescription = "Home")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showSettingsDialog = true }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
                 }
             )
         },
-        bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    selected = currentScreen == BudgetScreen.Overview,
-                    onClick = { currentScreen = BudgetScreen.Overview },
-                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Overview") },
-                    label = { Text("Overview") }
-                )
-                NavigationBarItem(
-                    selected = currentScreen == BudgetScreen.Settings,
-                    onClick = { currentScreen = BudgetScreen.Settings },
-                    icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
-                    label = { Text("Settings") }
-                )
-            }
-        },
         floatingActionButton = {
-            if (currentScreen != BudgetScreen.Settings) {
-                FloatingActionButton(onClick = { showAddDialog = true }) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Item")
-                }
+            FloatingActionButton(onClick = { showAddDialog = true }) {
+                Icon(Icons.Default.Add, contentDescription = "Add Item")
             }
         }
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
-            when (currentScreen) {
-                BudgetScreen.Overview -> OverviewView(items, categories, subscriptions, onEdit = { itemToEdit = it })
-                BudgetScreen.Settings -> BudgetSettingsView(categories, viewModel)
-            }
+            OverviewView(items, categories, subscriptions, onEdit = { itemToEdit = it })
         }
 
         if (showAddDialog) {
@@ -142,6 +109,14 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
                     viewModel.deleteItem(itemToEdit!!)
                     itemToEdit = null
                 }
+            )
+        }
+
+        if (showSettingsDialog) {
+            BudgetSettingsDialog(
+                categories = categories,
+                viewModel = viewModel,
+                onDismiss = { showSettingsDialog = false }
             )
         }
     }

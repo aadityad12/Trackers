@@ -27,55 +27,71 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Composable
-fun BudgetSettingsView(categories: List<Category>, viewModel: BudgetViewModel) {
+fun BudgetSettingsDialog(
+    categories: List<Category>,
+    viewModel: BudgetViewModel,
+    onDismiss: () -> Unit
+) {
     var activeSubScreen by remember { mutableStateOf<String?>(null) }
 
-    when (activeSubScreen) {
-        "categories" -> {
-            Column(modifier = Modifier.fillMaxSize()) {
-                SettingsHeader("Manage Categories") { activeSubScreen = null }
-                CategoriesView(
-                    categories = categories,
-                    onAdd = { name, color -> viewModel.addCategory(name, color) },
-                    onUpdate = { viewModel.updateCategory(it) },
-                    onDelete = { viewModel.deleteCategory(it) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (activeSubScreen != null) {
+                    IconButton(onClick = { activeSubScreen = null }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+                Text(
+                    text = when (activeSubScreen) {
+                        "categories" -> "Manage Categories"
+                        "subscriptions" -> "Manage Subscriptions"
+                        else -> "Budget Settings"
+                    }
                 )
             }
-        }
-        "subscriptions" -> {
-            Column(modifier = Modifier.fillMaxSize()) {
-                SettingsHeader("Manage Subscriptions") { activeSubScreen = null }
-                SubscriptionsView(viewModel)
+        },
+        text = {
+            Box(modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp)) {
+                when (activeSubScreen) {
+                    "categories" -> {
+                        CategoriesView(
+                            categories = categories,
+                            onAdd = { name, color -> viewModel.addCategory(name, color) },
+                            onUpdate = { viewModel.updateCategory(it) },
+                            onDelete = { viewModel.deleteCategory(it) }
+                        )
+                    }
+                    "subscriptions" -> {
+                        SubscriptionsView(viewModel)
+                    }
+                    else -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            BudgetSettingsItem("Manage Categories") { activeSubScreen = "categories" }
+                            BudgetSettingsItem("Manage Subscriptions") { activeSubScreen = "subscriptions" }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Done")
             }
         }
-        else -> {
-            Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                BudgetSettingsItem("Manage Categories") { activeSubScreen = "categories" }
-                BudgetSettingsItem("Manage Subscriptions") { activeSubScreen = "subscriptions" }
-            }
-        }
-    }
-}
-
-@Composable
-fun SettingsHeader(title: String, onBack: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-        }
-        Text(text = title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 8.dp))
-    }
-    HorizontalDivider()
+    )
 }
 
 @Composable
 fun BudgetSettingsItem(label: String, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    Surface(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     ) {
         Row(
             modifier = Modifier.padding(16.dp).fillMaxWidth(),
@@ -98,11 +114,11 @@ fun CategoriesView(
     var showAddDialog by remember { mutableStateOf(false) }
     var categoryToEdit by remember { mutableStateOf<Category?>(null) }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxSize()) {
         Button(onClick = { showAddDialog = true }, modifier = Modifier.fillMaxWidth()) {
             Text("Create New Category")
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(categories) { category ->
                 CategoryItem(
@@ -141,24 +157,22 @@ fun CategoriesView(
 
 @Composable
 fun CategoryItem(category: Category, onEdit: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onEdit)
+    Surface(
+        onClick = onEdit,
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surface
     ) {
         Row(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            modifier = Modifier.padding(12.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                Box(modifier = Modifier.size(24.dp).background(Color(android.graphics.Color.parseColor(category.colorHex)), CircleShape))
+                Box(modifier = Modifier.size(20.dp).background(Color(android.graphics.Color.parseColor(category.colorHex)), CircleShape))
                 Spacer(modifier = Modifier.width(12.dp))
-                Text(category.name, style = MaterialTheme.typography.bodyLarge)
+                Text(category.name, style = MaterialTheme.typography.bodyMedium)
             }
-            IconButton(onClick = onEdit) {
-                Icon(Icons.Default.Edit, contentDescription = "Edit")
-            }
+            Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
         }
     }
 }
@@ -244,11 +258,11 @@ fun SubscriptionsView(viewModel: BudgetViewModel) {
     var showAddDialog by remember { mutableStateOf(false) }
     var subToEdit by remember { mutableStateOf<Subscription?>(null) }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxSize()) {
         Button(onClick = { showAddDialog = true }, modifier = Modifier.fillMaxWidth()) {
             Text("Add New Subscription")
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(subscriptions) { sub ->
                 SubscriptionItem(sub) { subToEdit = sub }
@@ -287,19 +301,21 @@ fun SubscriptionsView(viewModel: BudgetViewModel) {
 
 @Composable
 fun SubscriptionItem(subscription: Subscription, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
+    Surface(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surface
     ) {
         Row(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            modifier = Modifier.padding(12.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(subscription.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("Renews: ${subscription.renewalDate.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))}", style = MaterialTheme.typography.bodySmall)
+                Text(subscription.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                Text("Renews: ${subscription.renewalDate.format(DateTimeFormatter.ofPattern("MMM dd"))}", style = MaterialTheme.typography.bodySmall)
             }
-            Text("$${String.format(Locale.US, "%.2f", subscription.amount)}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            Text("$${String.format(Locale.US, "%.2f", subscription.amount)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
         }
     }
 }
