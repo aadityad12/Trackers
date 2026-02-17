@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Monitor
@@ -104,6 +105,9 @@ fun AppNavigation() {
             }
             composable("reminders") {
                 ReminderView(onBackToMenu = { navController.popBackStack() })
+            }
+            composable("notes") {
+                NoteView(onBackToMenu = { navController.popBackStack() })
             }
         }
     }
@@ -214,6 +218,12 @@ fun MainMenu(onModuleSelected: (String) -> Unit) {
                 description = "Manage your daily tasks and reminders",
                 icon = Icons.Default.Notifications,
                 route = "reminders"
+            ),
+            AppModule(
+                title = "Notes",
+                description = "Save text, numbers and lists",
+                icon = Icons.AutoMirrored.Filled.Notes,
+                route = "notes"
             )
         )
     }

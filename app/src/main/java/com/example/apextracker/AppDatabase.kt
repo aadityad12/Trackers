@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [BudgetItem::class, Category::class, Subscription::class, StudySession::class, ScreenTimeSession::class, ExcludedApp::class, Reminder::class], version = 8, exportSchema = false)
+@Database(entities = [BudgetItem::class, Category::class, Subscription::class, StudySession::class, ScreenTimeSession::class, ExcludedApp::class, Reminder::class, Note::class], version = 9, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun budgetDao(): BudgetDao
@@ -16,6 +16,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun screenTimeSessionDao(): ScreenTimeSessionDao
     abstract fun excludedAppDao(): ExcludedAppDao
     abstract fun reminderDao(): ReminderDao
+    abstract fun noteDao(): NoteDao
 
     companion object {
         @Volatile
