@@ -15,7 +15,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -153,7 +155,9 @@ fun NoteCard(note: Note, onClick: () -> Unit, onDelete: () -> Unit) {
 @Composable
 fun NoteEditor(note: Note, onDismiss: () -> Unit, onSave: (String, String) -> Unit) {
     var title by remember { mutableStateOf(note.title) }
-    var content by remember { mutableStateOf(note.content) }
+    var contentValue by remember {
+        mutableStateOf(TextFieldValue(note.content, selection = TextRange(note.content.length)))
+    }
 
     Scaffold(
         topBar = {
@@ -165,7 +169,7 @@ fun NoteEditor(note: Note, onDismiss: () -> Unit, onSave: (String, String) -> Un
                     }
                 },
                 actions = {
-                    TextButton(onClick = { onSave(title, content) }) {
+                    TextButton(onClick = { onSave(title, contentValue.text) }) {
                         Text("Save", fontWeight = FontWeight.Bold)
                     }
                 }
@@ -188,8 +192,10 @@ fun NoteEditor(note: Note, onDismiss: () -> Unit, onSave: (String, String) -> Un
             )
             Spacer(modifier = Modifier.height(8.dp))
             TextField(
-                value = content,
-                onValueChange = { content = it },
+                value = contentValue,
+                onValueChange = { newValue ->
+                    contentValue = handleNoteContentChange(newValue, contentValue)
+                },
                 placeholder = { Text("Start typing...") },
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 colors = TextFieldDefaults.colors(
@@ -206,14 +212,59 @@ fun NoteEditor(note: Note, onDismiss: () -> Unit, onSave: (String, String) -> Un
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 InputToolButton(icon = Icons.AutoMirrored.Filled.List, label = "Bullet") {
-                    content += if (content.isEmpty() || content.endsWith("\n")) "• " else "\n• "
+                    val prefix = if (contentValue.text.isEmpty() || contentValue.text.endsWith("\n")) "• " else "\n• "
+                    val newText = contentValue.text.substring(0, contentValue.selection.start) + prefix + contentValue.text.substring(contentValue.selection.end)
+                    val newSelection = TextRange(contentValue.selection.start + prefix.length)
+                    contentValue = TextFieldValue(newText, newSelection)
                 }
                 InputToolButton(icon = Icons.AutoMirrored.Filled.FormatIndentIncrease, label = "Subpoint") {
-                    content += if (content.isEmpty() || content.endsWith("\n")) "  ◦ " else "\n  ◦ "
+                    val prefix = if (contentValue.text.isEmpty() || contentValue.text.endsWith("\n")) "  ◦ " else "\n  ◦ "
+                    val newText = contentValue.text.substring(0, contentValue.selection.start) + prefix + contentValue.text.substring(contentValue.selection.end)
+                    val newSelection = TextRange(contentValue.selection.start + prefix.length)
+                    contentValue = TextFieldValue(newText, newSelection)
                 }
             }
         }
     }
+}
+
+private fun handleNoteContentChange(
+    newValue: TextFieldValue,
+    oldValue: TextFieldValue
+): TextFieldValue {
+    if (newValue.text.length > oldValue.text.length) {
+        val addedCharIndex = newValue.selection.start - 1
+        if (addedCharIndex >= 0 && newValue.text[addedCharIndex] == '\n') {
+            // Newline was added
+            val textBeforeCursor = newValue.text.substring(0, addedCharIndex)
+            val lastLine = textBeforeCursor.split("\n").lastOrNull() ?: ""
+            
+            val prefix = when {
+                lastLine.startsWith("• ") -> "• "
+                lastLine.startsWith("  ◦ ") -> "  ◦ "
+                else -> null
+            }
+            
+            if (prefix != null) {
+                val newText = newValue.text.substring(0, newValue.selection.start) + prefix + newValue.text.substring(newValue.selection.start)
+                val newSelection = TextRange(newValue.selection.start + prefix.length)
+                return TextFieldValue(newText, newSelection)
+            }
+        }
+    } else if (newValue.text.length < oldValue.text.length) {
+        // Deletion
+        val oldSelection = oldValue.selection.start
+        val textBeforeOldCursor = oldValue.text.substring(0, oldSelection)
+        val lastLine = textBeforeOldCursor.split("\n").lastOrNull() ?: ""
+        
+        if ((lastLine == "• " || lastLine == "  ◦ ") && newValue.selection.start < oldSelection) {
+            // If deleting from an empty bullet line, remove the whole bullet prefix
+            val startOfLine = oldSelection - lastLine.length
+            val newText = oldValue.text.substring(0, startOfLine) + oldValue.text.substring(oldSelection)
+            return TextFieldValue(newText, TextRange(startOfLine))
+        }
+    }
+    return newValue
 }
 
 @Composable
