@@ -13,9 +13,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.AccountBalanceWallet
@@ -28,7 +31,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -201,39 +207,39 @@ fun MainMenu(onModuleSelected: (String) -> Unit) {
     val modules = remember {
         listOf(
             AppModule(
-                title = "Daily Overview",
-                description = "Your day at a glance - Reminders, Budget, Stats",
+                title = "Overview",
+                description = "Day at a glance",
                 icon = Icons.Default.GridView,
                 route = "overview",
                 isProminent = true
             ),
             AppModule(
-                title = "Budget Tracker",
-                description = "Track your expenses and manage categories",
+                title = "Budget",
+                description = "Expenses",
                 icon = Icons.Default.AccountBalanceWallet,
                 route = "budget_tracker"
             ),
             AppModule(
-                title = "Study Tracker",
-                description = "Daily study stopwatch with history",
+                title = "Study",
+                description = "Stopwatch",
                 icon = Icons.Default.Timer,
                 route = "study_tracker"
             ),
             AppModule(
-                title = "Screen Time Tracker",
-                description = "Monitor your daily device usage",
+                title = "Screen",
+                description = "Usage",
                 icon = Icons.Default.Monitor,
                 route = "screen_time"
             ),
             AppModule(
-                title = "Reminders",
-                description = "Manage your daily tasks and reminders",
+                title = "Tasks",
+                description = "Reminders",
                 icon = Icons.Default.Notifications,
                 route = "reminders"
             ),
             AppModule(
                 title = "Notes",
-                description = "Save text, numbers and lists",
+                description = "Ideas",
                 icon = Icons.AutoMirrored.Filled.Notes,
                 route = "notes"
             )
@@ -245,12 +251,12 @@ fun MainMenu(onModuleSelected: (String) -> Unit) {
             CenterAlignedTopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        ApexLogo(modifier = Modifier.size(24.dp))
-                        Spacer(modifier = Modifier.width(12.dp))
+                        ApexLogo(modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             "APEX TRACKER",
                             fontWeight = FontWeight.Black,
-                            style = MaterialTheme.typography.titleLarge,
+                            style = MaterialTheme.typography.titleMedium,
                             letterSpacing = 2.sp
                         )
                     }
@@ -261,118 +267,161 @@ fun MainMenu(onModuleSelected: (String) -> Unit) {
             )
         }
     ) { innerPadding ->
-        LazyColumn(
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .padding(horizontal = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(bottom = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Control Center",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
+                Column {
+                    Text(
+                        text = "Good Day,",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "Select a module to begin",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
             }
-            items(modules) { module ->
-                ModuleCard(module, onModuleSelected)
+
+            // Prominent module first
+            val prominent = modules.first { it.isProminent }
+            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
+                ProminentModuleCard(prominent, onModuleSelected)
             }
-            item { Spacer(modifier = Modifier.height(32.dp)) }
+
+            // Others in grid
+            items(modules.filter { !it.isProminent }) { module ->
+                GridModuleCard(module, onModuleSelected)
+            }
         }
     }
 }
 
 @Composable
-fun ModuleCard(module: AppModule, onModuleSelected: (String) -> Unit) {
+fun ProminentModuleCard(module: AppModule, onModuleSelected: (String) -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1.0f,
-        animationSpec = tween(100),
-        label = "scale"
-    )
+    val scale by animateFloatAsState(if (isPressed) 0.98f else 1f, label = "scale")
 
-    val containerColor = when {
-        !module.enabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
-        module.isProminent -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
-        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-    }
-
-    Card(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .height(140.dp)
             .scale(scale)
             .clickable(
-                enabled = module.enabled,
                 interactionSource = interactionSource,
                 indication = LocalIndication.current
             ) { onModuleSelected(module.route) },
-        colors = CardDefaults.cardColors(containerColor = containerColor),
-        shape = if (module.isProminent) MaterialTheme.shapes.extraLarge else MaterialTheme.shapes.large,
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (module.isProminent) 4.dp else 0.dp,
-            pressedElevation = 0.dp
-        )
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        shadowElevation = 4.dp
     ) {
-        Row(
-            modifier = Modifier
-                .padding(if (module.isProminent) 24.dp else 20.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Background decoration
+            Canvas(modifier = Modifier.fillMaxSize().offset(x = 40.dp, y = 20.dp)) {
+                drawCircle(
+                    color = Color.White.copy(alpha = 0.05f),
+                    radius = size.minDimension * 0.8f
+                )
+            }
+            
+            Row(
+                modifier = Modifier.padding(24.dp).fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = module.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        text = module.description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    )
+                }
+                
+                Surface(
+                    modifier = Modifier.size(64.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = module.icon,
+                            contentDescription = null,
+                            modifier = Modifier.size(32.dp),
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun GridModuleCard(module: AppModule, onModuleSelected: (String) -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (isPressed) 0.96f else 1f, label = "scale")
+
+    Surface(
+        modifier = Modifier
+            .aspectRatio(1f)
+            .scale(scale)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current
+            ) { onModuleSelected(module.route) },
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.Start,
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
             Surface(
-                modifier = Modifier.size(if (module.isProminent) 64.dp else 56.dp),
-                shape = CircleShape,
-                color = if (module.isProminent) MaterialTheme.colorScheme.primary 
-                        else if (module.enabled) MaterialTheme.colorScheme.primaryContainer 
-                        else MaterialTheme.colorScheme.outlineVariant
+                modifier = Modifier.size(40.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = module.icon,
                         contentDescription = null,
-                        modifier = Modifier.size(if (module.isProminent) 32.dp else 28.dp),
-                        tint = if (module.isProminent) MaterialTheme.colorScheme.onPrimary 
-                               else if (module.enabled) MaterialTheme.colorScheme.onPrimaryContainer 
-                               else MaterialTheme.colorScheme.onSurfaceVariant
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
             
-            Spacer(modifier = Modifier.width(20.dp))
-            
-            Column(modifier = Modifier.weight(1f)) {
+            Column {
                 Text(
                     text = module.title,
-                    style = if (module.isProminent) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = if (module.isProminent) MaterialTheme.colorScheme.onPrimaryContainer 
-                            else if (module.enabled) MaterialTheme.colorScheme.onSurface 
-                            else MaterialTheme.colorScheme.outline
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = module.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (module.isProminent) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 16.sp
-                )
-            }
-            
-            if (module.enabled) {
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = if (module.isProminent) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
-                           else MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                    modifier = Modifier.size(24.dp)
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

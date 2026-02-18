@@ -1,21 +1,33 @@
 package com.example.apextracker
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -50,18 +62,32 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
 
     val pastSessions = remember(allSessions) {
         val today = LocalDate.now()
-        allSessions.filter { it.date.isBefore(today) }
+        allSessions.filter { it.date.isBefore(today) }.sortedByDescending { it.date }
     }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Study Tracker", fontWeight = FontWeight.Bold) },
+            CenterAlignedTopAppBar(
+                title = { 
+                    Text("STUDY SESSION", 
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 2.sp
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBackToMenu) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.resetTimerManual() }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Reset")
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
             )
         }
     ) { innerPadding ->
@@ -69,90 +95,91 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .padding(16.dp),
+                .background(MaterialTheme.colorScheme.background),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(32.dp))
+            Box(
+                modifier = Modifier
+                    .weight(1.2f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                StudyTimerDisplay(timeSeconds, isRunning)
+            }
             
-            Text(
-                text = "Today's Study Session",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.secondary,
-                fontWeight = FontWeight.Medium
-            )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                    .padding(24.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Recent History",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black
+                    )
+                    Icon(Icons.Default.History, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                if (pastSessions.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("No history yet", color = MaterialTheme.colorScheme.outline)
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(pastSessions) { session ->
+                            SessionItemCompact(session)
+                        }
+                    }
+                }
+            }
             
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Text(
-                text = formatTime(timeSeconds),
-                style = MaterialTheme.typography.displayLarge.copy(
-                    fontSize = 72.sp,
-                    fontWeight = FontWeight.Black
-                ),
-                color = if (isRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-            )
-            
-            Spacer(modifier = Modifier.height(48.dp))
-            
-            val buttonInteractionSource = remember { MutableInteractionSource() }
-            val isButtonPressed by buttonInteractionSource.collectIsPressedAsState()
-            val buttonScale by animateFloatAsState(if (isButtonPressed) 0.94f else 1.0f, label = "buttonScale")
-
-            Button(
-                onClick = { viewModel.toggleTimer() },
+            // Bottom Action Button
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(100.dp)
-                    .scale(buttonScale),
-                interactionSource = buttonInteractionSource,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isRunning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                ),
-                shape = MaterialTheme.shapes.extraLarge,
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp, pressedElevation = 0.dp)
+                    .padding(24.dp),
+                color = Color.Transparent
             ) {
-                Text(
-                    text = if (isRunning) "PAUSE" else "START STUDYING",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Black
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            TextButton(
-                onClick = { viewModel.resetTimerManual() },
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.outline)
-            ) {
-                Text("RESET TODAY'S PROGRESS", fontWeight = FontWeight.Bold)
-            }
-            
-            Spacer(modifier = Modifier.height(32.dp))
-            
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 32.dp))
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            Text(
-                text = "Past Sessions",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.align(Alignment.Start)
-            )
-            
-            if (pastSessions.isEmpty()) {
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Text("No past data recorded yet", color = MaterialTheme.colorScheme.outline)
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                    contentPadding = PaddingValues(vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                val interactionSource = remember { MutableInteractionSource() }
+                val isPressed by interactionSource.collectIsPressedAsState()
+                val scale by animateFloatAsState(if (isPressed) 0.96f else 1f, label = "scale")
+
+                Button(
+                    onClick = { viewModel.toggleTimer() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(64.dp)
+                        .scale(scale),
+                    interactionSource = interactionSource,
+                    shape = RoundedCornerShape(20.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isRunning) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primary,
+                        contentColor = if (isRunning) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimary
+                    )
                 ) {
-                    items(pastSessions) { session ->
-                        SessionItem(session)
-                    }
+                    Icon(
+                        if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = null
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = if (isRunning) "PAUSE SESSION" else "START STUDYING",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black
+                    )
                 }
             }
         }
@@ -160,44 +187,111 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
 }
 
 @Composable
-fun SessionItem(session: StudySession) {
-    Card(
+fun StudyTimerDisplay(seconds: Long, isRunning: Boolean) {
+    val infiniteTransition = rememberInfiniteTransition(label = "timer")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(4000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+
+    val primaryColor = MaterialTheme.colorScheme.primary
+
+    Box(contentAlignment = Alignment.Center) {
+        // Decorative Rings
+        Canvas(modifier = Modifier.size(280.dp).rotate(if (isRunning) rotation else 0f)) {
+            drawArc(
+                brush = Brush.sweepGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        primaryColor.copy(alpha = 0.1f),
+                        primaryColor,
+                        Color.Transparent
+                    )
+                ),
+                startAngle = 0f,
+                sweepAngle = 360f,
+                useCenter = false,
+                style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
+            )
+        }
+        
+        Canvas(modifier = Modifier.size(240.dp).rotate(if (isRunning) -rotation * 0.5f else 0f)) {
+            drawCircle(
+                color = primaryColor.copy(alpha = 0.05f),
+                style = Stroke(width = 1.dp.toPx())
+            )
+        }
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = formatTime(seconds),
+                style = MaterialTheme.typography.displayLarge.copy(
+                    fontSize = 56.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = (-2).sp
+                ),
+                color = if (isRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = if (isRunning) "FOCUSING" else "READY",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.outline,
+                letterSpacing = 4.sp
+            )
+        }
+    }
+}
+
+@Composable
+fun SessionItemCompact(session: StudySession) {
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     ) {
         Row(
-            modifier = Modifier
-                .padding(20.dp)
-                .fillMaxWidth(),
+            modifier = Modifier.padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
                 Text(
-                    text = session.date.format(DateTimeFormatter.ofPattern("EEEE")),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = session.date.format(DateTimeFormatter.ofPattern("MMM dd, yyyy")),
+                    text = session.date.format(DateTimeFormatter.ofPattern("MMM dd")),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
+                Text(
+                    text = session.date.format(DateTimeFormatter.ofPattern("EEEE")),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
             }
             Text(
-                text = formatTime(session.durationSeconds),
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Black
+                text = formatTimeCompact(session.durationSeconds),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.primary
             )
         }
     }
 }
 
 fun formatTime(seconds: Long): String {
+    val h = seconds / 3600
+    val m = (seconds % 3600) / 60
+    val s = seconds % 60
+    return if (h > 0) String.format(Locale.getDefault(), "%02d:%02d:%02d", h, m, s)
+    else String.format(Locale.getDefault(), "%02d:%02d", m, s)
+}
+
+fun formatTimeCompact(seconds: Long): String {
     val hours = seconds / 3600
     val minutes = (seconds % 3600) / 60
-    val remainingSeconds = seconds % 60
-    return String.format(Locale.getDefault(), "%02d:%02d:%02d", hours, minutes, remainingSeconds)
+    return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
 }

@@ -1,5 +1,7 @@
 package com.example.apextracker
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -8,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
@@ -15,11 +18,14 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -28,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.LocalDate
 import java.time.YearMonth
@@ -47,9 +54,13 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = { 
-                    Text("Budget Tracker", fontWeight = FontWeight.Bold) 
+                    Text("BUDGET FLOW", 
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 2.sp
+                    )
                 },
                 navigationIcon = {
                     IconButton(onClick = onBackToMenu) {
@@ -60,17 +71,29 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
                     IconButton(onClick = { showSettingsDialog = true }) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }) {
+            FloatingActionButton(
+                onClick = { showAddDialog = true },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                shape = RoundedCornerShape(16.dp)
+            ) {
                 Icon(Icons.Default.Add, contentDescription = "Add Item")
             }
         }
     ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
-            OverviewView(items, categories, subscriptions, onEdit = { itemToEdit = it })
+        Box(modifier = Modifier
+            .padding(innerPadding)
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+        ) {
+            BudgetOverview(items, categories, subscriptions, onEdit = { itemToEdit = it })
         }
 
         if (showAddDialog) {
@@ -123,7 +146,7 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
 }
 
 @Composable
-fun OverviewView(
+fun BudgetOverview(
     items: List<BudgetItem>, 
     categories: List<Category>, 
     subscriptions: List<Subscription>,
@@ -146,36 +169,36 @@ fun OverviewView(
     val totalExpenditure = monthItems.sumOf { it.amount }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        MonthSelector(
+        MonthSelectorCompact(
             currentMonth = monthToDisplay,
             onMonthChange = { selectedMonth = it }
         )
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 16.dp)
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                Box(modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
-                    ExpenditureCard(totalExpenditure, monthItems, categories, pendingSubs)
-                }
+                SummaryCardModern(totalExpenditure, monthItems, categories, pendingSubs)
             }
 
             if (monthItems.isNotEmpty() || pendingSubs.isNotEmpty()) {
                 val sortedItems = monthItems.sortedByDescending { it.date }
                 
-                item { Spacer(modifier = Modifier.height(16.dp)) }
+                item { 
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("TRANSACTIONS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
                 
                 items(pendingSubs.sortedBy { it.renewalDate }) { sub ->
-                    val category = Category(id = -1L, name = "Pending Subscription", colorHex = "#FFD700")
-                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                        BudgetListItem(
-                            BudgetItem(title = sub.name, amount = sub.amount, date = sub.renewalDate, categoryId = -1L), 
-                            category, 
-                            onClick = {},
-                            isPending = true
-                        )
-                    }
+                    val category = Category(id = -1L, name = "Subscription", colorHex = "#FFD700")
+                    BudgetListItem(
+                        BudgetItem(title = sub.name, amount = sub.amount, date = sub.renewalDate, categoryId = -1L), 
+                        category, 
+                        onClick = {},
+                        isPending = true
+                    )
                 }
 
                 items(sortedItems) { item ->
@@ -184,9 +207,12 @@ fun OverviewView(
                     } else {
                         categories.find { it.id == item.categoryId }
                     }
-                    
-                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                        BudgetListItem(item, category, onClick = { onEdit(item) })
+                    BudgetListItem(item, category, onClick = { onEdit(item) })
+                }
+            } else {
+                item {
+                    Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                        Text("No data for this period", color = MaterialTheme.colorScheme.outline)
                     }
                 }
             }
@@ -195,71 +221,88 @@ fun OverviewView(
 }
 
 @Composable
-fun MonthSelector(currentMonth: YearMonth, onMonthChange: (YearMonth) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+fun MonthSelectorCompact(currentMonth: YearMonth, onMonthChange: (YearMonth) -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     ) {
-        IconButton(onClick = { onMonthChange(currentMonth.minusMonths(1)) }) {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous Month")
-        }
-        Text(
-            text = currentMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
-            style = MaterialTheme.typography.titleLarge
-        )
-        IconButton(onClick = { onMonthChange(currentMonth.plusMonths(1)) }) {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next Month")
-        }
-    }
-}
-
-@Composable
-fun ExpenditureCard(
-    totalExpenditure: Double, 
-    monthItems: List<BudgetItem>, 
-    categories: List<Category>,
-    pendingSubs: List<Subscription>
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Row(
+            modifier = Modifier.padding(4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Total Expenditure This Month:", 
-                style = MaterialTheme.typography.bodyLarge,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = "$${String.format(Locale.US, "%.2f", totalExpenditure)}",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center
-            )
+            IconButton(onClick = { onMonthChange(currentMonth.minusMonths(1)) }) {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Prev")
+            }
             
-            if (monthItems.isNotEmpty() || pendingSubs.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(24.dp))
-                ExpensePieChart(monthItems, categories, pendingSubs)
-            } else {
-                Text(
-                    text = "No expenses recorded for this month.",
-                    modifier = Modifier.padding(vertical = 32.dp).fillMaxWidth(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.outline,
-                    textAlign = TextAlign.Center
-                )
+            Text(
+                text = currentMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy")).uppercase(),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.sp
+            )
+
+            IconButton(onClick = { onMonthChange(currentMonth.plusMonths(1)) }) {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next")
             }
         }
     }
 }
 
 @Composable
-fun ExpensePieChart(
+fun SummaryCardModern(
+    total: Double, 
+    items: List<BudgetItem>, 
+    categories: List<Category>,
+    pendingSubs: List<Subscription>
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        shadowElevation = 2.dp
+    ) {
+        Column(modifier = Modifier.padding(24.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column {
+                    Text(
+                        text = "Total Monthly Spend",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = "$${String.format(Locale.US, "%,.2f", total)}",
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+                Surface(
+                    modifier = Modifier.size(48.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.SwapHoriz, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+                    }
+                }
+            }
+            
+            if (items.isNotEmpty() || pendingSubs.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(24.dp))
+                ExpensePieChartModern(items, categories, pendingSubs)
+            }
+        }
+    }
+}
+
+@Composable
+fun ExpensePieChartModern(
     items: List<BudgetItem>, 
     categories: List<Category>,
     pendingSubs: List<Subscription>
@@ -270,9 +313,6 @@ fun ExpensePieChart(
     val totalCombined = totalExpenses + totalPending
     
     if (totalCombined == 0.0) return
-
-    val haptic = LocalHapticFeedback.current
-    var showPendingBreakdown by remember { mutableStateOf(false) }
 
     val chartData = mutableListOf<Triple<String, Float, Color>>()
     
@@ -288,95 +328,61 @@ fun ExpensePieChart(
     }
 
     if (totalPending > 0) {
-        chartData.add(Triple("Pending Subscriptions", totalPending.toFloat(), Color(0xFFFFD700).copy(alpha = 0.4f)))
+        chartData.add(Triple("Pending", totalPending.toFloat(), MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f)))
     }
 
     val sortedData = chartData.sortedByDescending { it.second }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Canvas(modifier = Modifier.size(180.dp).pointerInput(Unit) {
-            detectTapGestures { offset ->
-                val centerX = size.width / 2f
-                val centerY = size.height / 2f
-                val angle = Math.toDegrees(atan2((offset.y - centerY).toDouble(), (offset.x - centerX).toDouble())).toFloat()
-                val normalizedAngle = (angle + 90f + 360f) % 360f
-                
-                var currentAngle = 0f
-                sortedData.forEach { (name, amount, _) ->
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(120.dp)) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                var startAngle = -90f
+                sortedData.forEach { (_, amount, color) ->
                     val sweepAngle = (amount / totalCombined.toFloat()) * 360f
-                    if (normalizedAngle >= currentAngle && normalizedAngle <= currentAngle + sweepAngle) {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        if (name == "Pending Subscriptions") {
-                            showPendingBreakdown = true
-                        }
-                    }
-                    currentAngle += sweepAngle
+                    drawArc(
+                        color = color,
+                        startAngle = startAngle,
+                        sweepAngle = sweepAngle,
+                        useCenter = false,
+                        style = Stroke(width = 20.dp.toPx(), cap = StrokeCap.Butt)
+                    )
+                    startAngle += sweepAngle
                 }
             }
-        }) {
-            var startAngle = -90f
-            sortedData.forEach { (_, amount, color) ->
-                val sweepAngle = (amount / totalCombined.toFloat()) * 360f
-                drawArc(color = color, startAngle = startAngle, sweepAngle = sweepAngle, useCenter = true)
-                drawArc(color = Color.White, startAngle = startAngle, sweepAngle = sweepAngle, useCenter = true, style = Stroke(width = 2.dp.toPx()))
-                startAngle += sweepAngle
-            }
-            drawCircle(color = Color.White, radius = size.minDimension / 4)
+            Text(
+                text = "${(totalExpenses/totalCombined * 100).toInt()}%",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Black
+            )
         }
         
         Spacer(modifier = Modifier.width(24.dp))
         
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            sortedData.take(6).forEach { (name, amount, color) ->
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable(enabled = name == "Pending Subscriptions") {
-                    if (name == "Pending Subscriptions") showPendingBreakdown = true
-                }) {
-                    Box(modifier = Modifier.size(10.dp).background(color, CircleShape))
-                    Spacer(modifier = Modifier.width(4.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            sortedData.take(4).forEach { (name, amount, color) ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(color))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "$name (${String.format(Locale.US, "%.0f%%", (amount / totalCombined.toFloat()) * 100)})",
+                        text = "$name",
                         style = MaterialTheme.typography.labelSmall,
-                        fontWeight = if (name == "Pending Subscriptions") FontWeight.Bold else FontWeight.Normal,
-                        textDecoration = if (name == "Pending Subscriptions") TextDecoration.Underline else null
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "${String.format(Locale.US, "%.0f%%", (amount / totalCombined.toFloat()) * 100)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
             }
-            if (sortedData.size > 6) Text(text = "...", style = MaterialTheme.typography.labelSmall)
+            if (sortedData.size > 4) {
+                Text("+ ${sortedData.size - 4} more", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f))
+            }
         }
     }
-
-    if (showPendingBreakdown) {
-        PendingSubscriptionsDialog(pendingSubs) { showPendingBreakdown = false }
-    }
-}
-
-@Composable
-fun PendingSubscriptionsDialog(subscriptions: List<Subscription>, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Upcoming Subscriptions") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                subscriptions.sortedBy { it.renewalDate }.forEach { sub ->
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Column {
-                            Text(sub.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                            Text("Renewal: ${sub.renewalDate.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))}", style = MaterialTheme.typography.bodySmall)
-                        }
-                        Text("$${String.format(Locale.US, "%.2f", sub.amount)}", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
-                    }
-                    HorizontalDivider()
-                }
-                Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Total Pending", fontWeight = FontWeight.Bold)
-                    Text("$${String.format(Locale.US, "%.2f", subscriptions.sumOf { it.amount })}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
-    )
 }
