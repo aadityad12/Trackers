@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material.icons.filled.Notifications
@@ -93,6 +94,9 @@ fun AppNavigation() {
                         navController.navigate(moduleRoute)
                     }
                 )
+            }
+            composable("overview") {
+                OverviewView(onBackToMenu = { navController.popBackStack() })
             }
             composable("budget_tracker") {
                 BudgetTrackerApp(onBackToMenu = { navController.popBackStack() })
@@ -187,6 +191,7 @@ data class AppModule(
     val description: String,
     val icon: ImageVector,
     val route: String,
+    val isProminent: Boolean = false,
     val enabled: Boolean = true
 )
 
@@ -195,6 +200,13 @@ data class AppModule(
 fun MainMenu(onModuleSelected: (String) -> Unit) {
     val modules = remember {
         listOf(
+            AppModule(
+                title = "Daily Overview",
+                description = "Your day at a glance - Reminders, Budget, Stats",
+                icon = Icons.Default.GridView,
+                route = "overview",
+                isProminent = true
+            ),
             AppModule(
                 title = "Budget Tracker",
                 description = "Track your expenses and manage categories",
@@ -287,6 +299,12 @@ fun ModuleCard(module: AppModule, onModuleSelected: (String) -> Unit) {
         label = "scale"
     )
 
+    val containerColor = when {
+        !module.enabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+        module.isProminent -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
+        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -296,35 +314,33 @@ fun ModuleCard(module: AppModule, onModuleSelected: (String) -> Unit) {
                 interactionSource = interactionSource,
                 indication = LocalIndication.current
             ) { onModuleSelected(module.route) },
-        colors = CardDefaults.cardColors(
-            containerColor = if (module.enabled) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f) 
-                             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
-        ),
-        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        shape = if (module.isProminent) MaterialTheme.shapes.extraLarge else MaterialTheme.shapes.large,
         elevation = CardDefaults.cardElevation(
-            defaultElevation = 0.dp,
-            pressedElevation = 0.dp,
-            hoveredElevation = 2.dp
+            defaultElevation = if (module.isProminent) 4.dp else 0.dp,
+            pressedElevation = 0.dp
         )
     ) {
         Row(
             modifier = Modifier
-                .padding(20.dp)
+                .padding(if (module.isProminent) 24.dp else 20.dp)
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                modifier = Modifier.size(56.dp),
+                modifier = Modifier.size(if (module.isProminent) 64.dp else 56.dp),
                 shape = CircleShape,
-                color = if (module.enabled) MaterialTheme.colorScheme.primaryContainer 
+                color = if (module.isProminent) MaterialTheme.colorScheme.primary 
+                        else if (module.enabled) MaterialTheme.colorScheme.primaryContainer 
                         else MaterialTheme.colorScheme.outlineVariant
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = module.icon,
                         contentDescription = null,
-                        modifier = Modifier.size(28.dp),
-                        tint = if (module.enabled) MaterialTheme.colorScheme.onPrimaryContainer 
+                        modifier = Modifier.size(if (module.isProminent) 32.dp else 28.dp),
+                        tint = if (module.isProminent) MaterialTheme.colorScheme.onPrimary 
+                               else if (module.enabled) MaterialTheme.colorScheme.onPrimaryContainer 
                                else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -335,14 +351,17 @@ fun ModuleCard(module: AppModule, onModuleSelected: (String) -> Unit) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = module.title,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = if (module.isProminent) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.ExtraBold,
-                    color = if (module.enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline
+                    color = if (module.isProminent) MaterialTheme.colorScheme.onPrimaryContainer 
+                            else if (module.enabled) MaterialTheme.colorScheme.onSurface 
+                            else MaterialTheme.colorScheme.outline
                 )
                 Text(
                     text = module.description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (module.isProminent) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 16.sp
                 )
             }
@@ -351,7 +370,8 @@ fun ModuleCard(module: AppModule, onModuleSelected: (String) -> Unit) {
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowRight,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                    tint = if (module.isProminent) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
+                           else MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
                     modifier = Modifier.size(24.dp)
                 )
             }
