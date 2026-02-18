@@ -8,29 +8,33 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 private val DarkColorScheme = darkColorScheme(
-    primary = ApexWhite,
-    secondary = ApexSilver,
-    tertiary = ApexGray,
-    background = ApexCharcoal,
-    surface = ApexSteel,
+    primary = EmeraldMuted,
     onPrimary = Color.Black,
+    primaryContainer = Color(0xFF1E3A2B), // Very deep green for container
+    onPrimaryContainer = MintGlass,
+    secondary = SeafoamMuted,
     onSecondary = Color.Black,
-    onTertiary = Color.White,
-    onBackground = ApexWhite,
-    onSurface = ApexWhite,
-    error = ApexError,
-    onError = Color.White,
-    errorContainer = Color(0xFF5C0000),
-    onErrorContainer = Color(0xFFFFDAD6),
-    surfaceVariant = ApexGray,
-    onSurfaceVariant = ApexSilver,
-    outline = ApexMuted
+    secondaryContainer = Color(0xFF1B332F),
+    onSecondaryContainer = SeafoamMuted,
+    tertiary = MintGlass,
+    onTertiary = Color.Black,
+    background = DeepCharcoal,
+    onBackground = OffWhite,
+    surface = DarkGunmetal,
+    onSurface = OffWhite,
+    surfaceVariant = DeepSlate,
+    onSurfaceVariant = SlateDim,
+    outline = BorderMuted,
+    error = SoftRed,
+    onError = Color.Black,
+    errorContainer = Color(0xFF5C2B2B),
+    onErrorContainer = SoftRed
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF1E1E1E),
-    secondary = Color(0xFF454545),
-    tertiary = Color(0xFF666666)
+    primary = Color(0xFF2D7D46),
+    secondary = Color(0xFF3B7A6E),
+    tertiary = Color(0xFF3B5D7A)
 )
 
 @Composable

@@ -167,6 +167,7 @@ fun BudgetOverview(
     } else emptyList()
 
     val totalExpenditure = monthItems.sumOf { it.amount }
+    val subColor = MaterialTheme.colorScheme.primary
 
     Column(modifier = Modifier.fillMaxSize()) {
         MonthSelectorCompact(
@@ -192,7 +193,8 @@ fun BudgetOverview(
                 }
                 
                 items(pendingSubs.sortedBy { it.renewalDate }) { sub ->
-                    val category = Category(id = -1L, name = "Subscription", colorHex = "#FFD700")
+                    val colorHex = String.format("#%06X", (0xFFFFFF and subColor.value.toInt()))
+                    val category = Category(id = -1L, name = "Subscription", colorHex = colorHex)
                     BudgetListItem(
                         BudgetItem(title = sub.name, amount = sub.amount, date = sub.renewalDate, categoryId = -1L), 
                         category, 
@@ -203,7 +205,8 @@ fun BudgetOverview(
 
                 items(sortedItems) { item ->
                     val category = if (item.categoryId == -1L) {
-                        Category(id = -1L, name = "Subscriptions", colorHex = "#FFD700")
+                        val colorHex = String.format("#%06X", (0xFFFFFF and subColor.value.toInt()))
+                        Category(id = -1L, name = "Subscriptions", colorHex = colorHex)
                     } else {
                         categories.find { it.id == item.categoryId }
                     }
@@ -315,14 +318,16 @@ fun ExpensePieChartModern(
     if (totalCombined == 0.0) return
 
     val chartData = mutableListOf<Triple<String, Float, Color>>()
+    val subColor = MaterialTheme.colorScheme.primary
+    val colorHex = String.format("#%06X", (0xFFFFFF and subColor.value.toInt()))
     
     itemsByCategory.forEach { (catId, catItems) ->
         val category = if (catId == -1L) {
-            Category(id = -1L, name = "Subscriptions", colorHex = "#FFD700")
+            Category(id = -1L, name = "Subscriptions", colorHex = colorHex)
         } else {
             categories.find { it.id == catId }
         }
-        val color = category?.let { Color(android.graphics.Color.parseColor(it.colorHex)) } ?: Color.Gray
+        val color = category?.let { try { Color(android.graphics.Color.parseColor(it.colorHex)) } catch(e: Exception) { Color.Gray } } ?: Color.Gray
         val amount = catItems.sumOf { it.amount }
         chartData.add(Triple(category?.name ?: "Uncategorized", amount.toFloat(), color))
     }
