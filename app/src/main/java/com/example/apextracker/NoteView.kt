@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.FormatIndentDecrease
 import androidx.compose.material.icons.automirrored.filled.FormatIndentIncrease
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
@@ -23,6 +24,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.format.DateTimeFormatter
+
+private val bulletSequence = listOf("• ", "  ◦ ", "    ▪ ")
+private val bulletRegex = Regex("^(\\s*[•◦▪])\\s")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -212,56 +216,112 @@ fun NoteEditor(note: Note, onDismiss: () -> Unit, onSave: (String, String) -> Un
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 InputToolButton(icon = Icons.AutoMirrored.Filled.List, label = "Bullet") {
-                    val prefix = if (contentValue.text.isEmpty() || contentValue.text.endsWith("\n")) "• " else "\n• "
-                    val newText = contentValue.text.substring(0, contentValue.selection.start) + prefix + contentValue.text.substring(contentValue.selection.end)
-                    val newSelection = TextRange(contentValue.selection.start + prefix.length)
-                    contentValue = TextFieldValue(newText, newSelection)
+                    contentValue = modifyCurrentLine(contentValue) { line ->
+                        val match = bulletRegex.find(line)
+                        if (match != null && match.value == bulletSequence[0]) {
+                            line.substring(match.value.length)
+                        } else if (match != null) {
+                            bulletSequence[0] + line.substring(match.value.length)
+                        } else {
+                            bulletSequence[0] + line
+                        }
+                    }
                 }
-                InputToolButton(icon = Icons.AutoMirrored.Filled.FormatIndentIncrease, label = "Subpoint") {
-                    val prefix = if (contentValue.text.isEmpty() || contentValue.text.endsWith("\n")) "  ◦ " else "\n  ◦ "
-                    val newText = contentValue.text.substring(0, contentValue.selection.start) + prefix + contentValue.text.substring(contentValue.selection.end)
-                    val newSelection = TextRange(contentValue.selection.start + prefix.length)
-                    contentValue = TextFieldValue(newText, newSelection)
+                InputToolButton(icon = Icons.AutoMirrored.Filled.FormatIndentIncrease, label = "Indent") {
+                    contentValue = modifyCurrentLine(contentValue) { line ->
+                        val match = bulletRegex.find(line)
+                        if (match != null) {
+                            val currentIndex = bulletSequence.indexOf(match.value)
+                            if (currentIndex != -1 && currentIndex < bulletSequence.size - 1) {
+                                bulletSequence[currentIndex + 1] + line.substring(match.value.length)
+                            } else line
+                        } else {
+                            bulletSequence[1] + line
+                        }
+                    }
+                }
+                InputToolButton(icon = Icons.AutoMirrored.Filled.FormatIndentDecrease, label = "Outdent") {
+                    contentValue = modifyCurrentLine(contentValue) { line ->
+                        val match = bulletRegex.find(line)
+                        if (match != null) {
+                            val currentIndex = bulletSequence.indexOf(match.value)
+                            if (currentIndex > 0) {
+                                bulletSequence[currentIndex - 1] + line.substring(match.value.length)
+                            } else if (currentIndex == 0) {
+                                line.substring(match.value.length)
+                            } else line
+                        } else line
+                    }
                 }
             }
         }
     }
 }
 
+private fun modifyCurrentLine(value: TextFieldValue, action: (String) -> String): TextFieldValue {
+    val text = value.text
+    val selection = value.selection
+    val lineStart = text.lastIndexOf('\n', selection.start - 1).let { if (it == -1) 0 else it + 1 }
+    val lineEnd = text.indexOf('\n', selection.start).let { if (it == -1) text.length else it }
+    
+    val currentLine = text.substring(lineStart, lineEnd)
+    val newLine = action(currentLine)
+    
+    val newText = text.substring(0, lineStart) + newLine + text.substring(lineEnd)
+    val diff = newLine.length - currentLine.length
+    val newCursor = (selection.start + diff).coerceIn(lineStart, lineStart + newLine.length)
+    return TextFieldValue(newText, TextRange(newCursor))
+}
+
 private fun handleNoteContentChange(
     newValue: TextFieldValue,
     oldValue: TextFieldValue
 ): TextFieldValue {
-    if (newValue.text.length > oldValue.text.length) {
-        val addedCharIndex = newValue.selection.start - 1
-        if (addedCharIndex >= 0 && newValue.text[addedCharIndex] == '\n') {
-            // Newline was added
-            val textBeforeCursor = newValue.text.substring(0, addedCharIndex)
-            val lastLine = textBeforeCursor.split("\n").lastOrNull() ?: ""
+    if (newValue.text.length == oldValue.text.length + 1) {
+        val cursor = newValue.selection.start
+        if (cursor > 0 && newValue.text[cursor - 1] == '\n') {
+            val textBeforeNewLine = newValue.text.substring(0, cursor - 1)
+            val lastLine = textBeforeNewLine.substringAfterLast('\n')
             
-            val prefix = when {
-                lastLine.startsWith("• ") -> "• "
-                lastLine.startsWith("  ◦ ") -> "  ◦ "
-                else -> null
-            }
-            
-            if (prefix != null) {
-                val newText = newValue.text.substring(0, newValue.selection.start) + prefix + newValue.text.substring(newValue.selection.start)
-                val newSelection = TextRange(newValue.selection.start + prefix.length)
-                return TextFieldValue(newText, newSelection)
+            val match = bulletRegex.find(lastLine)
+            if (match != null) {
+                val prefix = match.value
+                if (lastLine.trim() == prefix.trim()) {
+                    // Empty bullet line - Outdent or Clear
+                    val currentIndex = bulletSequence.indexOf(prefix)
+                    val lineStart = cursor - 1 - lastLine.length
+                    if (currentIndex > 0) {
+                        val newPrefix = bulletSequence[currentIndex - 1]
+                        return TextFieldValue(
+                            newValue.text.substring(0, lineStart) + newPrefix + newValue.text.substring(cursor),
+                            TextRange(lineStart + newPrefix.length)
+                        )
+                    } else {
+                        return TextFieldValue(
+                            newValue.text.substring(0, lineStart) + "\n" + newValue.text.substring(cursor),
+                            TextRange(lineStart + 1)
+                        )
+                    }
+                } else {
+                    // Continue Bullet
+                    return TextFieldValue(
+                        newValue.text.substring(0, cursor) + prefix + newValue.text.substring(cursor),
+                        TextRange(cursor + prefix.length)
+                    )
+                }
             }
         }
-    } else if (newValue.text.length < oldValue.text.length) {
-        // Deletion
-        val oldSelection = oldValue.selection.start
-        val textBeforeOldCursor = oldValue.text.substring(0, oldSelection)
-        val lastLine = textBeforeOldCursor.split("\n").lastOrNull() ?: ""
-        
-        if ((lastLine == "• " || lastLine == "  ◦ ") && newValue.selection.start < oldSelection) {
-            // If deleting from an empty bullet line, remove the whole bullet prefix
-            val startOfLine = oldSelection - lastLine.length
-            val newText = oldValue.text.substring(0, startOfLine) + oldValue.text.substring(oldSelection)
-            return TextFieldValue(newText, TextRange(startOfLine))
+    } else if (newValue.text.length == oldValue.text.length - 1) {
+        val oldCursor = oldValue.selection.start
+        val textBefore = oldValue.text.substring(0, oldCursor)
+        val lastLine = textBefore.substringAfterLast('\n')
+        val match = bulletRegex.find(lastLine)
+        if (match != null && match.value == lastLine && newValue.selection.start == oldCursor - 1) {
+            val lineStart = oldCursor - lastLine.length
+            return TextFieldValue(
+                oldValue.text.substring(0, lineStart) + oldValue.text.substring(oldCursor),
+                TextRange(lineStart)
+            )
         }
     }
     return newValue
