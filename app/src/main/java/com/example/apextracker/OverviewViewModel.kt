@@ -70,7 +70,7 @@ class OverviewViewModel(application: Application) : AndroidViewModel(application
 
     fun toggleReminder(reminder: Reminder) {
         viewModelScope.launch {
-            reminderDao.update(reminder.copy(isCompleted = !reminder.isCompleted))
+            reminderDao.updateReminder(reminder.copy(isCompleted = !reminder.isCompleted))
         }
     }
 }

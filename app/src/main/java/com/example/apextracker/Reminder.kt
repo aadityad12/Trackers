@@ -14,7 +14,10 @@ data class Reminder(
     val date: LocalDate,
     val time: LocalTime? = null, // null means all day
     val description: String? = null,
-    val isCompleted: Boolean = false
+    val isCompleted: Boolean = false,
+    val recurrence: Recurrence? = null,
+    val parentId: Long? = null, // if this is an instance of a recurring reminder
+    val occurrencesCompleted: Int = 0
 ) {
     fun isOverdue(now: LocalDateTime): Boolean {
         if (isCompleted) return false

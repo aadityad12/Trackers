@@ -3,68 +3,125 @@ package com.example.apextracker
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.work.*
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.time.Duration
+import java.time.DayOfWeek
 import java.time.LocalDate
-import java.time.LocalDateTime
 import java.time.LocalTime
-import java.util.concurrent.TimeUnit
 
 class ReminderViewModel(application: Application) : AndroidViewModel(application) {
-    private val reminderDao = AppDatabase.getDatabase(application).reminderDao()
-    private val workManager = WorkManager.getInstance(application)
-    private val settings = ReminderSettings(application)
+    private val database = AppDatabase.getDatabase(application)
+    private val reminderDao = database.reminderDao()
+    private val settingsRepository = ReminderSettings(application)
 
     val activeReminders: Flow<List<Reminder>> = reminderDao.getActiveReminders()
     val completedReminders: Flow<List<Reminder>> = reminderDao.getCompletedReminders()
     
-    val notificationsEnabled = settings.notificationsEnabled
-    val allDayNotificationTime = settings.allDayNotificationTime
-    val specificTimeOffsetMinutes = settings.specificTimeOffsetMinutes
+    val notificationsEnabled: Flow<Boolean> = settingsRepository.notificationsEnabled
+    val allDayNotificationTime: Flow<LocalTime> = settingsRepository.allDayNotificationTime
+    val specificTimeOffsetMinutes: Flow<Int> = settingsRepository.specificTimeOffsetMinutes
 
-    fun addReminder(name: String, date: LocalDate, time: LocalTime?, description: String?) {
+    fun addReminder(
+        name: String, 
+        date: LocalDate, 
+        time: LocalTime?, 
+        description: String?,
+        recurrence: Recurrence? = null
+    ) {
         viewModelScope.launch {
-            val reminder = Reminder(
+            reminderDao.insertReminder(Reminder(
                 name = name,
                 date = date,
                 time = time,
-                description = description
-            )
-            val id = reminderDao.insert(reminder)
-            scheduleNotification(reminder.copy(id = id))
+                description = description,
+                recurrence = recurrence
+            ))
         }
     }
 
     fun updateReminder(reminder: Reminder) {
         viewModelScope.launch {
-            reminderDao.update(reminder)
-            if (reminder.isCompleted) {
-                cancelNotification(reminder.id)
-            } else {
-                scheduleNotification(reminder)
-            }
+            reminderDao.updateReminder(reminder)
         }
     }
 
     fun toggleCompletion(reminder: Reminder) {
         viewModelScope.launch {
-            val updated = reminder.copy(isCompleted = !reminder.isCompleted)
-            reminderDao.update(updated)
-            if (updated.isCompleted) {
-                cancelNotification(updated.id)
+            if (!reminder.isCompleted && reminder.recurrence != null) {
+                // Handle completion of a recurring reminder
+                handleRecurringCompletion(reminder)
             } else {
-                scheduleNotification(updated)
+                reminderDao.updateReminder(reminder.copy(isCompleted = !reminder.isCompleted))
+            }
+        }
+    }
+
+    private suspend fun handleRecurringCompletion(reminder: Reminder) {
+        val recurrence = reminder.recurrence ?: return
+        val nextOccurrencesCompleted = reminder.occurrencesCompleted + 1
+        
+        // Check if we should generate the next occurrence
+        val shouldContinue = when (recurrence.endType) {
+            RecurrenceEndType.NEVER -> true
+            RecurrenceEndType.UNTIL_DATE -> {
+                val nextDate = calculateNextDate(reminder.date, recurrence)
+                nextDate != null && (recurrence.endDate == null || !nextDate.isAfter(recurrence.endDate))
+            }
+            RecurrenceEndType.AFTER_OCCURRENCES -> {
+                recurrence.endOccurrences == null || nextOccurrencesCompleted < recurrence.endOccurrences
+            }
+        }
+
+        if (shouldContinue) {
+            val nextDate = calculateNextDate(reminder.date, recurrence)
+            if (nextDate != null) {
+                // Insert the next instance
+                reminderDao.insertReminder(reminder.copy(
+                    id = 0,
+                    date = nextDate,
+                    isCompleted = false,
+                    occurrencesCompleted = nextOccurrencesCompleted
+                ))
+            }
+        }
+        
+        // Mark current one as completed
+        reminderDao.updateReminder(reminder.copy(isCompleted = true))
+    }
+
+    private fun calculateNextDate(currentDate: LocalDate, recurrence: Recurrence): LocalDate? {
+        return when (recurrence.frequency) {
+            RecurrenceFrequency.DAILY -> currentDate.plusDays(1)
+            RecurrenceFrequency.WEEKLY -> currentDate.plusWeeks(1)
+            RecurrenceFrequency.MONTHLY -> currentDate.plusMonths(1)
+            RecurrenceFrequency.YEARLY -> currentDate.plusYears(1)
+            RecurrenceFrequency.CUSTOM -> {
+                val days = recurrence.customDays ?: return null
+                if (days.isEmpty()) return null
+                
+                var next = currentDate.plusDays(1)
+                // Search for the next day of week in the set
+                repeat(7) {
+                    if (days.contains(next.dayOfWeek)) return next
+                    next = next.plusDays(1)
+                }
+                null
             }
         }
     }
 
     fun deleteReminder(reminder: Reminder) {
         viewModelScope.launch {
-            reminderDao.delete(reminder)
-            cancelNotification(reminder.id)
+            reminderDao.deleteReminder(reminder)
+        }
+    }
+
+    fun deleteReminders(ids: List<Long>) {
+        viewModelScope.launch {
+            reminderDao.deleteRemindersByIds(ids)
         }
     }
 
@@ -74,82 +131,21 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun deleteReminders(ids: List<Long>) {
-        viewModelScope.launch {
-            reminderDao.deleteByIds(ids)
-        }
-    }
-
     fun setNotificationsEnabled(enabled: Boolean) {
         viewModelScope.launch {
-            settings.setNotificationsEnabled(enabled)
-            if (!enabled) {
-                workManager.cancelAllWorkByTag("reminder")
-            } else {
-                // Re-schedule all active reminders
-                activeReminders.first().forEach { scheduleNotification(it) }
-            }
+            settingsRepository.setNotificationsEnabled(enabled)
         }
     }
 
     fun setAllDayTime(time: LocalTime) {
         viewModelScope.launch {
-            settings.setAllDayNotificationTime(time)
-            // Re-schedule active reminders to apply new time
-            activeReminders.first().forEach { scheduleNotification(it) }
+            settingsRepository.setAllDayNotificationTime(time)
         }
     }
 
     fun setOffset(minutes: Int) {
         viewModelScope.launch {
-            settings.setSpecificTimeOffsetMinutes(minutes)
-            // Re-schedule active reminders to apply new offset
-            activeReminders.first().forEach { scheduleNotification(it) }
+            settingsRepository.setSpecificTimeOffsetMinutes(minutes)
         }
-    }
-
-    private suspend fun scheduleNotification(reminder: Reminder) {
-        cancelNotification(reminder.id)
-        
-        if (!settings.notificationsEnabled.first()) return
-        if (reminder.isCompleted) return
-
-        val now = LocalDateTime.now()
-        val notificationTime = if (reminder.time == null) {
-            // All day reminder
-            val prefTime = settings.allDayNotificationTime.first()
-            LocalDateTime.of(reminder.date, prefTime)
-        } else {
-            // Specific time reminder
-            val offset = settings.specificTimeOffsetMinutes.first()
-            LocalDateTime.of(reminder.date, reminder.time).minusMinutes(offset.toLong())
-        }
-
-        if (notificationTime.isBefore(now)) return
-
-        val delay = Duration.between(now, notificationTime).toMillis()
-
-        val data = Data.Builder()
-            .putString("reminder_name", reminder.name)
-            .putString("reminder_description", reminder.description)
-            .putLong("reminder_id", reminder.id)
-            .build()
-
-        val workRequest = OneTimeWorkRequestBuilder<ReminderWorker>()
-            .setInitialDelay(delay, TimeUnit.MILLISECONDS)
-            .setInputData(data)
-            .addTag("reminder")
-            .addTag("reminder_${reminder.id}")
-            .build()
-
-        workManager.enqueueUniqueWork(
-            "reminder_${reminder.id}",
-            ExistingWorkPolicy.REPLACE,
-            workRequest
-        )
-    }
-
-    private fun cancelNotification(reminderId: Long) {
-        workManager.cancelUniqueWork("reminder_$reminderId")
     }
 }

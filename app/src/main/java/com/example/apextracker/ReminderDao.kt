@@ -12,17 +12,17 @@ interface ReminderDao {
     fun getCompletedReminders(): Flow<List<Reminder>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(reminder: Reminder): Long
+    suspend fun insertReminder(reminder: Reminder): Long
 
     @Update
-    suspend fun update(reminder: Reminder)
+    suspend fun updateReminder(reminder: Reminder)
 
     @Delete
-    suspend fun delete(reminder: Reminder)
+    suspend fun deleteReminder(reminder: Reminder)
 
     @Query("DELETE FROM reminders WHERE isCompleted = 1")
     suspend fun clearAllCompleted()
 
     @Query("DELETE FROM reminders WHERE id IN (:ids)")
-    suspend fun deleteByIds(ids: List<Long>)
+    suspend fun deleteRemindersByIds(ids: List<Long>)
 }

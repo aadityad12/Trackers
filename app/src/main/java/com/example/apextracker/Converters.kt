@@ -1,49 +1,54 @@
 package com.example.apextracker
 
 import androidx.room.TypeConverter
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import java.time.LocalDate
-import java.time.LocalTime
 import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
+import java.time.LocalTime
 
 class Converters {
-    private val dateFormatter = DateTimeFormatter.ISO_LOCAL_DATE
-    private val timeFormatter = DateTimeFormatter.ISO_LOCAL_TIME
-    private val dateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
+    private val gson = Gson()
 
     @TypeConverter
-    fun fromDateString(value: String?): LocalDate? {
-        return value?.let {
-            LocalDate.parse(it, dateFormatter)
-        }
+    fun fromRecurrence(recurrence: Recurrence?): String? {
+        return gson.toJson(recurrence)
     }
 
     @TypeConverter
-    fun dateToString(date: LocalDate?): String? {
-        return date?.format(dateFormatter)
+    fun toRecurrence(json: String?): Recurrence? {
+        if (json == null) return null
+        val type = object : TypeToken<Recurrence>() {}.type
+        return gson.fromJson(json, type)
     }
 
     @TypeConverter
-    fun fromTimeString(value: String?): LocalTime? {
-        return value?.let {
-            LocalTime.parse(it, timeFormatter)
-        }
+    fun fromLocalDate(value: LocalDate?): String? {
+        return value?.toString()
     }
 
     @TypeConverter
-    fun timeToString(time: LocalTime?): String? {
-        return time?.format(timeFormatter)
+    fun toLocalDate(value: String?): LocalDate? {
+        return value?.let { LocalDate.parse(it) }
     }
 
     @TypeConverter
-    fun fromDateTimeString(value: String?): LocalDateTime? {
-        return value?.let {
-            LocalDateTime.parse(it, dateTimeFormatter)
-        }
+    fun fromLocalTime(value: LocalTime?): String? {
+        return value?.toString()
     }
 
     @TypeConverter
-    fun dateTimeToString(dateTime: LocalDateTime?): String? {
-        return dateTime?.format(dateTimeFormatter)
+    fun toLocalTime(value: String?): LocalTime? {
+        return value?.let { LocalTime.parse(it) }
+    }
+
+    @TypeConverter
+    fun fromLocalDateTime(value: LocalDateTime?): String? {
+        return value?.toString()
+    }
+
+    @TypeConverter
+    fun toLocalDateTime(value: String?): LocalDateTime? {
+        return value?.let { LocalDateTime.parse(it) }
     }
 }

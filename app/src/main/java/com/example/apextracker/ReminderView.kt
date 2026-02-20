@@ -220,8 +220,8 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
             ReminderEditDialog(
                 title = "New Reminder",
                 onDismiss = { showAddDialog = false },
-                onConfirm = { name, date, time, description ->
-                    viewModel.addReminder(name, date, time, description)
+                onConfirm = { name, date, time, description, recurrence ->
+                    viewModel.addReminder(name, date, time, description, recurrence)
                     showAddDialog = false
                 }
             )
@@ -234,13 +234,15 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                 initialDescription = reminderToEdit!!.description ?: "",
                 initialDate = reminderToEdit!!.date,
                 initialTime = reminderToEdit!!.time,
+                initialRecurrence = reminderToEdit!!.recurrence,
                 onDismiss = { reminderToEdit = null },
-                onConfirm = { name, date, time, description ->
+                onConfirm = { name, date, time, description, recurrence ->
                     viewModel.updateReminder(reminderToEdit!!.copy(
                         name = name,
                         date = date,
                         time = time,
-                        description = description
+                        description = description,
+                        recurrence = recurrence
                     ))
                     reminderToEdit = null
                 },
@@ -296,14 +298,18 @@ fun ReminderEditDialog(
     initialDescription: String = "",
     initialDate: LocalDate = LocalDate.now(),
     initialTime: LocalTime? = null,
+    initialRecurrence: Recurrence? = null,
     onDismiss: () -> Unit,
-    onConfirm: (String, LocalDate, LocalTime?, String) -> Unit,
+    onConfirm: (String, LocalDate, LocalTime?, String, Recurrence?) -> Unit,
     onDelete: (() -> Unit)? = null
 ) {
     var name by remember { mutableStateOf(initialName) }
     var description by remember { mutableStateOf(initialDescription) }
     var date by remember { mutableStateOf(initialDate) }
     var time by remember { mutableStateOf(initialTime) }
+    var recurrence by remember { mutableStateOf(initialRecurrence) }
+    
+    var showRecurrencePicker by remember { mutableStateOf(false) }
     
     val context = LocalContext.current
 
@@ -355,11 +361,29 @@ fun ReminderEditDialog(
                         Text("Set as All Day")
                     }
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Recurrence: ${recurrence?.frequency?.name ?: "None"}", style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = { showRecurrencePicker = true }) {
+                        Text(if (recurrence == null) "Set" else "Change")
+                    }
+                }
+                if (recurrence != null) {
+                    TextButton(onClick = { recurrence = null }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                        Text("Remove Recurrence")
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
-                onClick = { if (name.isNotBlank()) onConfirm(name, date, time, description) },
+                onClick = { if (name.isNotBlank()) onConfirm(name, date, time, description, recurrence) },
                 enabled = name.isNotBlank()
             ) {
                 Text("Save")
@@ -378,6 +402,16 @@ fun ReminderEditDialog(
             }
         }
     )
+
+    if (showRecurrencePicker) {
+        RecurrencePickerDialog(
+            onDismiss = { showRecurrencePicker = false },
+            onConfirm = { 
+                recurrence = it
+                showRecurrencePicker = false
+            }
+        )
+    }
 }
 
 @Composable
@@ -484,17 +518,28 @@ fun ReminderItemModern(
             )
             
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                Text(
-                    text = reminder.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
-                    textDecoration = if (reminder.isCompleted) TextDecoration.LineThrough else null,
-                    color = when {
-                        reminder.isCompleted -> MaterialTheme.colorScheme.outline
-                        isOverdue -> MaterialTheme.colorScheme.error
-                        else -> MaterialTheme.colorScheme.onSurface
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = reminder.name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        textDecoration = if (reminder.isCompleted) TextDecoration.LineThrough else null,
+                        color = when {
+                            reminder.isCompleted -> MaterialTheme.colorScheme.outline
+                            isOverdue -> MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.onSurface
+                        }
+                    )
+                    if (reminder.recurrence != null) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Recurring",
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.outline
+                        )
                     }
-                )
+                }
                 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
                     Icon(
