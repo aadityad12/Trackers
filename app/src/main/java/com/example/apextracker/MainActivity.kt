@@ -23,9 +23,11 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.apextracker.ui.theme.ApexTheme
 import com.example.apextracker.ui.theme.ApexTrackerTheme
 import kotlinx.coroutines.delay
 
@@ -54,15 +57,20 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            ApexTrackerTheme {
-                AppNavigation()
+            var currentTheme by rememberSaveable { mutableStateOf(ApexTheme.EMERALD) }
+            
+            ApexTrackerTheme(theme = currentTheme) {
+                AppNavigation(
+                    currentTheme = currentTheme,
+                    onThemeChange = { currentTheme = it }
+                )
             }
         }
     }
 }
 
 @Composable
-fun AppNavigation() {
+fun AppNavigation(currentTheme: ApexTheme, onThemeChange: (ApexTheme) -> Unit) {
     val navController = rememberNavController()
     var showSplash by remember { mutableStateOf(true) }
 
@@ -94,6 +102,8 @@ fun AppNavigation() {
         ) {
             composable("menu") {
                 MainMenu(
+                    currentTheme = currentTheme,
+                    onThemeChange = onThemeChange,
                     onModuleSelected = { moduleRoute ->
                         navController.navigate(moduleRoute)
                     }
@@ -201,7 +211,7 @@ data class AppModule(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainMenu(onModuleSelected: (String) -> Unit) {
+fun MainMenu(currentTheme: ApexTheme, onThemeChange: (ApexTheme) -> Unit, onModuleSelected: (String) -> Unit) {
     val modules = remember {
         listOf(
             AppModule(
@@ -244,6 +254,7 @@ fun MainMenu(onModuleSelected: (String) -> Unit) {
         )
     }
 
+    var showThemeDialog by remember { mutableStateOf(false) }
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
@@ -259,6 +270,15 @@ fun MainMenu(onModuleSelected: (String) -> Unit) {
                             fontWeight = FontWeight.Black,
                             style = MaterialTheme.typography.titleMedium,
                             letterSpacing = 2.sp
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showThemeDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 },
@@ -293,7 +313,6 @@ fun MainMenu(onModuleSelected: (String) -> Unit) {
                         modifier = Modifier.weight(2.5f),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // 2 rows, 3 columns in landscape to maximize vertical space
                         Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             GridModuleCard(others[0], onModuleSelected, Modifier.weight(1f))
                             GridModuleCard(others[1], onModuleSelected, Modifier.weight(1f))
@@ -336,9 +355,56 @@ fun MainMenu(onModuleSelected: (String) -> Unit) {
                     }
                 }
             }
-            // Minimal bottom spacer
             Spacer(modifier = Modifier.height(4.dp))
         }
+    }
+
+    if (showThemeDialog) {
+        AlertDialog(
+            onDismissRequest = { showThemeDialog = false },
+            title = { Text("Select Theme") },
+            text = {
+                Column {
+                    ApexTheme.values().forEach { theme ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { 
+                                    onThemeChange(theme)
+                                    showThemeDialog = false
+                                }
+                                .padding(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        when(theme) {
+                                            ApexTheme.EMERALD -> Color(0xFF50C878)
+                                            ApexTheme.OCEAN -> Color(0xFF00B2FF)
+                                            ApexTheme.MAGMA -> Color(0xFFFF5722)
+                                            ApexTheme.ROYAL -> Color(0xFF9C27B0)
+                                        }
+                                    )
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Text(
+                                text = theme.name.lowercase().capitalize(),
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = if (currentTheme == theme) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showThemeDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
     }
 }
 
@@ -363,7 +429,6 @@ fun ProminentModuleCard(module: AppModule, onModuleSelected: (String) -> Unit, m
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val isSmallHeight = maxHeight < 100.dp
             
-            // Background decoration
             Canvas(modifier = Modifier.fillMaxSize().offset(x = 30.dp, y = 15.dp)) {
                 drawCircle(
                     color = Color.White.copy(alpha = 0.05f),
