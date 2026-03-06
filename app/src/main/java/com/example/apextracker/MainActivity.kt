@@ -8,8 +8,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -17,9 +17,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.LightMode
@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -234,6 +235,9 @@ fun MainMenu(
     var showSettingsDialog by remember { mutableStateOf(false) }
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val isSmallScreen = configuration.screenWidthDp < 360
+
+    val spacing = if (isSmallScreen) 8.dp else 12.dp
 
     Scaffold(
         topBar = {
@@ -260,7 +264,7 @@ fun MainMenu(
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
+                    containerColor = Color.Transparent
                 )
             )
         },
@@ -270,21 +274,21 @@ fun MainMenu(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .padding(horizontal = 12.dp, vertical = 4.dp)
+                .padding(horizontal = spacing, vertical = 4.dp)
         ) {
             val prominent = modules.first { it.isProminent }
             val others = modules.filter { !it.isProminent }
 
             if (isLandscape) {
-                Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(spacing)) {
                     ProminentModuleCard(prominent, onModuleSelected, Modifier.weight(1f))
-                    Column(modifier = Modifier.weight(2.5f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(modifier = Modifier.weight(2.5f), verticalArrangement = Arrangement.spacedBy(spacing)) {
+                        Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(spacing)) {
                             GridModuleCard(others[0], onModuleSelected, Modifier.weight(1f))
                             GridModuleCard(others[1], onModuleSelected, Modifier.weight(1f))
                             GridModuleCard(others[2], onModuleSelected, Modifier.weight(1f))
                         }
-                        Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(spacing)) {
                             GridModuleCard(others[3], onModuleSelected, Modifier.weight(1f))
                             GridModuleCard(others[4], onModuleSelected, Modifier.weight(1f))
                             Spacer(modifier = Modifier.weight(1f))
@@ -292,18 +296,18 @@ fun MainMenu(
                     }
                 }
             } else {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(spacing)) {
                     ProminentModuleCard(prominent, onModuleSelected, Modifier.weight(0.25f))
-                    Column(modifier = Modifier.weight(0.75f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(modifier = Modifier.weight(0.75f), verticalArrangement = Arrangement.spacedBy(spacing)) {
+                        Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(spacing)) {
                             GridModuleCard(others[0], onModuleSelected, Modifier.weight(1f))
                             GridModuleCard(others[1], onModuleSelected, Modifier.weight(1f))
                         }
-                        Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(spacing)) {
                             GridModuleCard(others[2], onModuleSelected, Modifier.weight(1f))
                             GridModuleCard(others[3], onModuleSelected, Modifier.weight(1f))
                         }
-                        Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(spacing)) {
                             GridModuleCard(others[4], onModuleSelected, Modifier.weight(1f))
                             Spacer(modifier = Modifier.weight(1f))
                         }
@@ -315,72 +319,115 @@ fun MainMenu(
     }
 
     if (showSettingsDialog) {
-        AlertDialog(
+        ModalBottomSheet(
             onDismissRequest = { showSettingsDialog = false },
-            title = { Text("Settings") },
-            text = {
-                Column {
-                    Text("Theme Mode", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            containerColor = MaterialTheme.colorScheme.surface,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)) }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 48.dp)
+            ) {
+                Text(
+                    "Settings",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                Text(
+                    "Appearance",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                Surface(
+                    onClick = { onDarkModeChange(!isDarkMode) },
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                        modifier = Modifier.fillMaxWidth().padding(16.dp)
                     ) {
                         Icon(
                             imageVector = if (isDarkMode) Icons.Default.DarkMode else Icons.Default.LightMode,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = MaterialTheme.colorScheme.primary
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text("Dark Mode", modifier = Modifier.weight(1f))
-                        Switch(checked = isDarkMode, onCheckedChange = onDarkModeChange)
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text("Dark Mode", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                        Switch(
+                            checked = isDarkMode, 
+                            onCheckedChange = onDarkModeChange,
+                            colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary)
+                        )
                     }
-                    
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
-                    
-                    Text("Color Accent", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    ApexTheme.values().forEach { theme ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                Text(
+                    "Color Accent",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    ApexTheme.entries.forEach { theme ->
+                        val themeColor = when(theme) {
+                            ApexTheme.EMERALD -> Color(0xFF50C878)
+                            ApexTheme.OCEAN -> Color(0xFF00B2FF)
+                            ApexTheme.MAGMA -> Color(0xFFFF5722)
+                            ApexTheme.ROYAL -> Color(0xFF9C27B0)
+                        }
+                        
+                        Box(
+                            contentAlignment = Alignment.Center,
                             modifier = Modifier
-                                .fillMaxWidth()
+                                .size(56.dp)
+                                .clip(CircleShape)
+                                .background(themeColor.copy(alpha = 0.1f))
+                                .border(
+                                    width = 2.dp,
+                                    color = if (currentTheme == theme) themeColor else Color.Transparent,
+                                    shape = CircleShape
+                                )
                                 .clickable { onThemeChange(theme) }
-                                .padding(vertical = 10.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(24.dp)
+                                    .size(32.dp)
                                     .clip(CircleShape)
-                                    .background(
-                                        when(theme) {
-                                            ApexTheme.EMERALD -> Color(0xFF50C878)
-                                            ApexTheme.OCEAN -> Color(0xFF00B2FF)
-                                            ApexTheme.MAGMA -> Color(0xFFE53935)
-                                            ApexTheme.ROYAL -> Color(0xFF8E24AA)
-                                        }
+                                    .background(themeColor)
+                            ) {
+                                if (currentTheme == theme) {
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp).align(Alignment.Center),
+                                        tint = Color.White
                                     )
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text(
-                                text = theme.name.lowercase().replaceFirstChar { it.uppercase() },
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = if (currentTheme == theme) FontWeight.Bold else FontWeight.Normal
-                            )
-                            if (currentTheme == theme) {
-                                Spacer(modifier = Modifier.weight(1f))
-                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                }
                             }
                         }
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { showSettingsDialog = false }) {
-                    Text("Done")
-                }
             }
-        )
+        }
     }
 }
 
@@ -389,53 +436,70 @@ fun ProminentModuleCard(module: AppModule, onModuleSelected: (String) -> Unit, m
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed) 0.98f else 1f, label = "scale")
+    val isDark = !MaterialTheme.colorScheme.background.isLight()
+    val primaryColor = MaterialTheme.colorScheme.primary
 
     Surface(
         modifier = modifier
             .fillMaxSize()
             .scale(scale)
-            .clickable(interactionSource = interactionSource, indication = LocalIndication.current) { onModuleSelected(module.route) },
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.primaryContainer,
-        shadowElevation = 2.dp,
-        border = if (!MaterialTheme.colorScheme.primaryContainer.isDark()) 
-            androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)) 
-        else null
+            .clickable(interactionSource = interactionSource, indication = null) { onModuleSelected(module.route) },
+        shape = RoundedCornerShape(24.dp),
+        color = if (isDark) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else Color.White,
+        shadowElevation = if (isDark) 0.dp else 2.dp,
+        border = if (isDark) {
+            androidx.compose.foundation.BorderStroke(
+                1.dp, 
+                Brush.linearGradient(listOf(primaryColor.copy(alpha = 0.3f), Color.Transparent))
+            )
+        } else {
+            androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+        }
     ) {
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val isSmallHeight = maxHeight < 100.dp
-            Canvas(modifier = Modifier.fillMaxSize().offset(x = 30.dp, y = 15.dp)) {
-                drawCircle(color = Color.White.copy(alpha = 0.05f), radius = size.minDimension * 0.7f)
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (isDark) {
+                Canvas(modifier = Modifier.fillMaxSize().offset(x = 50.dp, y = (-20).dp)) {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(primaryColor.copy(alpha = 0.15f), Color.Transparent),
+                            radius = size.maxDimension * 0.8f
+                        ),
+                        radius = size.maxDimension * 0.8f
+                    )
+                }
             }
+            
             Row(
-                modifier = Modifier.padding(if (isSmallHeight) 12.dp else 20.dp).fillMaxSize(),
+                modifier = Modifier.padding(24.dp).fillMaxSize(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = module.title,
-                        style = if (isSmallHeight) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall,
+                        style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1
                     )
                     Text(
                         text = module.description,
-                        style = if (isSmallHeight) MaterialTheme.typography.labelSmall else MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                         maxLines = 1
                     )
                 }
                 Surface(
-                    modifier = Modifier.size(if (isSmallHeight) 40.dp else 56.dp),
+                    modifier = Modifier.size(64.dp),
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary
+                    color = primaryColor,
+                    shadowElevation = 4.dp
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = module.icon,
                             contentDescription = null,
-                            modifier = Modifier.size(if (isSmallHeight) 20.dp else 28.dp),
+                            modifier = Modifier.size(32.dp),
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
@@ -450,58 +514,62 @@ fun GridModuleCard(module: AppModule, onModuleSelected: (String) -> Unit, modifi
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed) 0.96f else 1f, label = "scale")
+    val isDark = !MaterialTheme.colorScheme.background.isLight()
 
     Surface(
         modifier = modifier
             .fillMaxSize()
             .scale(scale)
-            .clickable(interactionSource = interactionSource, indication = LocalIndication.current) { onModuleSelected(module.route) },
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)),
-        shadowElevation = if (MaterialTheme.colorScheme.background.isLight()) 1.dp else 0.dp
+            .clickable(interactionSource = interactionSource, indication = null) { onModuleSelected(module.route) },
+        shape = RoundedCornerShape(20.dp),
+        color = if (isDark) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f) else Color.White,
+        shadowElevation = if (isDark) 0.dp else 1.dp,
+        border = if (isDark) {
+            androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+        } else {
+            androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+        }
     ) {
-        BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(10.dp)) {
-            val isSmall = maxHeight < 90.dp || maxWidth < 90.dp
-            Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-                Surface(
-                    modifier = Modifier.size(if (isSmall) 28.dp else 36.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = module.icon,
-                            contentDescription = null,
-                            modifier = Modifier.size(if (isSmall) 14.dp else 18.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-                Column {
-                    Text(
-                        text = module.title,
-                        style = if (isSmall) MaterialTheme.typography.labelLarge else MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1
-                    )
-                    Text(
-                        text = module.description,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        fontSize = if (isSmall) 8.sp else 10.sp
+        Column(
+            modifier = Modifier.fillMaxSize().padding(14.dp), 
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = module.icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
+            }
+            Column {
+                Text(
+                    text = module.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1
+                )
+                Text(
+                    text = module.description,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    fontSize = 11.sp
+                )
             }
         }
     }
 }
 
-// Helper to determine brightness for light mode border logic
-private fun Color.isDark(): Boolean {
+// Helper to determine brightness for light mode logic
+private fun Color.isLight(): Boolean {
     val luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
-    return luminance < 0.5
+    return luminance > 0.5
 }
-private fun Color.isLight(): Boolean = !isDark()

@@ -6,9 +6,19 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 
 enum class ApexTheme {
     EMERALD, OCEAN, MAGMA, ROYAL
+}
+
+// Dynamic Color Shifter for Light Mode
+private fun shiftColorForLightMode(color: Color): Color {
+    val hsv = FloatArray(3)
+    android.graphics.Color.colorToHSV(color.toArgb(), hsv)
+    hsv[1] = (hsv[1] * 1.3f).coerceAtMost(1f) // Increase saturation more
+    hsv[2] = (hsv[2] * 0.75f).coerceAtMost(1f) // Deeper brightness
+    return Color(android.graphics.Color.HSVToColor(hsv))
 }
 
 private fun getDarkColorScheme(primary: Color, secondary: Color, tertiary: Color): ColorScheme {
@@ -38,15 +48,18 @@ private fun getDarkColorScheme(primary: Color, secondary: Color, tertiary: Color
 }
 
 private fun getLightColorScheme(primary: Color, secondary: Color, tertiary: Color): ColorScheme {
+    val adjPrimary = shiftColorForLightMode(primary)
+    val adjSecondary = shiftColorForLightMode(secondary)
+    
     return lightColorScheme(
-        primary = primary,
+        primary = adjPrimary,
         onPrimary = Color.White,
-        primaryContainer = primary.copy(alpha = 0.12f),
-        onPrimaryContainer = primary,
-        secondary = secondary,
+        primaryContainer = adjPrimary.copy(alpha = 0.1f),
+        onPrimaryContainer = adjPrimary,
+        secondary = adjSecondary,
         onSecondary = Color.White,
-        secondaryContainer = secondary.copy(alpha = 0.12f),
-        onSecondaryContainer = secondary,
+        secondaryContainer = adjSecondary.copy(alpha = 0.1f),
+        onSecondaryContainer = adjSecondary,
         tertiary = tertiary,
         onTertiary = Color.White,
         background = LightBackground,
