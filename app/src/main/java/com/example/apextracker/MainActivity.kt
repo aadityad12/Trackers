@@ -17,10 +17,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
@@ -31,9 +33,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -42,7 +42,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.NavHost
@@ -58,11 +57,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             var currentTheme by rememberSaveable { mutableStateOf(ApexTheme.EMERALD) }
+            var isDarkMode by rememberSaveable { mutableStateOf(true) }
             
-            ApexTrackerTheme(theme = currentTheme) {
+            ApexTrackerTheme(theme = currentTheme, darkTheme = isDarkMode) {
                 AppNavigation(
                     currentTheme = currentTheme,
-                    onThemeChange = { currentTheme = it }
+                    isDarkMode = isDarkMode,
+                    onThemeChange = { currentTheme = it },
+                    onDarkModeChange = { isDarkMode = it }
                 )
             }
         }
@@ -70,7 +72,12 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun AppNavigation(currentTheme: ApexTheme, onThemeChange: (ApexTheme) -> Unit) {
+fun AppNavigation(
+    currentTheme: ApexTheme, 
+    isDarkMode: Boolean,
+    onThemeChange: (ApexTheme) -> Unit,
+    onDarkModeChange: (Boolean) -> Unit
+) {
     val navController = rememberNavController()
     var showSplash by remember { mutableStateOf(true) }
 
@@ -103,7 +110,9 @@ fun AppNavigation(currentTheme: ApexTheme, onThemeChange: (ApexTheme) -> Unit) {
             composable("menu") {
                 MainMenu(
                     currentTheme = currentTheme,
+                    isDarkMode = isDarkMode,
                     onThemeChange = onThemeChange,
+                    onDarkModeChange = onDarkModeChange,
                     onModuleSelected = { moduleRoute ->
                         navController.navigate(moduleRoute)
                     }
@@ -177,19 +186,12 @@ fun ApexLogo(modifier: Modifier = Modifier, color: Color = MaterialTheme.colorSc
         
         drawPath(
             path = Path().apply {
-                // Bottom left leg
                 moveTo(w * 0.25f, h * 0.8f)
                 lineTo(w * 0.45f, h * 0.45f)
-                
-                // Cross bar
                 moveTo(w * 0.38f, h * 0.6f)
                 lineTo(w * 0.75f, h * 0.6f)
-                
-                // Bottom right leg
                 moveTo(w * 0.75f, h * 0.8f)
                 lineTo(w * 0.52f, h * 0.4f)
-                
-                // Top Chevron (the "Apex")
                 moveTo(w * 0.45f, h * 0.3f)
                 lineTo(w * 0.5f, h * 0.22f)
                 lineTo(w * 0.55f, h * 0.3f)
@@ -211,50 +213,25 @@ data class AppModule(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainMenu(currentTheme: ApexTheme, onThemeChange: (ApexTheme) -> Unit, onModuleSelected: (String) -> Unit) {
+fun MainMenu(
+    currentTheme: ApexTheme, 
+    isDarkMode: Boolean,
+    onThemeChange: (ApexTheme) -> Unit, 
+    onDarkModeChange: (Boolean) -> Unit,
+    onModuleSelected: (String) -> Unit
+) {
     val modules = remember {
         listOf(
-            AppModule(
-                title = "Overview",
-                description = "Day at a glance",
-                icon = Icons.Default.GridView,
-                route = "overview",
-                isProminent = true
-            ),
-            AppModule(
-                title = "Budget",
-                description = "Expenses",
-                icon = Icons.Default.AccountBalanceWallet,
-                route = "budget_tracker"
-            ),
-            AppModule(
-                title = "Study",
-                description = "Stopwatch",
-                icon = Icons.Default.Timer,
-                route = "study_tracker"
-            ),
-            AppModule(
-                title = "Screen",
-                description = "Usage",
-                icon = Icons.Default.Monitor,
-                route = "screen_time"
-            ),
-            AppModule(
-                title = "Tasks",
-                description = "Reminders",
-                icon = Icons.Default.Notifications,
-                route = "reminders"
-            ),
-            AppModule(
-                title = "Notes",
-                description = "Ideas",
-                icon = Icons.AutoMirrored.Filled.Notes,
-                route = "notes"
-            )
+            AppModule("Overview", "Day at a glance", Icons.Default.GridView, "overview", true),
+            AppModule("Budget", "Expenses", Icons.Default.AccountBalanceWallet, "budget_tracker"),
+            AppModule("Study", "Stopwatch", Icons.Default.Timer, "study_tracker"),
+            AppModule("Screen", "Usage", Icons.Default.Monitor, "screen_time"),
+            AppModule("Tasks", "Reminders", Icons.Default.Notifications, "reminders"),
+            AppModule("Notes", "Ideas", Icons.AutoMirrored.Filled.Notes, "notes")
         )
     }
 
-    var showThemeDialog by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
@@ -274,7 +251,7 @@ fun MainMenu(currentTheme: ApexTheme, onThemeChange: (ApexTheme) -> Unit, onModu
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showThemeDialog = true }) {
+                    IconButton(onClick = { showSettingsDialog = true }) {
                         Icon(
                             imageVector = Icons.Default.Settings,
                             contentDescription = "Settings",
@@ -299,20 +276,9 @@ fun MainMenu(currentTheme: ApexTheme, onThemeChange: (ApexTheme) -> Unit, onModu
             val others = modules.filter { !it.isProminent }
 
             if (isLandscape) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    ProminentModuleCard(
-                        module = prominent,
-                        onModuleSelected = onModuleSelected,
-                        modifier = Modifier.weight(1f)
-                    )
-                    
-                    Column(
-                        modifier = Modifier.weight(2.5f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ProminentModuleCard(prominent, onModuleSelected, Modifier.weight(1f))
+                    Column(modifier = Modifier.weight(2.5f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             GridModuleCard(others[0], onModuleSelected, Modifier.weight(1f))
                             GridModuleCard(others[1], onModuleSelected, Modifier.weight(1f))
@@ -326,20 +292,9 @@ fun MainMenu(currentTheme: ApexTheme, onThemeChange: (ApexTheme) -> Unit, onModu
                     }
                 }
             } else {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    ProminentModuleCard(
-                        module = prominent,
-                        onModuleSelected = onModuleSelected,
-                        modifier = Modifier.weight(0.25f)
-                    )
-
-                    Column(
-                        modifier = Modifier.weight(0.75f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ProminentModuleCard(prominent, onModuleSelected, Modifier.weight(0.25f))
+                    Column(modifier = Modifier.weight(0.75f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             GridModuleCard(others[0], onModuleSelected, Modifier.weight(1f))
                             GridModuleCard(others[1], onModuleSelected, Modifier.weight(1f))
@@ -359,22 +314,39 @@ fun MainMenu(currentTheme: ApexTheme, onThemeChange: (ApexTheme) -> Unit, onModu
         }
     }
 
-    if (showThemeDialog) {
+    if (showSettingsDialog) {
         AlertDialog(
-            onDismissRequest = { showThemeDialog = false },
-            title = { Text("Select Theme") },
+            onDismissRequest = { showSettingsDialog = false },
+            title = { Text("Settings") },
             text = {
                 Column {
+                    Text("Theme Mode", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isDarkMode) Icons.Default.DarkMode else Icons.Default.LightMode,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Dark Mode", modifier = Modifier.weight(1f))
+                        Switch(checked = isDarkMode, onCheckedChange = onDarkModeChange)
+                    }
+                    
+                    Divider(modifier = Modifier.padding(vertical = 8.dp))
+                    
+                    Text("Color Accent", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
                     ApexTheme.values().forEach { theme ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { 
-                                    onThemeChange(theme)
-                                    showThemeDialog = false
-                                }
-                                .padding(12.dp)
+                                .clickable { onThemeChange(theme) }
+                                .padding(vertical = 10.dp)
                         ) {
                             Box(
                                 modifier = Modifier
@@ -384,24 +356,28 @@ fun MainMenu(currentTheme: ApexTheme, onThemeChange: (ApexTheme) -> Unit, onModu
                                         when(theme) {
                                             ApexTheme.EMERALD -> Color(0xFF50C878)
                                             ApexTheme.OCEAN -> Color(0xFF00B2FF)
-                                            ApexTheme.MAGMA -> Color(0xFFFF5722)
-                                            ApexTheme.ROYAL -> Color(0xFF9C27B0)
+                                            ApexTheme.MAGMA -> Color(0xFFE53935)
+                                            ApexTheme.ROYAL -> Color(0xFF8E24AA)
                                         }
                                     )
                             )
                             Spacer(modifier = Modifier.width(16.dp))
                             Text(
-                                text = theme.name.lowercase().capitalize(),
+                                text = theme.name.lowercase().replaceFirstChar { it.uppercase() },
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = if (currentTheme == theme) FontWeight.Bold else FontWeight.Normal
                             )
+                            if (currentTheme == theme) {
+                                Spacer(modifier = Modifier.weight(1f))
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            }
                         }
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showThemeDialog = false }) {
-                    Text("Close")
+                TextButton(onClick = { showSettingsDialog = false }) {
+                    Text("Done")
                 }
             }
         )
@@ -418,24 +394,19 @@ fun ProminentModuleCard(module: AppModule, onModuleSelected: (String) -> Unit, m
         modifier = modifier
             .fillMaxSize()
             .scale(scale)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = LocalIndication.current
-            ) { onModuleSelected(module.route) },
+            .clickable(interactionSource = interactionSource, indication = LocalIndication.current) { onModuleSelected(module.route) },
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.primaryContainer,
-        shadowElevation = 2.dp
+        shadowElevation = 2.dp,
+        border = if (!MaterialTheme.colorScheme.primaryContainer.isDark()) 
+            androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)) 
+        else null
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val isSmallHeight = maxHeight < 100.dp
-            
             Canvas(modifier = Modifier.fillMaxSize().offset(x = 30.dp, y = 15.dp)) {
-                drawCircle(
-                    color = Color.White.copy(alpha = 0.05f),
-                    radius = size.minDimension * 0.7f
-                )
+                drawCircle(color = Color.White.copy(alpha = 0.05f), radius = size.minDimension * 0.7f)
             }
-            
             Row(
                 modifier = Modifier.padding(if (isSmallHeight) 12.dp else 20.dp).fillMaxSize(),
                 verticalAlignment = Alignment.CenterVertically
@@ -455,7 +426,6 @@ fun ProminentModuleCard(module: AppModule, onModuleSelected: (String) -> Unit, m
                         maxLines = 1
                     )
                 }
-                
                 Surface(
                     modifier = Modifier.size(if (isSmallHeight) 40.dp else 56.dp),
                     shape = CircleShape,
@@ -485,22 +455,15 @@ fun GridModuleCard(module: AppModule, onModuleSelected: (String) -> Unit, modifi
         modifier = modifier
             .fillMaxSize()
             .scale(scale)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = LocalIndication.current
-            ) { onModuleSelected(module.route) },
+            .clickable(interactionSource = interactionSource, indication = LocalIndication.current) { onModuleSelected(module.route) },
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)),
+        shadowElevation = if (MaterialTheme.colorScheme.background.isLight()) 1.dp else 0.dp
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(10.dp)) {
             val isSmall = maxHeight < 90.dp || maxWidth < 90.dp
-            
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.Start,
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
+            Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
                 Surface(
                     modifier = Modifier.size(if (isSmall) 28.dp else 36.dp),
                     shape = RoundedCornerShape(10.dp),
@@ -515,7 +478,6 @@ fun GridModuleCard(module: AppModule, onModuleSelected: (String) -> Unit, modifi
                         )
                     }
                 }
-                
                 Column {
                     Text(
                         text = module.title,
@@ -536,3 +498,10 @@ fun GridModuleCard(module: AppModule, onModuleSelected: (String) -> Unit, modifi
         }
     }
 }
+
+// Helper to determine brightness for light mode border logic
+private fun Color.isDark(): Boolean {
+    val luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+    return luminance < 0.5
+}
+private fun Color.isLight(): Boolean = !isDark()

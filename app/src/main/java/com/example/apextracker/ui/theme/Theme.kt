@@ -1,6 +1,5 @@
 package com.example.apextracker.ui.theme
 
-import android.app.Activity
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -38,16 +37,52 @@ private fun getDarkColorScheme(primary: Color, secondary: Color, tertiary: Color
     )
 }
 
+private fun getLightColorScheme(primary: Color, secondary: Color, tertiary: Color): ColorScheme {
+    return lightColorScheme(
+        primary = primary,
+        onPrimary = Color.White,
+        primaryContainer = primary.copy(alpha = 0.12f),
+        onPrimaryContainer = primary,
+        secondary = secondary,
+        onSecondary = Color.White,
+        secondaryContainer = secondary.copy(alpha = 0.12f),
+        onSecondaryContainer = secondary,
+        tertiary = tertiary,
+        onTertiary = Color.White,
+        background = LightBackground,
+        onBackground = LightTextPrimary,
+        surface = LightSurface,
+        onSurface = LightTextPrimary,
+        surfaceVariant = LightSurfaceVariant,
+        onSurfaceVariant = LightTextSecondary,
+        outline = LightBorder,
+        error = Color(0xFFB00020),
+        onError = Color.White,
+        errorContainer = Color(0xFFF9DEDC),
+        onErrorContainer = Color(0xFF410E0B)
+    )
+}
+
 @Composable
 fun ApexTrackerTheme(
     theme: ApexTheme = ApexTheme.EMERALD,
+    darkTheme: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when (theme) {
-        ApexTheme.EMERALD -> getDarkColorScheme(EmeraldMuted, SeafoamMuted, MintGlass)
-        ApexTheme.OCEAN -> getDarkColorScheme(OceanPrimary, OceanSecondary, OceanTertiary)
-        ApexTheme.MAGMA -> getDarkColorScheme(MagmaPrimary, MagmaSecondary, MagmaTertiary)
-        ApexTheme.ROYAL -> getDarkColorScheme(RoyalPrimary, RoyalSecondary, RoyalTertiary)
+    val colorScheme = if (darkTheme) {
+        when (theme) {
+            ApexTheme.EMERALD -> getDarkColorScheme(EmeraldMuted, SeafoamMuted, MintGlass)
+            ApexTheme.OCEAN -> getDarkColorScheme(OceanPrimary, OceanSecondary, OceanTertiary)
+            ApexTheme.MAGMA -> getDarkColorScheme(MagmaPrimary, MagmaSecondary, MagmaTertiary)
+            ApexTheme.ROYAL -> getDarkColorScheme(RoyalPrimary, RoyalSecondary, RoyalTertiary)
+        }
+    } else {
+        when (theme) {
+            ApexTheme.EMERALD -> getLightColorScheme(EmeraldMuted, SeafoamMuted, MintGlass)
+            ApexTheme.OCEAN -> getLightColorScheme(OceanPrimary, OceanSecondary, OceanTertiary)
+            ApexTheme.MAGMA -> getLightColorScheme(MagmaPrimary, MagmaSecondary, MagmaTertiary)
+            ApexTheme.ROYAL -> getLightColorScheme(RoyalPrimary, RoyalSecondary, RoyalTertiary)
+        }
     }
 
     MaterialTheme(
