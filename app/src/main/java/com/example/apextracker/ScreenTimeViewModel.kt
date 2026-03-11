@@ -32,12 +32,16 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
     private val database = AppDatabase.getDatabase(application)
     private val screenTimeDao = database.screenTimeSessionDao()
     private val excludedAppDao = database.excludedAppDao()
+    private val firebaseManager = FirebaseManager(application)
 
     private val _hasPermission = MutableStateFlow(false)
     val hasPermission: StateFlow<Boolean> = _hasPermission.asStateFlow()
 
     private val _todayScreenTimeMillis = MutableStateFlow(0L)
     val todayScreenTimeMillis: StateFlow<Long> = _todayScreenTimeMillis.asStateFlow()
+
+    val aggregatedUsage: StateFlow<List<DeviceUsage>> = firebaseManager.getAggregatedScreenTime()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _excludedApps = excludedAppDao.getExcludedApps()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -114,7 +118,7 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
                 if (_hasPermission.value) {
                     updateScreenTime()
                 }
-                delay(10000)
+                delay(30000) // Increased delay to avoid spamming Firestore
             }
         }
     }
@@ -139,6 +143,11 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
 
         _todayScreenTimeMillis.value = totalFilteredTime
         saveTodayScreenTime(totalFilteredTime)
+        
+        // Upload to Firebase if logged in
+        if (firebaseManager.userId != null) {
+            firebaseManager.uploadScreenTime(totalFilteredTime)
+        }
     }
 
     private fun calculateAppSpecificUsage(): Map<String, Long> {
@@ -163,12 +172,10 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
             
             when (event.eventType) {
                 UsageEvents.Event.ACTIVITY_RESUMED -> {
-                    // App came to foreground
                     currentForegroundApp = event.packageName
                     lastEventTime[event.packageName] = event.timeStamp
                 }
                 UsageEvents.Event.ACTIVITY_PAUSED, UsageEvents.Event.ACTIVITY_STOPPED -> {
-                    // App went to background
                     val startTimeForApp = lastEventTime[event.packageName]
                     if (startTimeForApp != null) {
                         val duration = event.timeStamp - startTimeForApp
@@ -182,7 +189,6 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
             }
         }
 
-        // Add duration for the app currently in foreground
         currentForegroundApp?.let { pkg ->
             val startTimeForApp = lastEventTime[pkg]
             if (startTimeForApp != null) {

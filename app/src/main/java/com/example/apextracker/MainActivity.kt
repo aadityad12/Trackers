@@ -20,9 +20,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
@@ -41,13 +45,17 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import coil.compose.AsyncImage
 import com.example.apextracker.ui.theme.ApexTheme
 import com.example.apextracker.ui.theme.ApexTrackerTheme
 import kotlinx.coroutines.delay
@@ -57,8 +65,35 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
+            val authViewModel: AuthViewModel = viewModel()
+            val user by authViewModel.user.collectAsState()
+            
             var currentTheme by rememberSaveable { mutableStateOf(ApexTheme.EMERALD) }
             var isDarkMode by rememberSaveable { mutableStateOf(true) }
+            
+            // Sync settings when they change if logged in
+            val firebaseManager = remember { FirebaseManager(this) }
+            LaunchedEffect(currentTheme, isDarkMode, user) {
+                if (user != null) {
+                    firebaseManager.syncSettings(currentTheme.name, isDarkMode)
+                }
+            }
+
+            // Load remote settings
+            LaunchedEffect(user) {
+                if (user != null) {
+                    firebaseManager.getSettingsFlow().collect { settings ->
+                        settings?.let {
+                            (it["theme"] as? String)?.let { themeName ->
+                                try { currentTheme = ApexTheme.valueOf(themeName) } catch (e: Exception) {}
+                            }
+                            (it["isDarkMode"] as? Boolean)?.let { dark ->
+                                isDarkMode = dark
+                            }
+                        }
+                    }
+                }
+            }
             
             ApexTrackerTheme(theme = currentTheme, darkTheme = isDarkMode) {
                 AppNavigation(
@@ -219,7 +254,8 @@ fun MainMenu(
     isDarkMode: Boolean,
     onThemeChange: (ApexTheme) -> Unit, 
     onDarkModeChange: (Boolean) -> Unit,
-    onModuleSelected: (String) -> Unit
+    onModuleSelected: (String) -> Unit,
+    authViewModel: AuthViewModel = viewModel()
 ) {
     val modules = remember {
         listOf(
@@ -232,7 +268,11 @@ fun MainMenu(
         )
     }
 
+    val user by authViewModel.user.collectAsState()
+    val isSyncing by authViewModel.isSyncing.collectAsState()
     var showSettingsDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val isSmallScreen = configuration.screenWidthDp < 360
@@ -255,6 +295,17 @@ fun MainMenu(
                     }
                 },
                 actions = {
+                    if (user != null) {
+                        val syncIcon = if (isSyncing) Icons.Default.CloudSync else Icons.Default.CloudDone
+                        val syncTint = if (isSyncing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                        
+                        Icon(
+                            imageVector = syncIcon,
+                            contentDescription = "Sync Status",
+                            tint = syncTint,
+                            modifier = Modifier.padding(end = 8.dp).size(20.dp)
+                        )
+                    }
                     IconButton(onClick = { showSettingsDialog = true }) {
                         Icon(
                             imageVector = Icons.Default.Settings,
@@ -328,7 +379,7 @@ fun MainMenu(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp)
-                    .padding(bottom = 48.dp)
+                    .padding(bottom = 32.dp)
             ) {
                 Text(
                     "Settings",
@@ -337,6 +388,72 @@ fun MainMenu(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // User Profile / Auth Section
+                Text(
+                    "Account",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (user != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            if (user?.photoUrl != null) {
+                                AsyncImage(
+                                    model = user?.photoUrl,
+                                    contentDescription = "Profile Picture",
+                                    modifier = Modifier.size(48.dp).clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Surface(
+                                    modifier = Modifier.size(48.dp),
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primary
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = (user?.displayName ?: "U").take(1).uppercase(),
+                                            color = MaterialTheme.colorScheme.onPrimary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(user?.displayName ?: "User", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                                Text(user?.email ?: "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            IconButton(onClick = { authViewModel.signOut(context) }) {
+                                Icon(Icons.Default.Logout, contentDescription = "Sign Out", tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    } else {
+                        Button(
+                            onClick = { authViewModel.signInWithGoogle(context) },
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(Icons.Default.Cloud, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Sign in with Google")
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(24.dp))
                 
                 Text(
