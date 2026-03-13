@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.google.services)
+    id("com.google.gms.google-services") version "4.4.4" apply false
 }
 
 android {
@@ -13,6 +14,7 @@ android {
     defaultConfig {
         applicationId = "com.example.apextracker"
         minSdk = 26
+
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
