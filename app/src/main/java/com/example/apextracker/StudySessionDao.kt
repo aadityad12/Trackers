@@ -17,4 +17,7 @@ interface StudySessionDao {
 
     @Query("SELECT * FROM study_sessions ORDER BY date DESC")
     fun getAllSessions(): Flow<List<StudySession>>
+
+    @Query("SELECT * FROM study_sessions")
+    suspend fun getAllSessionsOneShot(): List<StudySession>
 }

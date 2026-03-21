@@ -21,4 +21,10 @@ interface BudgetDao {
 
     @Delete
     suspend fun deleteItem(item: BudgetItem)
+
+    @Query("SELECT * FROM budget_items WHERE cloudId = :cloudId LIMIT 1")
+    suspend fun getItemByCloudId(cloudId: String): BudgetItem?
+
+    @Query("SELECT * FROM budget_items")
+    suspend fun getAllItemsOneShot(): List<BudgetItem>
 }

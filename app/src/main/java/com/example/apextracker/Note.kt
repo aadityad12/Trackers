@@ -13,5 +13,6 @@ data class Note(
     val createdAt: LocalDateTime = LocalDateTime.now(),
     val modifiedAt: LocalDateTime = LocalDateTime.now(),
     val isDeleted: Boolean = false,
-    val deletedAt: LocalDateTime? = null
+    val deletedAt: LocalDateTime? = null,
+    val cloudId: String = ""
 )

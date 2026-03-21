@@ -14,4 +14,7 @@ interface ScreenTimeSessionDao {
 
     @Query("SELECT * FROM screen_time_sessions ORDER BY date DESC")
     fun getAllSessions(): Flow<List<ScreenTimeSession>>
+
+    @Query("SELECT * FROM screen_time_sessions")
+    suspend fun getAllSessionsOneShot(): List<ScreenTimeSession>
 }

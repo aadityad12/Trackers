@@ -26,4 +26,13 @@ interface NoteDao {
 
     @Query("SELECT * FROM notes WHERE id = :id")
     suspend fun getNoteById(id: Long): Note?
+
+    @Query("SELECT * FROM notes WHERE cloudId = :cloudId LIMIT 1")
+    suspend fun getNoteByCloudId(cloudId: String): Note?
+
+    @Query("SELECT * FROM notes")
+    suspend fun getAllNotesOneShot(): List<Note>
+
+    @Query("SELECT * FROM notes WHERE isDeleted = 1 AND deletedAt < :threshold")
+    suspend fun getDeletedNotesBefore(threshold: LocalDateTime): List<Note>
 }

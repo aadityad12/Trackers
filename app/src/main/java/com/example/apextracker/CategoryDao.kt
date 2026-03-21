@@ -21,4 +21,10 @@ interface CategoryDao {
 
     @Delete
     suspend fun deleteCategory(category: Category)
+
+    @Query("SELECT * FROM categories WHERE cloudId = :cloudId LIMIT 1")
+    suspend fun getCategoryByCloudId(cloudId: String): Category?
+
+    @Query("SELECT * FROM categories")
+    suspend fun getAllCategoriesOneShot(): List<Category>
 }

@@ -13,4 +13,7 @@ interface ExcludedAppDao {
 
     @Delete
     suspend fun includeApp(app: ExcludedApp)
+
+    @Query("SELECT * FROM excluded_apps")
+    suspend fun getAllExcludedAppsOneShot(): List<ExcludedApp>
 }

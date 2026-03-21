@@ -19,4 +19,7 @@ interface SubscriptionDao {
 
     @Query("SELECT * FROM subscriptions")
     suspend fun getAllSubscriptionsSync(): List<Subscription>
+
+    @Query("SELECT * FROM subscriptions WHERE cloudId = :cloudId LIMIT 1")
+    suspend fun getByCloudId(cloudId: String): Subscription?
 }

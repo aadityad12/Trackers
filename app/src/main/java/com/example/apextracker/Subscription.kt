@@ -12,5 +12,7 @@ data class Subscription(
     val amount: Double,
     val renewalDate: LocalDate,
     val notes: String? = null,
-    val lastAddedDate: LocalDate? = null
+    val lastAddedDate: LocalDate? = null,
+    val cloudId: String = "",
+    val modifiedAt: Long = 0L
 )

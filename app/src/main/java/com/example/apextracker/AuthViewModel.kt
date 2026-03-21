@@ -28,6 +28,9 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
+    private val _signInError = MutableStateFlow<String?>(null)
+    val signInError: StateFlow<String?> = _signInError.asStateFlow()
+
     init {
         auth.addAuthStateListener { 
             _user.value = it.currentUser
@@ -51,8 +54,10 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 handleSignIn(result)
             } catch (e: GetCredentialException) {
                 e.printStackTrace()
+                _signInError.value = "Sign-in failed: ${e.message}"
             } catch (e: Exception) {
                 e.printStackTrace()
+                _signInError.value = "Sign-in failed: ${e.message}"
             }
         }
     }
@@ -75,5 +80,9 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     
     fun setSyncing(syncing: Boolean) {
         _isSyncing.value = syncing
+    }
+
+    fun clearSignInError() {
+        _signInError.value = null
     }
 }

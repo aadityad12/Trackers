@@ -12,5 +12,7 @@ data class BudgetItem(
     val amount: Double,
     val description: String? = null,
     val date: LocalDate = LocalDate.now(),
-    val categoryId: Long? = null
+    val categoryId: Long? = null,
+    val cloudId: String = "",
+    val modifiedAt: Long = 0L
 )

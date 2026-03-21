@@ -73,6 +73,21 @@ class MainActivity : ComponentActivity() {
             
             // Sync settings when they change if logged in
             val firebaseManager = remember { FirebaseManager(this) }
+            var previousUser by remember { mutableStateOf(firebaseManager.currentUser) }
+
+            // Trigger full initial sync on new sign-in (null → non-null transition only)
+            LaunchedEffect(user) {
+                if (user != null && previousUser == null) {
+                    authViewModel.setSyncing(true)
+                    try {
+                        firebaseManager.performInitialSync(AppDatabase.getDatabase(applicationContext))
+                    } finally {
+                        authViewModel.setSyncing(false)
+                    }
+                }
+                previousUser = user
+            }
+
             LaunchedEffect(currentTheme, isDarkMode, user) {
                 if (user != null) {
                     firebaseManager.syncSettings(currentTheme.name, isDarkMode)
@@ -270,8 +285,18 @@ fun MainMenu(
 
     val user by authViewModel.user.collectAsState()
     val isSyncing by authViewModel.isSyncing.collectAsState()
+    val signInError by authViewModel.signInError.collectAsState()
     var showSettingsDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(signInError) {
+        val error = signInError
+        if (error != null) {
+            snackbarHostState.showSnackbar(error)
+            authViewModel.clearSignInError()
+        }
+    }
     
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -280,6 +305,7 @@ fun MainMenu(
     val spacing = if (isSmallScreen) 8.dp else 12.dp
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
