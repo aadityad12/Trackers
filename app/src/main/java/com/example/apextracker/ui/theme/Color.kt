@@ -42,9 +42,3 @@ val BorderMuted = Color(0xFF444D56)   // Subtle details
 
 // Functional Colors
 val SoftRed = Color(0xFFE57373)      // Error
-val SoftGreen = Color(0xFF81C784)    // Success
-
-// Keeping for reference
-val ElectricBlue = Color(0xFF00B2FF)
-val CyberCyan = Color(0xFF00FFD5)
-val CyberGreen = Color(0xFF00FF66)

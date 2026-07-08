@@ -141,7 +141,7 @@ fun ScreenTimeTrackerView(onBackToMenu: () -> Unit, viewModel: ScreenTimeViewMod
 }
 
 @Composable
-fun TotalApexTimeCard(devices: List<DeviceUsage>) {
+fun TotalApexTimeCard(devices: List<DeviceSession>) {
     val totalMillis = devices.sumOf { it.durationMillis }
     
     Card(
@@ -183,7 +183,7 @@ fun TotalApexTimeCard(devices: List<DeviceUsage>) {
 }
 
 @Composable
-fun DeviceBreakdownItem(usage: DeviceUsage) {
+fun DeviceBreakdownItem(usage: DeviceSession) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
         shape = RoundedCornerShape(16.dp)

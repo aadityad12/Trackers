@@ -194,10 +194,10 @@ fun AppNavigation(
 @Composable
 fun SplashScreen(onFinished: () -> Unit) {
     var startAnimation by remember { mutableStateOf(false) }
-    val alphaAnim = animateFloatAsState(
+    val scaleAnim = animateFloatAsState(
         targetValue = if (startAnimation) 1f else 0f,
         animationSpec = tween(durationMillis = 800),
-        label = "splashAlpha"
+        label = "splashScale"
     )
 
     LaunchedEffect(Unit) {
@@ -214,7 +214,7 @@ fun SplashScreen(onFinished: () -> Unit) {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.scale(alphaAnim.value)
+            modifier = Modifier.scale(scaleAnim.value)
         ) {
             ApexLogo(modifier = Modifier.size(120.dp))
             Spacer(modifier = Modifier.height(24.dp))

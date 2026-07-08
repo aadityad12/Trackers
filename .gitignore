@@ -13,3 +13,7 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Firebase config — contains project secrets, must never be committed.
+# Each developer/CI must supply their own from the Firebase console.
+app/google-services.json
