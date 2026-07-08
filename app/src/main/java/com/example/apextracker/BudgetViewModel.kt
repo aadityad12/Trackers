@@ -31,22 +31,6 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         checkAndAddSubscriptions()
-        observeCloudChanges()
-    }
-
-    private fun observeCloudChanges() {
-        val uid = auth.currentUser?.uid ?: return
-        
-        // Listen for Budget Items
-        firestore.collection("users").document(uid).collection("budget")
-            .addSnapshotListener { snapshot, _ ->
-                viewModelScope.launch {
-                    snapshot?.documents?.forEach { doc ->
-                        // Convert Firestore doc to BudgetItem and upsert to Room
-                        // This ensures local UI is always fresh
-                    }
-                }
-            }
     }
 
     private fun checkAndAddSubscriptions() {

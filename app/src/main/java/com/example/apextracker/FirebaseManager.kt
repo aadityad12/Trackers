@@ -32,14 +32,6 @@ class FirebaseManager(private val context: Context) {
 
     private val deviceName: String get() = Build.MODEL
 
-    // ── Auth ─────────────────────────────────────────────────────────────────
-
-    fun authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
-        val listener = FirebaseAuth.AuthStateListener { trySend(it.currentUser) }
-        auth.addAuthStateListener(listener)
-        awaitClose { auth.removeAuthStateListener(listener) }
-    }
-
     // ── Settings ──────────────────────────────────────────────────────────────
 
     suspend fun syncSettings(theme: String, isDarkMode: Boolean) {

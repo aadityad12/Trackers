@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
+import android.os.Build
 import android.os.Process
 import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
@@ -40,8 +41,8 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
     private val _todayScreenTimeMillis = MutableStateFlow(0L)
     val todayScreenTimeMillis: StateFlow<Long> = _todayScreenTimeMillis.asStateFlow()
 
-    val aggregatedUsage: StateFlow<List<DeviceUsage>> = firebaseManager.getAggregatedScreenTime()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val _aggregatedUsage = MutableStateFlow<List<DeviceSession>>(emptyList())
+    val aggregatedUsage: StateFlow<List<DeviceSession>> = _aggregatedUsage.asStateFlow()
 
     private val _excludedApps = excludedAppDao.getExcludedApps()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -65,11 +66,20 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
 
     fun checkPermission() {
         val appOps = getApplication<Application>().getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-        val mode = appOps.unsafeCheckOpNoThrow(
-            AppOpsManager.OPSTR_GET_USAGE_STATS,
-            Process.myUid(),
-            getApplication<Application>().packageName
-        )
+        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            appOps.unsafeCheckOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                Process.myUid(),
+                getApplication<Application>().packageName
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            appOps.checkOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                Process.myUid(),
+                getApplication<Application>().packageName
+            )
+        }
         _hasPermission.value = mode == AppOpsManager.MODE_ALLOWED
     }
 
@@ -143,11 +153,24 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
 
         _todayScreenTimeMillis.value = totalFilteredTime
         saveTodayScreenTime(totalFilteredTime)
-        
+
         // Upload to Firebase if logged in
         if (firebaseManager.userId != null) {
-            firebaseManager.uploadScreenTime(totalFilteredTime)
+            firebaseManager.uploadScreenTimeSession(ScreenTimeSession(date = LocalDate.now(), durationMillis = totalFilteredTime))
         }
+        refreshAggregatedUsage(totalFilteredTime)
+    }
+
+    private suspend fun refreshAggregatedUsage(currentDeviceMillis: Long) {
+        val otherDevices = if (firebaseManager.userId != null) firebaseManager.getOtherDevicesTodayUsage() else emptyList()
+        val currentDevice = DeviceSession(
+            deviceId = firebaseManager.deviceId,
+            deviceName = Build.MODEL,
+            date = LocalDate.now().toString(),
+            durationMillis = currentDeviceMillis,
+            isCurrentDevice = true
+        )
+        _aggregatedUsage.value = listOf(currentDevice) + otherDevices
     }
 
     private fun calculateAppSpecificUsage(): Map<String, Long> {
