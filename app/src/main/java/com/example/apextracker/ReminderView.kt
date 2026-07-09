@@ -405,8 +405,9 @@ fun ReminderEditDialog(
 
     if (showRecurrencePicker) {
         RecurrencePickerDialog(
+            initialRecurrence = recurrence,
             onDismiss = { showRecurrencePicker = false },
-            onConfirm = { 
+            onConfirm = {
                 recurrence = it
                 showRecurrencePicker = false
             }

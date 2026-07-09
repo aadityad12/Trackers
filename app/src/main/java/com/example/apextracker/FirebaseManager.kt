@@ -17,6 +17,29 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.util.UUID
 
+/**
+ * Assigns a fresh cloudId to each reminder that needs one and resolves parentCloudId using
+ * cloudIds assigned within this same batch (not just pre-existing ones), so a parent/child
+ * recurring pair that are both syncing for the first time link correctly regardless of
+ * iteration order.
+ */
+internal fun resolvePendingReminderCloudIds(
+    remindersNeedingCloudId: List<Reminder>,
+    existingCloudIdsById: Map<Long, String>,
+    generateCloudId: () -> String = { UUID.randomUUID().toString() }
+): List<Reminder> {
+    val cloudIdById = existingCloudIdsById.toMutableMap()
+    val assigned = remindersNeedingCloudId.map { reminder ->
+        val newCloudId = generateCloudId()
+        cloudIdById[reminder.id] = newCloudId
+        reminder.copy(cloudId = newCloudId)
+    }
+    return assigned.map { reminder ->
+        val parentCloudId = reminder.parentId?.let { pid -> cloudIdById[pid]?.takeIf { it.isNotEmpty() } }
+        reminder.copy(parentCloudId = parentCloudId)
+    }
+}
+
 class FirebaseManager(private val context: Context) {
     private val auth = FirebaseAuth.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
@@ -566,15 +589,10 @@ class FirebaseManager(private val context: Context) {
 
         // Push locally-created reminders with no cloudId
         val allLocalReminders = db.reminderDao().getAllRemindersOneShot()
-        for (reminder in allLocalReminders.filter { it.cloudId.isEmpty() }) {
-            val parentCloudId = reminder.parentId?.let { pid ->
-                allLocalReminders.find { it.id == pid }?.cloudId?.takeIf { it.isNotEmpty() }
-            }
-            val updated = reminder.copy(
-                cloudId = UUID.randomUUID().toString(),
-                parentCloudId = parentCloudId,
-                modifiedAt = System.currentTimeMillis()
-            )
+        val existingCloudIdsById = allLocalReminders.associate { it.id to it.cloudId }
+        val toPush = allLocalReminders.filter { it.cloudId.isEmpty() }
+        for (reminder in resolvePendingReminderCloudIds(toPush, existingCloudIdsById)) {
+            val updated = reminder.copy(modifiedAt = System.currentTimeMillis())
             db.reminderDao().updateReminder(updated)
             pushReminder(updated)
         }

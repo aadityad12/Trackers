@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Last full audit: 2026-07-07 (Firebase/auth follow-up: 2026-07-08). If you make significant architectural changes, update this file in the same session.
+Last full audit: 2026-07-07 (Firebase/auth follow-up: 2026-07-08; Known Issues fix pass + dependency bumps: 2026-07-09, branch `fix/known-issues-3-through-10`). If you make significant architectural changes, update this file in the same session.
 
 ## Environment Setup (read this first)
 
@@ -38,7 +38,7 @@ JAVA_HOME="<jdk17-path>" ./gradlew test --tests "com.example.apextracker.Example
 JAVA_HOME="<jdk17-path>" ./gradlew clean
 ```
 
-Note: there is currently only the default boilerplate `ExampleUnitTest` — no real unit test coverage exists for any ViewModel or business logic yet.
+Note: unit tests (as of 2026-07-09) cover the pure logic extracted during the fix pass — `ReminderSchedulerTest`, `OverviewFormattingTest`, `NoteBulletEditingTest`, `ResolvePendingReminderCloudIdsTest`, `ScreenTimeUsageAggregatorTest` — plus the boilerplate `ExampleUnitTest`. ViewModels themselves are still untested (they need Android framework/Robolectric).
 
 ## Architecture Overview
 
@@ -82,66 +82,65 @@ Settings dialogs for each module live in `*Settings.kt` files (e.g., `BudgetSett
 - Light-mode note: `shiftColorForLightMode()` in `Theme.kt` adjusts `primary`/`secondary` for light backgrounds but **not `tertiary`**, so tertiary accents may look washed out in light mode — likely just an oversight, not intentional.
 
 ### Background Work
-- `ReminderWorker.kt` — a `CoroutineWorker` that posts a notification via the `reminder_channel` notification channel. **It is currently never enqueued anywhere in the app** — no `WorkManager.enqueue(...)` call exists for it. See Known Issues; this is the actual root cause of "reminders don't notify."
+- `ReminderWorker.kt` — a `CoroutineWorker` that posts a notification via the `reminder_channel` notification channel. As of the 2026-07-09 fix pass it is reachable: `ReminderScheduler` (object) sets an exact `AlarmManager` alarm per active reminder → `ReminderAlarmReceiver` (BroadcastReceiver) enqueues `ReminderWorker` via WorkManager → notification posts. `ReminderBootReceiver` re-arms alarms after reboot. Scheduling is wired into every `ReminderViewModel` mutation path (add/update/toggle/delete/settings changes).
 
 ### Permissions
 - `PACKAGE_USAGE_STATS` + `QUERY_ALL_PACKAGES` — Required for screen time tracking.
-- `POST_NOTIFICATIONS` — Declared in the manifest for reminder notifications, but the app **never requests it at runtime** (no `registerForActivityResult`/`ActivityCompat.requestPermission` call exists anywhere). On API 33+ this means notifications would silently fail to post even if `ReminderWorker` were wired up.
+- `POST_NOTIFICATIONS` — Requested at runtime (API 33+) in `MainActivity.onCreate` via `registerForActivityResult` (added 2026-07-09).
+- `SCHEDULE_EXACT_ALARM` + `RECEIVE_BOOT_COMPLETED` — For exact reminder alarms and re-arming them after reboot (added 2026-07-09). `ReminderScheduler` falls back to inexact `setAndAllowWhileIdle` if the user revokes exact-alarm permission on API 31+.
 
 ## Key Conventions
 - All ViewModels extend `AndroidViewModel` and access Room through `AppDatabase.getDatabase(application)`.
 - **Intended** convention: Firebase sync is fire-and-forget inside `viewModelScope.launch`; local Room is always updated first. **Actual current state**: only partially true — see "Authentication & Cloud Sync" above and Known Issues.
 - Light/dark mode detection in Composables uses the extension `Color.isLight()` defined at the bottom of `MainActivity.kt`.
 - The `BudgetViewModel` auto-creates `BudgetItem` entries for due subscriptions on init and on any subscription change (`checkAndAddSubscriptions()`), which back-fills one `BudgetItem` per elapsed month if a subscription's renewal date is far in the past.
-- Currency formatting (`String.format("%.2f", ...)` / `"%,.2f"`) and duration formatting (seconds/millis → "Xh Ym") are each hand-rolled independently in multiple files rather than through a shared utility — see Known Issues if consolidating.
+- "Xh Ym" duration formatting goes through the shared `formatDurationCompact(millis)` in `DurationFormat.kt` (consolidated 2026-07-09; `StudyTrackerView.formatTime` remains separate — it's the HH:MM:SS stopwatch display, a different format). Periodic 30s polling loops go through `CoroutineScope.launchPeriodic()` in `PeriodicRefresh.kt`. Currency formatting is still hand-rolled per call site.
 
 ## Known Issues (as of 2026-07-07 audit)
 
-This section exists so the next work session doesn't have to rediscover these from scratch. Ordered roughly by severity/impact. None of these were fixed in the 2026-07-07 cleanup pass (which focused on redundant/dead code and build-breaking issues) — they're feature/behavior bugs appropriate for a dedicated follow-up.
+This section exists so the next work session doesn't have to rediscover these from scratch. Ordered roughly by severity/impact. **2026-07-09 status update**: most of these were addressed on branch `fix/known-issues-3-through-10` (one commit per issue) — each section below is annotated with what was fixed and what remains. All fixes verified via `assembleDebug` + unit tests + `lintDebug` (0 errors) only; **no device/emulator was available**, so an on-device smoke test is still owed before closing the GitHub issues.
 
 Each section below is tracked as a GitHub issue, numbered in recommended fix order: [#3](https://github.com/aadityad12/Trackers/issues/3) Reminders, [#4](https://github.com/aadityad12/Trackers/issues/4) Firebase sync, [#5](https://github.com/aadityad12/Trackers/issues/5) Overview display bugs, [#6](https://github.com/aadityad12/Trackers/issues/6) Notes, [#7](https://github.com/aadityad12/Trackers/issues/7) Screen Time accounting, [#8](https://github.com/aadityad12/Trackers/issues/8) Auth polish, [#9](https://github.com/aadityad12/Trackers/issues/9) code-duplication cleanup, [#10](https://github.com/aadityad12/Trackers/issues/10) dependency bumps.
 
-### [Issue #3] Reminders — notifications don't fire (highest-impact bug)
-1. `ReminderWorker` is never enqueued via `WorkManager` anywhere in the codebase — it's unreachable dead code today. Nothing schedules a reminder to fire at its due date/time.
-2. `POST_NOTIFICATIONS` runtime permission (API 33+) is declared in the manifest but never requested.
-3. `RecurrencePickerDialog.kt`: both dropdowns (`Frequency`, `Ends`) are hardcoded `expanded = false` with a no-op `onExpandedChange` — **the dropdowns can never be opened**, so users can't actually pick anything but the DAILY/NEVER defaults. This is very likely the literal cause of "recurrence doesn't work properly" (commit `01f21dc`).
-4. Recurrence advancement only happens when the user manually taps "complete" on a reminder (`ReminderViewModel.handleRecurringCompletion`) — there's no calendar-driven catch-up, so a missed/unopened recurring reminder just sits overdue forever.
-5. Editing an existing reminder's recurrence via `RecurrencePickerDialog` always resets to defaults rather than prefilling the current `Recurrence` — combined with #3, there's no way to verify/change an existing recurring schedule through the UI.
+### [Issue #3] Reminders — notifications don't fire (highest-impact bug) — **mostly fixed 2026-07-09**
+1. ~~`ReminderWorker` never enqueued~~ **Fixed**: exact `AlarmManager` alarms via new `ReminderScheduler`/`ReminderAlarmReceiver`/`ReminderBootReceiver` (see "Background Work" above).
+2. ~~`POST_NOTIFICATIONS` never requested~~ **Fixed**: requested at runtime in `MainActivity.onCreate`.
+3. ~~Dropdowns hardcoded `expanded = false`~~ **Fixed**: both dropdowns in `RecurrencePickerDialog.kt` now use real `remember` state.
+4. **Still open**: recurrence advancement only happens on manual "complete" — no calendar-driven catch-up for missed recurring reminders. Deliberately left: whether a missed recurrence should silently advance or sit overdue is a product decision.
+5. ~~Recurrence picker resets to defaults when editing~~ **Fixed**: prefills from the reminder's existing `Recurrence` via new `initialRecurrence` param.
 
-Fix order suggestion: (a) request `POST_NOTIFICATIONS` at runtime, (b) enqueue `ReminderWorker` (likely via `WorkManager` with exact-alarm semantics — default WorkManager windows are too inexact for a due-time reminder, consider `AlarmManager.setExactAndAllowWhileIdle` instead), (c) fix the dropdown `expanded` state in `RecurrencePickerDialog.kt`, (d) prefill the picker from the reminder's existing `Recurrence` when editing.
+### [Issue #4] Firebase sync — architecture inconsistencies — **partially fixed 2026-07-09**
+- **Still open — the big one**: Budget items have two competing, incompatible sync paths. `BudgetViewModel.syncItemToCloud()`/`deleteItem()` write directly to Firestore keyed by the local Room autoincrement `id` (colliding across devices/reinstalls, missing `cloudId`/`modifiedAt`/`categoryCloudId`), while `FirebaseManager`'s `pushBudgetItem`/`syncBudgetItems` expect a UUID-based `cloudId` scheme. Net effect: a locally-created budget item can end up as two different, unlinked Firestore documents. Recommend routing `BudgetViewModel` entirely through `FirebaseManager`'s `cloudId` scheme. **Deliberately not attempted headlessly**: it touches live Firestore data for the real signed-in project and needs a migration/scoping decision.
+- **Still open**: sync is "once at sign-in," not continuous, for every entity except (partially) Budget/ScreenTime — same reason as above.
+- ~~`checkAndAddSubscriptions()` race~~ **Fixed**: now guarded by a `Mutex`, and the catch-up loop calls DAOs directly instead of re-entrant public methods (which used to spawn nested launches re-triggering the check).
+- ~~`syncReminders()` first-sync `parentCloudId` ordering bug~~ **Fixed**: extracted into pure `resolvePendingReminderCloudIds()` (top of `FirebaseManager.kt`) which threads batch-assigned cloudIds; unit-tested order-independent.
+- **Still open**: `FirebaseManager.kt` cloud-document parsing silently drops malformed documents with no logging.
 
-### [Issue #4] Firebase sync — architecture inconsistencies
-- **Budget items have two competing, incompatible sync paths.** `BudgetViewModel.syncItemToCloud()`/`deleteItem()` write directly to Firestore keyed by the local Room autoincrement `id` (colliding across devices/reinstalls, missing `cloudId`/`modifiedAt`/`categoryCloudId`), while `FirebaseManager`'s `pushBudgetItem`/`syncBudgetItems` expect a UUID-based `cloudId` scheme. Net effect: a locally-created budget item can end up as two different, unlinked Firestore documents. Recommend routing `BudgetViewModel` entirely through `FirebaseManager`'s existing `cloudId` scheme and deleting `BudgetViewModel`'s ad-hoc Firestore calls.
-- **Sync is "once at sign-in," not continuous**, for every entity except (partially, and broken-ly) Budget/ScreenTime — see "Authentication & Cloud Sync" above. New items created/edited/deleted after sign-in aren't pushed until the next sign-out/sign-in cycle.
-- `checkAndAddSubscriptions()` in `BudgetViewModel` is launched fire-and-forget from both `init` and every subscription add/update, with no mutex/transaction guarding the read-advance-write of `renewalDate` — concurrent invocations can double-insert a `BudgetItem` for the same subscription period.
-- `FirebaseManager.syncReminders()`: when resolving a newly-created reminder's parent (for recurring chains) during the very first sync, if the parent hasn't been assigned a `cloudId` yet in the same batch, the child's `parentCloudId` can resolve incorrectly — order-dependent bug for first-sync recurring chains.
-- Most `mapNotNull`/`as? Type ?: continue` cloud-document parsing in `FirebaseManager.kt` silently drops malformed documents with no logging, making real-world sync issues hard to diagnose (only two bare `printStackTrace()` calls exist in the whole file).
+### [Issue #5] Overview module — display bugs — **fixed 2026-07-09**
+- ~~Total spent rounds to whole dollars~~ **Fixed**: `"%.2f"`.
+- ~~Study/screen time shown as raw minutes~~ **Fixed**: both use `formatDurationCompact()`.
+- **Still open (perf-only, not a bug)**: `OverviewViewModel` recomputes aggregates by scanning entire tables on every combine — revisit only if it becomes a performance issue.
 
-### [Issue #5] Overview module — display bugs (explicitly requested by the developer in `notes.txt`)
-- `OverviewView.kt`: total spent is formatted with `String.format("%.0f", data.totalSpent)` — rounds to whole dollars instead of showing cents. Should be `"%.2f"`.
-- `OverviewView.kt`: study time is displayed as `"${data.studyTimeMinutes}m"` — raw minutes only, no hours split. Same pattern (and same fix needed) applies to the screen-time display right next to it. Needs an "Xh Ym" formatter.
-- `OverviewViewModel` recomputes aggregates by scanning the *entire* Budget/Study/ScreenTime tables on every combine, rather than reusing any per-date-keyed derived flow from each module's own ViewModel — not incorrect, just redundant computation worth revisiting if this becomes a performance issue.
+### [Issue #6] Notes module — **partially fixed 2026-07-09**
+- **Unconfirmed**: the "backspacing a bullet needs two keystrokes / leaves a dangling glyph" report did NOT reproduce through the pure edit-diffing logic — a unit test (`NoteBulletEditingTest`) shows an empty bullet line clears in one keystroke via `handleNoteContentChange`. If it happens on-device, it's likely IME-batching-specific; needs a device repro before changing the regex.
+- ~~"Indent" on a plain line creates a level-2 bullet~~ **Fixed**: Indent now leaves non-bulleted lines untouched.
 
-### [Issue #6] Notes module
-- Backspacing a bullet marker (e.g. `"• "`) doesn't fully clear it in one keystroke: once the trailing space is deleted, the remaining lone glyph (`"•"`) no longer matches `bulletRegex` (which requires a trailing space), so a second backspace is needed and is treated as a plain character delete, leaving a dangling glyph momentarily. Reproducible, minor but visible.
-- "Indent" on a plain (non-bulleted) line silently creates a level-2 bullet rather than doing nothing — likely surprising, not obviously intentional.
+### [Issue #7] Screen Time — usage accounting edge cases — **fixed 2026-07-09**
+- ~~Undercounting/overcounting in `calculateAppSpecificUsage()`~~ **Fixed**: event processing extracted into pure `aggregateForegroundDurations()` (`ScreenTimeUsageAggregator.kt`, unit-tested). Back-to-back `RESUMED` no longer resets the start time; a session already foregrounded before the window is counted from window start; `SCREEN_NON_INTERACTIVE` (API 28+) closes out the foreground app on screen lock.
+- **Still open (accepted tradeoff)**: cross-device totals lag up to ~30s (one-shot fetch on the 30s polling loop, no live Firestore listener).
 
-### [Issue #7] Screen Time — usage accounting edge cases
-- `calculateAppSpecificUsage()` in `ScreenTimeViewModel.kt` keys foreground duration purely off `ACTIVITY_RESUMED`/`PAUSED`/`STOPPED` events within today's query window. Known undercounting: multi-activity apps firing back-to-back `RESUMED` events overwrite the tracked start time; a session that started before midnight (today's query window) is dropped entirely rather than counted from `startTime`. Known possible overcounting: no handling of screen-off events, so an app can keep "accruing" after the screen locks until an explicit pause arrives.
-- `aggregatedUsage` (multi-device total) is now built from a one-shot `FirebaseManager.getOtherDevicesTodayUsage()` call refreshed every ~30s alongside the existing polling loop (this was fixed as part of the 2026-07-07 build-breakage repair — see "2026-07-07 Cleanup Pass" below); there's no live Firestore listener for other devices, so cross-device totals can lag up to ~30s.
+### [Issue #8] Auth — **mostly fixed**
+- ~~Credential unwrap bug~~ **Fixed** earlier (PR [#2](https://github.com/aadityad12/Trackers/pull/2)).
+- ~~`AuthStateListener` leak~~ **Fixed 2026-07-09**: listener stored and removed in `onCleared()`.
+- ~~`signOut()` leaves `isSyncing`/`signInError` stale~~ **Fixed 2026-07-09**: both reset on sign-out.
+- **Still open (speculative, unconfirmed)**: theme-sync echo loop in `MainActivity.kt` (local change → Firestore write → own snapshot listener → re-drive state). Likely converges harmlessly; add a `hasPendingLocalChange` guard only if flicker is actually observed on-device.
 
-### [Issue #8] Auth
-- ~~`AuthViewModel.handleSignIn()`: if the returned credential isn't a `GoogleIdTokenCredential`...~~ **Fixed** (PR [#2](https://github.com/aadityad12/Trackers/pull/2)): Credential Manager actually returns the token wrapped in a `CustomCredential`, not a bare `GoogleIdTokenCredential` — the old direct-cast check never matched in practice, so sign-in silently no-op'd on real devices. Now unwraps via `GoogleIdTokenCredential.createFrom(credential.data)` and surfaces a real error for any other credential type.
-- `AuthViewModel`'s `FirebaseAuth.AuthStateListener` registered in `init` is never removed (no `onCleared()` override) — minor leak.
-- `AuthViewModel.signOut()` doesn't reset `isSyncing`/`signInError` — a sign-out mid-sync could leave the sync spinner active indefinitely in the UI.
-- `MainActivity.kt`: local-theme-change → Firestore write → snapshot listener fires on the writer's own local cache update → could re-drive `currentTheme`/`isDarkMode` state → re-triggers the push effect. Likely converges harmlessly (same value written back) today, but there's no guard against this echo; worth a `hasPendingLocalChange` flag if it ever causes visible flicker.
+### [Issue #9] Study Tracker (code-duplication cleanup) — **fixed 2026-07-09**
+- ~~Duplicated 30s polling loops~~ **Fixed**: both use `launchPeriodic()` (`PeriodicRefresh.kt`). Still always-on polls by design (30s tolerance accepted).
+- ~~Three hand-rolled duration formatters~~ **Fixed**: `formatTimeCompact`/`formatMillis` merged into `formatDurationCompact()` (`DurationFormat.kt`); `formatTime` (stopwatch HH:MM:SS) intentionally kept separate.
 
-### [Issue #9] Study Tracker (code-duplication cleanup)
-- `startDailyResetCheck()` polls every 30s in an unconditional `while(true)` loop for the entire ViewModel lifetime (even while not studying) to detect day rollover — acceptable given the 30s tolerance, but an always-on poll; same pattern duplicated independently in `ScreenTimeViewModel.startScreenTimeUpdates()`. Could be consolidated into one shared "periodic refresh" helper.
-- Duration formatting (`formatTime`/`formatTimeCompact` in `StudyTrackerView.kt` vs `formatMillis` in `ScreenTimeTrackerView.kt`) is three independent hand-rolled implementations with different output styles/input units. Consolidate into one shared utility if touching this area.
-
-### [Issue #10] Dependency freshness
-`gradle/libs.versions.toml` pins reasonably current-for-when-written versions, but lint flags several newer releases available (AGP 8.13.2→9.2.1, Kotlin 2.1.0→2.4.0, Firebase BOM 33.6.0→34.15.0, Room 2.6.1→2.8.4, etc.). Not bumped during this cleanup pass since version bumps carry their own regression risk and deserve a dedicated pass with testing — see `./gradlew lintDebug` output for the full list.
+### [Issue #10] Dependency freshness — **fixed 2026-07-09**
+All catalog versions bumped to latest (AGP 9.2.1, Kotlin 2.4.0, KSP 2.3.9, Compose BOM 2026.06.01, Room 2.8.4, Firebase BOM 34.16.0, etc.), Gradle wrapper 9.1.0 → 9.4.1, compileSdk 35 → 37 (targetSdk stays 35 — no runtime behavior opt-ins). **AGP 9 migration notes**: the standalone `org.jetbrains.kotlin.android` plugin is gone (AGP 9 has built-in Kotlin and refuses it); `kotlinOptions{}` became `kotlin { compilerOptions {} }` in `app/build.gradle.kts`. KSP is standalone-versioned from 2.3.0 (no longer `<kotlin>-<ksp>` coupled). Coil intentionally left at 2.7.0 (Coil 3 = artifact/package migration, not a bump). Verified by build/tests/lint only — **needs an on-device smoke test** (sign-in, sync, each module) before merging.
 
 ## 2026-07-07 Cleanup Pass (what was already fixed — don't re-flag these)
 

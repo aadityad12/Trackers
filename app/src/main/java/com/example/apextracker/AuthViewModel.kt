@@ -33,10 +33,17 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     private val _signInError = MutableStateFlow<String?>(null)
     val signInError: StateFlow<String?> = _signInError.asStateFlow()
 
+    private val authStateListener = FirebaseAuth.AuthStateListener {
+        _user.value = it.currentUser
+    }
+
     init {
-        auth.addAuthStateListener { 
-            _user.value = it.currentUser
-        }
+        auth.addAuthStateListener(authStateListener)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        auth.removeAuthStateListener(authStateListener)
     }
 
     fun signInWithGoogle(context: Context) {
@@ -85,6 +92,8 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             auth.signOut()
             val credentialManager = CredentialManager.create(context)
             credentialManager.clearCredentialState(ClearCredentialStateRequest())
+            _isSyncing.value = false
+            _signInError.value = null
         }
     }
     
