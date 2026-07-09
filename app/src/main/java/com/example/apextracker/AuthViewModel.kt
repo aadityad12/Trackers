@@ -2,8 +2,10 @@ package com.example.apextracker
 
 import android.app.Application
 import android.content.Context
+import android.util.Log
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.GetCredentialResponse
 import androidx.credentials.exceptions.GetCredentialException
@@ -67,6 +69,14 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         if (credential is GoogleIdTokenCredential) {
             val firebaseCredential = GoogleAuthProvider.getCredential(credential.idToken, null)
             auth.signInWithCredential(firebaseCredential).await()
+        } else if (credential is CustomCredential &&
+            credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+            val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+            val firebaseCredential = GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
+            auth.signInWithCredential(firebaseCredential).await()
+        } else {
+            Log.w("AuthViewModel", "Unexpected credential type returned: ${credential::class.java.name}")
+            _signInError.value = "Sign-in failed: unexpected credential type (${credential::class.java.simpleName})"
         }
     }
 
