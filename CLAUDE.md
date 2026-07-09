@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Last full audit: 2026-07-07. If you make significant architectural changes, update this file in the same session.
+Last full audit: 2026-07-07 (Firebase/auth follow-up: 2026-07-08). If you make significant architectural changes, update this file in the same session.
 
 ## Environment Setup (read this first)
 
@@ -11,7 +11,7 @@ Last full audit: 2026-07-07. If you make significant architectural changes, upda
   JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew <task>
   ```
   If Android Studio isn't installed at that path, find another JDK 17+ via `/usr/libexec/java_home -V`.
-- **`app/google-services.json` is required by the Google Services Gradle plugin but is gitignored** (it contains real Firebase project secrets — it was committed once by accident and deleted in commit `bd3f18e`, then re-added to `.gitignore`). A syntactically-valid placeholder file exists locally so the project builds, but **Google Sign-In / Firestore will not actually work until you drop in your real config from the Firebase console** (Project Settings → your Android app → download `google-services.json` → place at `app/google-services.json`).
+- **`app/google-services.json` is required by the Google Services Gradle plugin but is gitignored** (it contains real Firebase project secrets — it was committed once by accident and deleted in commit `bd3f18e`, then re-added to `.gitignore`). As of 2026-07-08 this machine has the **real** config in place (project `apex-tracker-3ed29`) with the debug SHA-1 fingerprint registered in the Firebase console — Google Sign-In is verified working end-to-end on a physical device. On a **fresh clone/new machine**, you'll need to redo this yourself: Firebase Console → Project Settings → your Android app → add your machine's debug SHA-1 (`keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android`) → download `google-services.json` → place at `app/google-services.json`. Without it, the build still succeeds with a stub placeholder, but sign-in/Firestore won't function.
 
 ## Build & Run Commands
 
@@ -122,23 +122,23 @@ Fix order suggestion: (a) request `POST_NOTIFICATIONS` at runtime, (b) enqueue `
 - `OverviewView.kt`: study time is displayed as `"${data.studyTimeMinutes}m"` — raw minutes only, no hours split. Same pattern (and same fix needed) applies to the screen-time display right next to it. Needs an "Xh Ym" formatter.
 - `OverviewViewModel` recomputes aggregates by scanning the *entire* Budget/Study/ScreenTime tables on every combine, rather than reusing any per-date-keyed derived flow from each module's own ViewModel — not incorrect, just redundant computation worth revisiting if this becomes a performance issue.
 
-### [Issue #7] Screen Time — usage accounting edge cases
-- `calculateAppSpecificUsage()` in `ScreenTimeViewModel.kt` keys foreground duration purely off `ACTIVITY_RESUMED`/`PAUSED`/`STOPPED` events within today's query window. Known undercounting: multi-activity apps firing back-to-back `RESUMED` events overwrite the tracked start time; a session that started before midnight (today's query window) is dropped entirely rather than counted from `startTime`. Known possible overcounting: no handling of screen-off events, so an app can keep "accruing" after the screen locks until an explicit pause arrives.
-- `aggregatedUsage` (multi-device total) is now built from a one-shot `FirebaseManager.getOtherDevicesTodayUsage()` call refreshed every ~30s alongside the existing polling loop (this was fixed as part of the 2026-07-07 build-breakage repair — see "2026-07-07 Cleanup Pass" below); there's no live Firestore listener for other devices, so cross-device totals can lag up to ~30s.
-
 ### [Issue #6] Notes module
 - Backspacing a bullet marker (e.g. `"• "`) doesn't fully clear it in one keystroke: once the trailing space is deleted, the remaining lone glyph (`"•"`) no longer matches `bulletRegex` (which requires a trailing space), so a second backspace is needed and is treated as a plain character delete, leaving a dangling glyph momentarily. Reproducible, minor but visible.
 - "Indent" on a plain (non-bulleted) line silently creates a level-2 bullet rather than doing nothing — likely surprising, not obviously intentional.
 
-### [Issue #9] Study Tracker (code-duplication cleanup)
-- `startDailyResetCheck()` polls every 30s in an unconditional `while(true)` loop for the entire ViewModel lifetime (even while not studying) to detect day rollover — acceptable given the 30s tolerance, but an always-on poll; same pattern duplicated independently in `ScreenTimeViewModel.startScreenTimeUpdates()`. Could be consolidated into one shared "periodic refresh" helper.
-- Duration formatting (`formatTime`/`formatTimeCompact` in `StudyTrackerView.kt` vs `formatMillis` in `ScreenTimeTrackerView.kt`) is three independent hand-rolled implementations with different output styles/input units. Consolidate into one shared utility if touching this area.
+### [Issue #7] Screen Time — usage accounting edge cases
+- `calculateAppSpecificUsage()` in `ScreenTimeViewModel.kt` keys foreground duration purely off `ACTIVITY_RESUMED`/`PAUSED`/`STOPPED` events within today's query window. Known undercounting: multi-activity apps firing back-to-back `RESUMED` events overwrite the tracked start time; a session that started before midnight (today's query window) is dropped entirely rather than counted from `startTime`. Known possible overcounting: no handling of screen-off events, so an app can keep "accruing" after the screen locks until an explicit pause arrives.
+- `aggregatedUsage` (multi-device total) is now built from a one-shot `FirebaseManager.getOtherDevicesTodayUsage()` call refreshed every ~30s alongside the existing polling loop (this was fixed as part of the 2026-07-07 build-breakage repair — see "2026-07-07 Cleanup Pass" below); there's no live Firestore listener for other devices, so cross-device totals can lag up to ~30s.
 
 ### [Issue #8] Auth
 - ~~`AuthViewModel.handleSignIn()`: if the returned credential isn't a `GoogleIdTokenCredential`...~~ **Fixed** (PR [#2](https://github.com/aadityad12/Trackers/pull/2)): Credential Manager actually returns the token wrapped in a `CustomCredential`, not a bare `GoogleIdTokenCredential` — the old direct-cast check never matched in practice, so sign-in silently no-op'd on real devices. Now unwraps via `GoogleIdTokenCredential.createFrom(credential.data)` and surfaces a real error for any other credential type.
 - `AuthViewModel`'s `FirebaseAuth.AuthStateListener` registered in `init` is never removed (no `onCleared()` override) — minor leak.
 - `AuthViewModel.signOut()` doesn't reset `isSyncing`/`signInError` — a sign-out mid-sync could leave the sync spinner active indefinitely in the UI.
 - `MainActivity.kt`: local-theme-change → Firestore write → snapshot listener fires on the writer's own local cache update → could re-drive `currentTheme`/`isDarkMode` state → re-triggers the push effect. Likely converges harmlessly (same value written back) today, but there's no guard against this echo; worth a `hasPendingLocalChange` flag if it ever causes visible flicker.
+
+### [Issue #9] Study Tracker (code-duplication cleanup)
+- `startDailyResetCheck()` polls every 30s in an unconditional `while(true)` loop for the entire ViewModel lifetime (even while not studying) to detect day rollover — acceptable given the 30s tolerance, but an always-on poll; same pattern duplicated independently in `ScreenTimeViewModel.startScreenTimeUpdates()`. Could be consolidated into one shared "periodic refresh" helper.
+- Duration formatting (`formatTime`/`formatTimeCompact` in `StudyTrackerView.kt` vs `formatMillis` in `ScreenTimeTrackerView.kt`) is three independent hand-rolled implementations with different output styles/input units. Consolidate into one shared utility if touching this area.
 
 ### [Issue #10] Dependency freshness
 `gradle/libs.versions.toml` pins reasonably current-for-when-written versions, but lint flags several newer releases available (AGP 8.13.2→9.2.1, Kotlin 2.1.0→2.4.0, Firebase BOM 33.6.0→34.15.0, Room 2.6.1→2.8.4, etc.). Not bumped during this cleanup pass since version bumps carry their own regression risk and deserve a dedicated pass with testing — see `./gradlew lintDebug` output for the full list.
