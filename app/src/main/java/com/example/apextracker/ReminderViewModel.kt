@@ -7,9 +7,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 
 class ReminderViewModel(application: Application) : AndroidViewModel(application) {
@@ -25,27 +27,51 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
     val specificTimeOffsetMinutes: Flow<Int> = settingsRepository.specificTimeOffsetMinutes
 
     fun addReminder(
-        name: String, 
-        date: LocalDate, 
-        time: LocalTime?, 
+        name: String,
+        date: LocalDate,
+        time: LocalTime?,
         description: String?,
         recurrence: Recurrence? = null
     ) {
         viewModelScope.launch {
-            reminderDao.insertReminder(Reminder(
+            val reminder = Reminder(
                 name = name,
                 date = date,
                 time = time,
                 description = description,
                 recurrence = recurrence
-            ))
+            )
+            val id = reminderDao.insertReminder(reminder)
+            scheduleIfNeeded(reminder.copy(id = id))
         }
     }
 
     fun updateReminder(reminder: Reminder) {
         viewModelScope.launch {
             reminderDao.updateReminder(reminder)
+            scheduleIfNeeded(reminder)
         }
+    }
+
+    /** Schedules (or cancels, if completed/disabled/past-due) the exact alarm for a reminder. */
+    private suspend fun scheduleIfNeeded(reminder: Reminder) {
+        val context = getApplication<Application>()
+        if (reminder.isCompleted || !settingsRepository.notificationsEnabled.first()) {
+            ReminderScheduler.cancel(context, reminder.id)
+            return
+        }
+        val allDayTime = settingsRepository.allDayNotificationTime.first()
+        val offsetMinutes = settingsRepository.specificTimeOffsetMinutes.first()
+        val triggerTime = ReminderScheduler.computeTriggerTime(reminder, allDayTime, offsetMinutes)
+        if (triggerTime.isAfter(LocalDateTime.now())) {
+            ReminderScheduler.schedule(context, reminder, ReminderScheduler.toEpochMillis(triggerTime))
+        } else {
+            ReminderScheduler.cancel(context, reminder.id)
+        }
+    }
+
+    private suspend fun rescheduleAllActive() {
+        activeReminders.first().forEach { scheduleIfNeeded(it) }
     }
 
     fun toggleCompletion(reminder: Reminder) {
@@ -54,7 +80,9 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
                 // Handle completion of a recurring reminder
                 handleRecurringCompletion(reminder)
             } else {
-                reminderDao.updateReminder(reminder.copy(isCompleted = !reminder.isCompleted))
+                val updated = reminder.copy(isCompleted = !reminder.isCompleted)
+                reminderDao.updateReminder(updated)
+                scheduleIfNeeded(updated)
             }
         }
     }
@@ -79,17 +107,20 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
             val nextDate = calculateNextDate(reminder.date, recurrence)
             if (nextDate != null) {
                 // Insert the next instance
-                reminderDao.insertReminder(reminder.copy(
+                val nextReminder = reminder.copy(
                     id = 0,
                     date = nextDate,
                     isCompleted = false,
                     occurrencesCompleted = nextOccurrencesCompleted
-                ))
+                )
+                val nextId = reminderDao.insertReminder(nextReminder)
+                scheduleIfNeeded(nextReminder.copy(id = nextId))
             }
         }
-        
+
         // Mark current one as completed
         reminderDao.updateReminder(reminder.copy(isCompleted = true))
+        ReminderScheduler.cancel(getApplication(), reminder.id)
     }
 
     private fun calculateNextDate(currentDate: LocalDate, recurrence: Recurrence): LocalDate? {
@@ -116,12 +147,14 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
     fun deleteReminder(reminder: Reminder) {
         viewModelScope.launch {
             reminderDao.deleteReminder(reminder)
+            ReminderScheduler.cancel(getApplication(), reminder.id)
         }
     }
 
     fun deleteReminders(ids: List<Long>) {
         viewModelScope.launch {
             reminderDao.deleteRemindersByIds(ids)
+            ids.forEach { ReminderScheduler.cancel(getApplication(), it) }
         }
     }
 
@@ -134,18 +167,25 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
     fun setNotificationsEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setNotificationsEnabled(enabled)
+            if (enabled) {
+                rescheduleAllActive()
+            } else {
+                activeReminders.first().forEach { ReminderScheduler.cancel(getApplication(), it.id) }
+            }
         }
     }
 
     fun setAllDayTime(time: LocalTime) {
         viewModelScope.launch {
             settingsRepository.setAllDayNotificationTime(time)
+            rescheduleAllActive()
         }
     }
 
     fun setOffset(minutes: Int) {
         viewModelScope.launch {
             settingsRepository.setSpecificTimeOffsetMinutes(minutes)
+            rescheduleAllActive()
         }
     }
 }
