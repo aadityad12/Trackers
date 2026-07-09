@@ -99,7 +99,9 @@ Settings dialogs for each module live in `*Settings.kt` files (e.g., `BudgetSett
 
 This section exists so the next work session doesn't have to rediscover these from scratch. Ordered roughly by severity/impact. None of these were fixed in the 2026-07-07 cleanup pass (which focused on redundant/dead code and build-breaking issues) — they're feature/behavior bugs appropriate for a dedicated follow-up.
 
-### Reminders — notifications don't fire (highest-impact bug)
+Each section below is tracked as a GitHub issue, numbered in recommended fix order: [#3](https://github.com/aadityad12/Trackers/issues/3) Reminders, [#4](https://github.com/aadityad12/Trackers/issues/4) Firebase sync, [#5](https://github.com/aadityad12/Trackers/issues/5) Overview display bugs, [#6](https://github.com/aadityad12/Trackers/issues/6) Notes, [#7](https://github.com/aadityad12/Trackers/issues/7) Screen Time accounting, [#8](https://github.com/aadityad12/Trackers/issues/8) Auth polish, [#9](https://github.com/aadityad12/Trackers/issues/9) code-duplication cleanup, [#10](https://github.com/aadityad12/Trackers/issues/10) dependency bumps.
+
+### [Issue #3] Reminders — notifications don't fire (highest-impact bug)
 1. `ReminderWorker` is never enqueued via `WorkManager` anywhere in the codebase — it's unreachable dead code today. Nothing schedules a reminder to fire at its due date/time.
 2. `POST_NOTIFICATIONS` runtime permission (API 33+) is declared in the manifest but never requested.
 3. `RecurrencePickerDialog.kt`: both dropdowns (`Frequency`, `Ends`) are hardcoded `expanded = false` with a no-op `onExpandedChange` — **the dropdowns can never be opened**, so users can't actually pick anything but the DAILY/NEVER defaults. This is very likely the literal cause of "recurrence doesn't work properly" (commit `01f21dc`).
@@ -108,37 +110,37 @@ This section exists so the next work session doesn't have to rediscover these fr
 
 Fix order suggestion: (a) request `POST_NOTIFICATIONS` at runtime, (b) enqueue `ReminderWorker` (likely via `WorkManager` with exact-alarm semantics — default WorkManager windows are too inexact for a due-time reminder, consider `AlarmManager.setExactAndAllowWhileIdle` instead), (c) fix the dropdown `expanded` state in `RecurrencePickerDialog.kt`, (d) prefill the picker from the reminder's existing `Recurrence` when editing.
 
-### Firebase sync — architecture inconsistencies
+### [Issue #4] Firebase sync — architecture inconsistencies
 - **Budget items have two competing, incompatible sync paths.** `BudgetViewModel.syncItemToCloud()`/`deleteItem()` write directly to Firestore keyed by the local Room autoincrement `id` (colliding across devices/reinstalls, missing `cloudId`/`modifiedAt`/`categoryCloudId`), while `FirebaseManager`'s `pushBudgetItem`/`syncBudgetItems` expect a UUID-based `cloudId` scheme. Net effect: a locally-created budget item can end up as two different, unlinked Firestore documents. Recommend routing `BudgetViewModel` entirely through `FirebaseManager`'s existing `cloudId` scheme and deleting `BudgetViewModel`'s ad-hoc Firestore calls.
 - **Sync is "once at sign-in," not continuous**, for every entity except (partially, and broken-ly) Budget/ScreenTime — see "Authentication & Cloud Sync" above. New items created/edited/deleted after sign-in aren't pushed until the next sign-out/sign-in cycle.
 - `checkAndAddSubscriptions()` in `BudgetViewModel` is launched fire-and-forget from both `init` and every subscription add/update, with no mutex/transaction guarding the read-advance-write of `renewalDate` — concurrent invocations can double-insert a `BudgetItem` for the same subscription period.
 - `FirebaseManager.syncReminders()`: when resolving a newly-created reminder's parent (for recurring chains) during the very first sync, if the parent hasn't been assigned a `cloudId` yet in the same batch, the child's `parentCloudId` can resolve incorrectly — order-dependent bug for first-sync recurring chains.
 - Most `mapNotNull`/`as? Type ?: continue` cloud-document parsing in `FirebaseManager.kt` silently drops malformed documents with no logging, making real-world sync issues hard to diagnose (only two bare `printStackTrace()` calls exist in the whole file).
 
-### Overview module — display bugs (explicitly requested by the developer in `notes.txt`)
+### [Issue #5] Overview module — display bugs (explicitly requested by the developer in `notes.txt`)
 - `OverviewView.kt`: total spent is formatted with `String.format("%.0f", data.totalSpent)` — rounds to whole dollars instead of showing cents. Should be `"%.2f"`.
 - `OverviewView.kt`: study time is displayed as `"${data.studyTimeMinutes}m"` — raw minutes only, no hours split. Same pattern (and same fix needed) applies to the screen-time display right next to it. Needs an "Xh Ym" formatter.
 - `OverviewViewModel` recomputes aggregates by scanning the *entire* Budget/Study/ScreenTime tables on every combine, rather than reusing any per-date-keyed derived flow from each module's own ViewModel — not incorrect, just redundant computation worth revisiting if this becomes a performance issue.
 
-### Screen Time — usage accounting edge cases
+### [Issue #7] Screen Time — usage accounting edge cases
 - `calculateAppSpecificUsage()` in `ScreenTimeViewModel.kt` keys foreground duration purely off `ACTIVITY_RESUMED`/`PAUSED`/`STOPPED` events within today's query window. Known undercounting: multi-activity apps firing back-to-back `RESUMED` events overwrite the tracked start time; a session that started before midnight (today's query window) is dropped entirely rather than counted from `startTime`. Known possible overcounting: no handling of screen-off events, so an app can keep "accruing" after the screen locks until an explicit pause arrives.
 - `aggregatedUsage` (multi-device total) is now built from a one-shot `FirebaseManager.getOtherDevicesTodayUsage()` call refreshed every ~30s alongside the existing polling loop (this was fixed as part of the 2026-07-07 build-breakage repair — see "2026-07-07 Cleanup Pass" below); there's no live Firestore listener for other devices, so cross-device totals can lag up to ~30s.
 
-### Notes module
+### [Issue #6] Notes module
 - Backspacing a bullet marker (e.g. `"• "`) doesn't fully clear it in one keystroke: once the trailing space is deleted, the remaining lone glyph (`"•"`) no longer matches `bulletRegex` (which requires a trailing space), so a second backspace is needed and is treated as a plain character delete, leaving a dangling glyph momentarily. Reproducible, minor but visible.
 - "Indent" on a plain (non-bulleted) line silently creates a level-2 bullet rather than doing nothing — likely surprising, not obviously intentional.
 
-### Study Tracker
+### [Issue #9] Study Tracker (code-duplication cleanup)
 - `startDailyResetCheck()` polls every 30s in an unconditional `while(true)` loop for the entire ViewModel lifetime (even while not studying) to detect day rollover — acceptable given the 30s tolerance, but an always-on poll; same pattern duplicated independently in `ScreenTimeViewModel.startScreenTimeUpdates()`. Could be consolidated into one shared "periodic refresh" helper.
 - Duration formatting (`formatTime`/`formatTimeCompact` in `StudyTrackerView.kt` vs `formatMillis` in `ScreenTimeTrackerView.kt`) is three independent hand-rolled implementations with different output styles/input units. Consolidate into one shared utility if touching this area.
 
-### Auth
-- `AuthViewModel.handleSignIn()`: if the returned credential isn't a `GoogleIdTokenCredential` (can happen if Credential Manager surfaces a different saved credential type), the function silently does nothing — no error shown, no exception. Should set `signInError` in that branch.
+### [Issue #8] Auth
+- ~~`AuthViewModel.handleSignIn()`: if the returned credential isn't a `GoogleIdTokenCredential`...~~ **Fixed** (PR [#2](https://github.com/aadityad12/Trackers/pull/2)): Credential Manager actually returns the token wrapped in a `CustomCredential`, not a bare `GoogleIdTokenCredential` — the old direct-cast check never matched in practice, so sign-in silently no-op'd on real devices. Now unwraps via `GoogleIdTokenCredential.createFrom(credential.data)` and surfaces a real error for any other credential type.
 - `AuthViewModel`'s `FirebaseAuth.AuthStateListener` registered in `init` is never removed (no `onCleared()` override) — minor leak.
 - `AuthViewModel.signOut()` doesn't reset `isSyncing`/`signInError` — a sign-out mid-sync could leave the sync spinner active indefinitely in the UI.
 - `MainActivity.kt`: local-theme-change → Firestore write → snapshot listener fires on the writer's own local cache update → could re-drive `currentTheme`/`isDarkMode` state → re-triggers the push effect. Likely converges harmlessly (same value written back) today, but there's no guard against this echo; worth a `hasPendingLocalChange` flag if it ever causes visible flicker.
 
-### Dependency freshness
+### [Issue #10] Dependency freshness
 `gradle/libs.versions.toml` pins reasonably current-for-when-written versions, but lint flags several newer releases available (AGP 8.13.2→9.2.1, Kotlin 2.1.0→2.4.0, Firebase BOM 33.6.0→34.15.0, Room 2.6.1→2.8.4, etc.). Not bumped during this cleanup pass since version bumps carry their own regression risk and deserve a dedicated pass with testing — see `./gradlew lintDebug` output for the full list.
 
 ## 2026-07-07 Cleanup Pass (what was already fixed — don't re-flag these)
@@ -151,6 +153,12 @@ Fix order suggestion: (a) request `POST_NOTIFICATIONS` at runtime, (b) enqueue `
 - Removed dead code: orphaned `RecurrenceConverter.kt` (duplicate of `Converters.kt`, never registered on `AppDatabase`, never referenced); `FirebaseManager.authStateFlow()` (unused, duplicated by `AuthViewModel`'s own listener); `StudySessionDao.updateSession()` (unused — all writes go through `insertSession` with `REPLACE`); `BudgetViewModel.observeCloudChanges()` (registered a Firestore snapshot listener whose body did nothing but comments, and was never removed — a no-op leak); unused imports in `BudgetTrackerView.kt` (`detectTapGestures`, `pointerInput`, `LocalHapticFeedback`, `HapticFeedbackType`, `TextDecoration`, `atan2` — leftover from removed gesture-based pie-chart code); dead color constants in `ui/theme/Color.kt` (`ElectricBlue`, `CyberCyan` — exact duplicates of `OceanPrimary`/`OceanSecondary`; `CyberGreen`, `SoftGreen` — unused).
 - Renamed `alphaAnim` → `scaleAnim` in `MainActivity.kt`'s `SplashScreen` — the variable was used as a `.scale()` modifier, not alpha/opacity; the misleading name was vestigial from an earlier fade-based design, per the developer's own note in `notes.txt` about splash-screen cleanup.
 - Verified: `./gradlew assembleDebug`, `./gradlew test`, and `./gradlew lintDebug` all pass clean (lint: 0 errors after the `AppOpsManager` fix; ~45 pre-existing warnings remain, mostly dependency-freshness and a few `@OptIn`/deprecation notices — none build-blocking).
+
+## 2026-07-08 Follow-up (PR #2)
+
+- Set up a real Firebase project connection: registered the debug SHA-1 fingerprint in the Firebase console, downloaded the real `google-services.json` (replacing the 2026-07-07 placeholder — still gitignored, never committed).
+- Fixed Google Sign-In actually completing on real devices: `AuthViewModel.handleSignIn()` only matched `credential is GoogleIdTokenCredential`, but Credential Manager's `GetGoogleIdOption` returns the token wrapped in a `CustomCredential` (type `TYPE_GOOGLE_ID_TOKEN_CREDENTIAL`) that must be unwrapped via `GoogleIdTokenCredential.createFrom(credential.data)` — Google's documented pattern. The old check never matched, so sign-in silently no-op'd: Credential Manager returned a response, `auth.signInWithCredential()` was never called, no error shown, no Firebase auth state persisted. Confirmed via live device testing (adb logs + inspecting the app's private storage for auth persistence files) before and after the fix. Verified working end-to-end on a physical Samsung device post-fix.
+- Filed the remaining Known Issues above as GitHub issues [#3](https://github.com/aadityad12/Trackers/issues/3)–[#10](https://github.com/aadityad12/Trackers/issues/10), numbered in recommended fix order.
 
 ## Developer's own TODO list (from notes.txt, still current)
 - Budget: "Extract from receipt" (OCR/receipt-parsing) — not started.
