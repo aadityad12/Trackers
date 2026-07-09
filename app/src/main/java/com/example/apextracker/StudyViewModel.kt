@@ -47,23 +47,20 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun startDailyResetCheck() {
-        viewModelScope.launch {
-            while (true) {
-                val now = LocalDate.now()
-                if (now.isAfter(lastResetDate)) {
-                    // Save final time for previous day
-                    val finalTotal = if (_isRunning.value) calculateCurrentTotalSeconds() else _timeSeconds.value
-                    saveSessionForDate(lastResetDate, finalTotal)
-                    
-                    // Reset for new day
-                    _timeSeconds.value = 0L
-                    baseSeconds = 0L
-                    if (_isRunning.value) {
-                        lastStartTimeMillis = System.currentTimeMillis()
-                    }
-                    lastResetDate = now
+        viewModelScope.launchPeriodic(30_000) {
+            val now = LocalDate.now()
+            if (now.isAfter(lastResetDate)) {
+                // Save final time for previous day
+                val finalTotal = if (_isRunning.value) calculateCurrentTotalSeconds() else _timeSeconds.value
+                saveSessionForDate(lastResetDate, finalTotal)
+
+                // Reset for new day
+                _timeSeconds.value = 0L
+                baseSeconds = 0L
+                if (_isRunning.value) {
+                    lastStartTimeMillis = System.currentTimeMillis()
                 }
-                delay(30000)
+                lastResetDate = now
             }
         }
     }

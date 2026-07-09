@@ -15,7 +15,6 @@ import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -123,12 +122,10 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     private fun startScreenTimeUpdates() {
-        viewModelScope.launch {
-            while (true) {
-                if (_hasPermission.value) {
-                    updateScreenTime()
-                }
-                delay(30000) // Increased delay to avoid spamming Firestore
+        // 30s interval to avoid spamming Firestore
+        viewModelScope.launchPeriodic(30_000) {
+            if (_hasPermission.value) {
+                updateScreenTime()
             }
         }
     }

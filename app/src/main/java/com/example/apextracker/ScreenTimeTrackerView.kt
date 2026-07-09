@@ -159,7 +159,7 @@ fun TotalApexTimeCard(devices: List<DeviceSession>) {
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
             Text(
-                text = formatMillis(totalMillis),
+                text = formatDurationCompact(totalMillis),
                 style = MaterialTheme.typography.displayMedium,
                 fontWeight = FontWeight.Black,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -205,7 +205,7 @@ fun DeviceBreakdownItem(usage: DeviceSession) {
                 fontWeight = FontWeight.Medium
             )
             Text(
-                text = formatMillis(usage.durationMillis),
+                text = formatDurationCompact(usage.durationMillis),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -229,7 +229,7 @@ fun AppUsageItem(app: AppUsageInfo) {
         }
         Spacer(modifier = Modifier.width(12.dp))
         Text(app.appName, modifier = Modifier.weight(1f), maxLines = 1)
-        Text(formatMillis(app.usageTimeMillis), fontWeight = FontWeight.Bold)
+        Text(formatDurationCompact(app.usageTimeMillis), fontWeight = FontWeight.Bold)
     }
 }
 
@@ -341,7 +341,7 @@ fun ScreenTimeHistoryItem(session: ScreenTimeSession) {
                 style = MaterialTheme.typography.bodyLarge
             )
             Text(
-                text = formatMillis(session.durationMillis),
+                text = formatDurationCompact(session.durationMillis),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold
             )
@@ -365,13 +365,3 @@ fun LifecycleEffect(onEvent: () -> Unit) {
     }
 }
 
-fun formatMillis(millis: Long): String {
-    val totalSeconds = millis / 1000
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    return if (hours > 0) {
-        String.format(Locale.getDefault(), "%dh %dm", hours, minutes)
-    } else {
-        String.format(Locale.getDefault(), "%dm", minutes)
-    }
-}

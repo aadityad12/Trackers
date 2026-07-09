@@ -273,7 +273,7 @@ fun SessionItemCompact(session: StudySession) {
                 )
             }
             Text(
-                text = formatTimeCompact(session.durationSeconds),
+                text = formatDurationCompact(session.durationSeconds * 1000),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Black,
                 color = MaterialTheme.colorScheme.primary
@@ -288,10 +288,4 @@ fun formatTime(seconds: Long): String {
     val s = seconds % 60
     return if (h > 0) String.format(Locale.getDefault(), "%02d:%02d:%02d", h, m, s)
     else String.format(Locale.getDefault(), "%02d:%02d", m, s)
-}
-
-fun formatTimeCompact(seconds: Long): String {
-    val hours = seconds / 3600
-    val minutes = (seconds % 3600) / 60
-    return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
 }
