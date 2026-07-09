@@ -10,10 +10,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.unit.dp
 import java.time.DayOfWeek
 import java.time.format.TextStyle
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,6 +57,7 @@ fun RecurrencePickerDialog(
 
                 if (frequency == RecurrenceFrequency.CUSTOM) {
                     Text("Repeat on:")
+                    val locale = LocalLocale.current.platformLocale
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         DayOfWeek.values().forEach { day ->
                             val isSelected = customDays.contains(day)
@@ -70,7 +71,7 @@ fun RecurrencePickerDialog(
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(day.getDisplayName(TextStyle.SHORT, Locale.getDefault()))
+                                Text(day.getDisplayName(TextStyle.SHORT, locale))
                             }
                         }
                     }
