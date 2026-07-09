@@ -185,42 +185,29 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
 
         val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
         val event = UsageEvents.Event()
-        
-        val appUsageMap = mutableMapOf<String, Long>()
-        val lastEventTime = mutableMapOf<String, Long>()
-        var currentForegroundApp: String? = null
 
+        val events = mutableListOf<ForegroundEvent>()
         while (usageEvents.hasNextEvent()) {
             usageEvents.getNextEvent(event)
-            
-            when (event.eventType) {
-                UsageEvents.Event.ACTIVITY_RESUMED -> {
-                    currentForegroundApp = event.packageName
-                    lastEventTime[event.packageName] = event.timeStamp
-                }
-                UsageEvents.Event.ACTIVITY_PAUSED, UsageEvents.Event.ACTIVITY_STOPPED -> {
-                    val startTimeForApp = lastEventTime[event.packageName]
-                    if (startTimeForApp != null) {
-                        val duration = event.timeStamp - startTimeForApp
-                        appUsageMap[event.packageName] = (appUsageMap[event.packageName] ?: 0L) + duration
-                        lastEventTime.remove(event.packageName)
-                    }
-                    if (currentForegroundApp == event.packageName) {
-                        currentForegroundApp = null
+            val kind = when (event.eventType) {
+                UsageEvents.Event.ACTIVITY_RESUMED -> ForegroundEventKind.RESUMED
+                UsageEvents.Event.ACTIVITY_PAUSED, UsageEvents.Event.ACTIVITY_STOPPED -> ForegroundEventKind.PAUSED
+                else -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+                        event.eventType == UsageEvents.Event.SCREEN_NON_INTERACTIVE
+                    ) {
+                        ForegroundEventKind.SCREEN_OFF
+                    } else {
+                        null
                     }
                 }
             }
-        }
-
-        currentForegroundApp?.let { pkg ->
-            val startTimeForApp = lastEventTime[pkg]
-            if (startTimeForApp != null) {
-                val duration = endTime - startTimeForApp
-                appUsageMap[pkg] = (appUsageMap[pkg] ?: 0L) + duration
+            if (kind != null) {
+                events.add(ForegroundEvent(kind, event.packageName ?: "", event.timeStamp))
             }
         }
 
-        return appUsageMap
+        return aggregateForegroundDurations(events, startTime, endTime)
     }
 
     private suspend fun saveTodayScreenTime(millis: Long) {
