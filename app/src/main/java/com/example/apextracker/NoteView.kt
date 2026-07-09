@@ -25,8 +25,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.format.DateTimeFormatter
 
-private val bulletSequence = listOf("• ", "  ◦ ", "    ▪ ")
-private val bulletRegex = Regex("^(\\s*[•◦▪])\\s")
+internal val bulletSequence = listOf("• ", "  ◦ ", "    ▪ ")
+internal val bulletRegex = Regex("^(\\s*[•◦▪])\\s")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -236,7 +236,8 @@ fun NoteEditor(note: Note, onDismiss: () -> Unit, onSave: (String, String) -> Un
                                 bulletSequence[currentIndex + 1] + line.substring(match.value.length)
                             } else line
                         } else {
-                            bulletSequence[1] + line
+                            // Indent only applies to already-bulleted lines; a plain line is left untouched.
+                            line
                         }
                     }
                 }
@@ -258,7 +259,7 @@ fun NoteEditor(note: Note, onDismiss: () -> Unit, onSave: (String, String) -> Un
     }
 }
 
-private fun modifyCurrentLine(value: TextFieldValue, action: (String) -> String): TextFieldValue {
+internal fun modifyCurrentLine(value: TextFieldValue, action: (String) -> String): TextFieldValue {
     val text = value.text
     val selection = value.selection
     val lineStart = text.lastIndexOf('\n', selection.start - 1).let { if (it == -1) 0 else it + 1 }
@@ -273,7 +274,7 @@ private fun modifyCurrentLine(value: TextFieldValue, action: (String) -> String)
     return TextFieldValue(newText, TextRange(newCursor))
 }
 
-private fun handleNoteContentChange(
+internal fun handleNoteContentChange(
     newValue: TextFieldValue,
     oldValue: TextFieldValue
 ): TextFieldValue {
