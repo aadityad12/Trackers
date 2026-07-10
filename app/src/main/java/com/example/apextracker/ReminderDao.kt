@@ -34,4 +34,7 @@ interface ReminderDao {
 
     @Query("SELECT * FROM reminders WHERE isCompleted = 1")
     suspend fun getCompletedRemindersOneShot(): List<Reminder>
+
+    @Query("SELECT * FROM reminders WHERE id IN (:ids)")
+    suspend fun getRemindersByIds(ids: List<Long>): List<Reminder>
 }

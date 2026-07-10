@@ -661,14 +661,18 @@ class FirebaseManager(private val context: Context) {
             }
         }
 
-        // Push locally-created reminders with no cloudId
+        // Assign cloudIds where missing (threading parentCloudId within the batch),
+        // then push ALL local rows (see syncCategories).
         val allLocalReminders = db.reminderDao().getAllRemindersOneShot()
         val existingCloudIdsById = allLocalReminders.associate { it.id to it.cloudId }
-        val toPush = allLocalReminders.filter { it.cloudId.isEmpty() }
-        for (reminder in resolvePendingReminderCloudIds(toPush, existingCloudIdsById)) {
+        val toAssign = allLocalReminders.filter { it.cloudId.isEmpty() }
+        for (reminder in resolvePendingReminderCloudIds(toAssign, existingCloudIdsById)) {
             val updated = reminder.copy(modifiedAt = System.currentTimeMillis())
             db.reminderDao().updateReminder(updated)
             pushReminder(updated)
+        }
+        for (reminder in allLocalReminders.filter { it.cloudId.isNotEmpty() }) {
+            pushReminder(reminder)
         }
     }
 
