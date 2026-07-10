@@ -91,6 +91,12 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
         activeReminders.first().forEach { scheduleIfNeeded(it) }
     }
 
+    /** Re-arms every active reminder — used after the exact-alarm permission is granted, so
+     *  alarms scheduled inexactly while it was denied become exact. */
+    fun rescheduleAll() {
+        viewModelScope.launch { rescheduleAllActive() }
+    }
+
     // Reminder ids with a toggle currently being processed. Only touched on the main thread
     // (Compose click handlers + viewModelScope), so no synchronization is needed. Guards against
     // rapid double-taps launching two coroutines that both see the stale "incomplete" snapshot
