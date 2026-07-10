@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.ZoneId
 
 class StudyViewModel(application: Application) : AndroidViewModel(application) {
     private companion object {
@@ -23,6 +24,7 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
     private val studySessionDao = database.studySessionDao()
     private val powerManager = application.getSystemService(Context.POWER_SERVICE) as PowerManager
     private val firebaseManager = FirebaseManager(application)
+    private val timerStateStore = StudyTimerStateStore(application)
     private var lastCloudPushMillis = 0L
 
     private val _timeSeconds = MutableStateFlow(0L)
@@ -39,15 +41,36 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
     private var baseSeconds: Long = 0L
 
     init {
-        loadTodaySession()
+        restoreSession()
         startDailyResetCheck()
     }
 
-    private fun loadTodaySession() {
+    /**
+     * Loads today's saved total — and if the process was killed while the timer ran, restores
+     * the stopwatch instead of silently dropping it: a same-day death resumes counting from the
+     * persisted start time; a death on an earlier day credits that day up to its midnight
+     * boundary (time past midnight isn't credited — we can't know when the process died) and
+     * leaves the timer stopped.
+     */
+    private fun restoreSession() {
         viewModelScope.launch {
             val today = LocalDate.now()
-            val session = studySessionDao.getSessionByDate(today)
-            val savedSeconds = session?.durationSeconds ?: 0L
+            val persisted = timerStateStore.loadRunning()
+            if (persisted != null && persisted.date == today) {
+                baseSeconds = persisted.baseSeconds
+                lastStartTimeMillis = persisted.startedAtMillis
+                lastResetDate = today
+                _isRunning.value = true
+                _timeSeconds.value = calculateCurrentTotalSeconds()
+                launchTicker()
+                return@launch
+            }
+            if (persisted != null) {
+                val finalSeconds = finalizeSecondsAtEndOfDay(persisted, ZoneId.systemDefault())
+                saveSessionForDate(persisted.date, finalSeconds, forcePush = true)
+                timerStateStore.clear()
+            }
+            val savedSeconds = studySessionDao.getSessionByDate(today)?.durationSeconds ?: 0L
             _timeSeconds.value = savedSeconds
             baseSeconds = savedSeconds
         }
@@ -83,6 +106,9 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
             lastStartTimeMillis = System.currentTimeMillis()
         }
         lastResetDate = now
+        if (_isRunning.value) {
+            timerStateStore.saveRunning(lastStartTimeMillis, baseSeconds, lastResetDate)
+        }
     }
 
     private fun calculateCurrentTotalSeconds(): Long {
@@ -101,11 +127,16 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun startTimer() {
         if (_isRunning.value) return
-        
+
+        rolloverIfNeeded()
         lastStartTimeMillis = System.currentTimeMillis()
         baseSeconds = _timeSeconds.value
         _isRunning.value = true
-        
+        timerStateStore.saveRunning(lastStartTimeMillis, baseSeconds, lastResetDate)
+        launchTicker()
+    }
+
+    private fun launchTicker() {
         timerJob = viewModelScope.launch {
             while (_isRunning.value) {
                 rolloverIfNeeded()
@@ -128,6 +159,7 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
         baseSeconds = total
         _isRunning.value = false
         timerJob?.cancel()
+        timerStateStore.clear()
         saveSessionForDate(lastResetDate, total, forcePush = true)
     }
 
@@ -135,6 +167,7 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
         rolloverIfNeeded()
         _isRunning.value = false
         timerJob?.cancel()
+        timerStateStore.clear()
         _timeSeconds.value = 0L
         baseSeconds = 0L
         saveSessionForDate(lastResetDate, 0L, forcePush = true)
