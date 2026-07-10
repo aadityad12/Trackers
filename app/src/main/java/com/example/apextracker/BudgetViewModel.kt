@@ -3,33 +3,28 @@ package com.example.apextracker
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.tasks.await
 import java.time.LocalDate
+import java.util.UUID
 
 class BudgetViewModel(application: Application) : AndroidViewModel(application) {
+    private companion object {
+        const val TAG = "BudgetViewModel"
+    }
+
     private val database = AppDatabase.getDatabase(application)
     private val budgetDao = database.budgetDao()
     private val categoryDao = database.categoryDao()
     private val subscriptionDao = database.subscriptionDao()
-    
-    private val auth = FirebaseAuth.getInstance()
-    private val firestore = FirebaseFirestore.getInstance()
+
+    private val firebaseManager = FirebaseManager(application)
 
     val allItems: Flow<List<BudgetItem>> = budgetDao.getAllItems()
     val allCategories: Flow<List<Category>> = categoryDao.getAllCategories()
     val allSubscriptions: Flow<List<Subscription>> = subscriptionDao.getAllSubscriptions()
-
-    private val _isSyncing = MutableStateFlow(false)
-    val isSyncing = _isSyncing.asStateFlow()
 
     // Guards checkAndAddSubscriptions so overlapping calls (init + every add/update) can't
     // race on the same subscription's renewalDate and double-insert a BudgetItem.
@@ -38,6 +33,9 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
     init {
         checkAndAddSubscriptions()
     }
+
+    private suspend fun categoryCloudIdFor(categoryId: Long?): String? =
+        categoryId?.let { categoryDao.getCategoryById(it)?.cloudId?.takeIf { c -> c.isNotEmpty() } }
 
     private fun checkAndAddSubscriptions() {
         viewModelScope.launch {
@@ -56,10 +54,14 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
                             amount = updatedSub.amount,
                             description = updatedSub.notes,
                             date = currentRenewal,
-                            categoryId = subscriptionCategoryId
+                            categoryId = subscriptionCategoryId,
+                            cloudId = UUID.randomUUID().toString(),
+                            modifiedAt = System.currentTimeMillis()
                         )
-                        val id = budgetDao.insertItem(item)
-                        syncItemToCloud(item.copy(id = id))
+                        budgetDao.insertItem(item)
+                        safeCloudCall(TAG, "push subscription budget item") {
+                            firebaseManager.pushBudgetItem(item, null)
+                        }
 
                         currentRenewal = currentRenewal.plusMonths(1)
                         updatedSub = updatedSub.copy(
@@ -69,6 +71,17 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
                         // Direct DAO call (not the public updateSubscription) so this catch-up
                         // pass doesn't re-trigger another concurrent checkAndAddSubscriptions().
                         subscriptionDao.updateSubscription(updatedSub)
+                    }
+
+                    if (updatedSub != subscription) {
+                        val finalSub = updatedSub.copy(
+                            cloudId = updatedSub.cloudId.ifEmpty { UUID.randomUUID().toString() },
+                            modifiedAt = System.currentTimeMillis()
+                        )
+                        subscriptionDao.updateSubscription(finalSub)
+                        safeCloudCall(TAG, "push subscription renewal advance") {
+                            firebaseManager.pushSubscription(finalSub)
+                        }
                     }
                 }
             }
@@ -82,76 +95,104 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
                 amount = amount,
                 description = description,
                 date = date,
-                categoryId = categoryId
+                categoryId = categoryId,
+                cloudId = UUID.randomUUID().toString(),
+                modifiedAt = System.currentTimeMillis()
             )
-            val id = budgetDao.insertItem(item)
-            syncItemToCloud(item.copy(id = id))
-        }
-    }
-
-    private suspend fun syncItemToCloud(item: BudgetItem) {
-        val uid = auth.currentUser?.uid ?: return
-        _isSyncing.value = true
-        try {
-            firestore.collection("users").document(uid)
-                .collection("budget").document(item.id.toString())
-                .set(item, SetOptions.merge())
-                .await()
-        } finally {
-            _isSyncing.value = false
+            budgetDao.insertItem(item)
+            safeCloudCall(TAG, "push budget item") {
+                firebaseManager.pushBudgetItem(item, categoryCloudIdFor(item.categoryId))
+            }
         }
     }
 
     fun updateItem(item: BudgetItem) {
         viewModelScope.launch {
-            budgetDao.updateItem(item)
-            syncItemToCloud(item)
+            val updated = item.copy(
+                cloudId = item.cloudId.ifEmpty { UUID.randomUUID().toString() },
+                modifiedAt = System.currentTimeMillis()
+            )
+            budgetDao.updateItem(updated)
+            safeCloudCall(TAG, "update budget item") {
+                firebaseManager.pushBudgetItem(updated, categoryCloudIdFor(updated.categoryId))
+            }
         }
     }
 
     fun deleteItem(item: BudgetItem) {
         viewModelScope.launch {
             budgetDao.deleteItem(item)
-            val uid = auth.currentUser?.uid ?: return@launch
-            firestore.collection("users").document(uid)
-                .collection("budget").document(item.id.toString())
-                .delete()
+            safeCloudCall(TAG, "delete budget item") {
+                firebaseManager.deleteBudgetItem(item.cloudId)
+            }
         }
     }
 
-    // Category and Subscription sync follows similar pattern...
     fun addCategory(name: String, colorHex: String) {
         viewModelScope.launch {
-            val category = Category(name = name, colorHex = colorHex)
+            val category = Category(
+                name = name,
+                colorHex = colorHex,
+                cloudId = UUID.randomUUID().toString(),
+                modifiedAt = System.currentTimeMillis()
+            )
             categoryDao.insertCategory(category)
-            // Cloud sync...
+            safeCloudCall(TAG, "push category") {
+                firebaseManager.pushCategory(category)
+            }
         }
     }
 
     fun updateCategory(category: Category) {
         viewModelScope.launch {
-            categoryDao.updateCategory(category)
+            val updated = category.copy(
+                cloudId = category.cloudId.ifEmpty { UUID.randomUUID().toString() },
+                modifiedAt = System.currentTimeMillis()
+            )
+            categoryDao.updateCategory(updated)
+            safeCloudCall(TAG, "update category") {
+                firebaseManager.pushCategory(updated)
+            }
         }
     }
 
     fun deleteCategory(category: Category) {
         viewModelScope.launch {
             categoryDao.deleteCategory(category)
+            safeCloudCall(TAG, "delete category") {
+                firebaseManager.deleteCategory(category.cloudId)
+            }
         }
     }
 
     fun addSubscription(name: String, amount: Double, renewalDate: LocalDate, notes: String?) {
         viewModelScope.launch {
-            subscriptionDao.insertSubscription(
-                Subscription(name = name, amount = amount, renewalDate = renewalDate, notes = notes)
+            val subscription = Subscription(
+                name = name,
+                amount = amount,
+                renewalDate = renewalDate,
+                notes = notes,
+                cloudId = UUID.randomUUID().toString(),
+                modifiedAt = System.currentTimeMillis()
             )
+            subscriptionDao.insertSubscription(subscription)
+            safeCloudCall(TAG, "push subscription") {
+                firebaseManager.pushSubscription(subscription)
+            }
             checkAndAddSubscriptions()
         }
     }
 
     fun updateSubscription(subscription: Subscription) {
         viewModelScope.launch {
-            subscriptionDao.updateSubscription(subscription)
+            val updated = subscription.copy(
+                cloudId = subscription.cloudId.ifEmpty { UUID.randomUUID().toString() },
+                modifiedAt = System.currentTimeMillis()
+            )
+            subscriptionDao.updateSubscription(updated)
+            safeCloudCall(TAG, "update subscription") {
+                firebaseManager.pushSubscription(updated)
+            }
             checkAndAddSubscriptions()
         }
     }
@@ -159,6 +200,9 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
     fun deleteSubscription(subscription: Subscription) {
         viewModelScope.launch {
             subscriptionDao.deleteSubscription(subscription)
+            safeCloudCall(TAG, "delete subscription") {
+                firebaseManager.deleteSubscription(subscription.cloudId)
+            }
         }
     }
 }

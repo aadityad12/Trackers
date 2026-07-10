@@ -3,6 +3,7 @@ package com.example.apextracker
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
@@ -40,7 +41,174 @@ internal fun resolvePendingReminderCloudIds(
     }
 }
 
+/**
+ * Runs a fire-and-forget cloud operation from a ViewModel. Room is always written
+ * first and is the source of truth; a failed push (offline, signed out mid-flight)
+ * must never crash or roll back the local mutation — it's logged and reconciled by
+ * the next initial sync.
+ */
+internal suspend fun safeCloudCall(tag: String, op: String, block: suspend () -> Unit) {
+    try {
+        block()
+    } catch (e: Exception) {
+        Log.w(tag, "Cloud $op failed", e)
+    }
+}
+
+// ── Cloud document parsing ────────────────────────────────────────────────────
+// Pure functions so malformed-document handling is unit-testable. Each throws on a
+// document that can't be represented locally; callers catch per-doc and log, so one
+// bad document is skipped instead of aborting the whole sync. A blank cloudId is
+// malformed by definition: legacy docs written by the old BudgetViewModel path
+// serialized the entity default cloudId = "" and must not be re-imported.
+
+private fun Map<String, Any?>.requireCloudId(): String =
+    (this["cloudId"] as? String)?.takeIf { it.isNotBlank() }
+        ?: error("missing or blank 'cloudId'")
+
+private fun Map<String, Any?>.requireString(key: String): String =
+    this[key] as? String ?: error("missing '$key'")
+
+private fun Map<String, Any?>.optString(key: String): String? = this[key] as? String
+
+private fun Map<String, Any?>.optLong(key: String): Long = (this[key] as? Number)?.toLong() ?: 0L
+
+private fun Map<String, Any?>.requireDouble(key: String): Double =
+    (this[key] as? Number)?.toDouble() ?: error("missing or non-numeric '$key'")
+
+internal data class ParsedBudgetItem(val item: BudgetItem, val categoryCloudId: String?)
+
+// ── Legacy budget doc migration ───────────────────────────────────────────────
+// The old BudgetViewModel sync path wrote users/{uid}/budget/{roomId} docs via raw
+// POJO serialization: cloudId = "", modifiedAt = 0, date as a nested object, doc key
+// = the local Room autoincrement id. These are unreadable by the cloudId scheme and
+// used to resurrect as duplicates. During sync we migrate what's salvageable and
+// delete the legacy doc.
+
+internal sealed interface LegacyBudgetDocAction {
+    /** Salvageable and not present locally: insert locally under a fresh cloudId, push, delete legacy doc. */
+    data class Migrate(val item: BudgetItem) : LegacyBudgetDocAction
+    /** Duplicate of an existing local item, or missing required fields: just delete the legacy doc. */
+    data object DeleteOnly : LegacyBudgetDocAction
+}
+
+private fun parseLegacyDate(raw: Any?): LocalDate? = when (raw) {
+    is String -> try { LocalDate.parse(raw) } catch (e: Exception) { null }
+    // Raw POJO serialization of LocalDate produces a nested map of its getters
+    is Map<*, *> -> {
+        val year = (raw["year"] as? Number)?.toInt()
+        val month = (raw["monthValue"] as? Number)?.toInt()
+        val day = (raw["dayOfMonth"] as? Number)?.toInt()
+        if (year != null && month != null && day != null) {
+            try { LocalDate.of(year, month, day) } catch (e: Exception) { null }
+        } else null
+    }
+    else -> null
+}
+
+/**
+ * Decides what to do with a pulled budget doc that has a null/blank cloudId field.
+ * Returns null if the doc is NOT legacy (has a proper cloudId).
+ *
+ * Dedup guard: the common case is that the device which wrote the legacy doc still
+ * has the Room row, which the unified path re-pushes under a UUID — migrating would
+ * duplicate it. A local item with the same title and amount (and date, when the
+ * legacy date is readable) counts as that duplicate.
+ *
+ * The migrated item's categoryId is dropped: the legacy doc stored a local Room id
+ * from whichever install wrote it, which is meaningless on this device.
+ */
+internal fun classifyLegacyBudgetDoc(
+    data: Map<String, Any?>,
+    localItems: List<BudgetItem>,
+    fallbackDate: LocalDate
+): LegacyBudgetDocAction? {
+    if (!(data["cloudId"] as? String).isNullOrBlank()) return null // not legacy
+
+    val title = data["title"] as? String ?: return LegacyBudgetDocAction.DeleteOnly
+    val amount = (data["amount"] as? Number)?.toDouble() ?: return LegacyBudgetDocAction.DeleteOnly
+    val date = parseLegacyDate(data["date"])
+
+    val duplicatesLocal = localItems.any {
+        it.title == title && it.amount == amount && (date == null || it.date == date)
+    }
+    if (duplicatesLocal) return LegacyBudgetDocAction.DeleteOnly
+
+    return LegacyBudgetDocAction.Migrate(
+        BudgetItem(
+            title = title,
+            amount = amount,
+            description = data["description"] as? String,
+            date = date ?: fallbackDate,
+            categoryId = null
+        )
+    )
+}
+
+internal fun parseCategoryDoc(data: Map<String, Any?>): Category = Category(
+    name = data.requireString("name"),
+    colorHex = data.requireString("colorHex"),
+    cloudId = data.requireCloudId(),
+    modifiedAt = data.optLong("modifiedAt")
+)
+
+internal fun parseBudgetItemDoc(data: Map<String, Any?>): ParsedBudgetItem = ParsedBudgetItem(
+    item = BudgetItem(
+        title = data.requireString("title"),
+        amount = data.requireDouble("amount"),
+        description = data.optString("description"),
+        date = LocalDate.parse(data.requireString("date")),
+        categoryId = null,
+        cloudId = data.requireCloudId(),
+        modifiedAt = data.optLong("modifiedAt")
+    ),
+    categoryCloudId = data.optString("categoryCloudId")
+)
+
+internal fun parseSubscriptionDoc(data: Map<String, Any?>): Subscription = Subscription(
+    name = data.requireString("name"),
+    amount = data.requireDouble("amount"),
+    renewalDate = LocalDate.parse(data.requireString("renewalDate")),
+    notes = data.optString("notes"),
+    lastAddedDate = data.optString("lastAddedDate")?.let { LocalDate.parse(it) },
+    cloudId = data.requireCloudId(),
+    modifiedAt = data.optLong("modifiedAt")
+)
+
+internal fun parseNoteDoc(data: Map<String, Any?>): Note = Note(
+    title = data.requireString("title"),
+    content = data.requireString("content"),
+    createdAt = LocalDateTime.parse(data.requireString("createdAt")),
+    modifiedAt = LocalDateTime.parse(data.requireString("modifiedAt")),
+    isDeleted = data["isDeleted"] as? Boolean ?: false,
+    deletedAt = data.optString("deletedAt")?.let { LocalDateTime.parse(it) },
+    cloudId = data.requireCloudId()
+)
+
+internal fun parseReminderDoc(data: Map<String, Any?>, gson: Gson): Reminder = Reminder(
+    name = data.requireString("name"),
+    date = LocalDate.parse(data.requireString("date")),
+    time = data.optString("time")?.let { LocalTime.parse(it) },
+    description = data.optString("description"),
+    isCompleted = data["isCompleted"] as? Boolean ?: false,
+    recurrence = data.optString("recurrence")?.let { gson.fromJson(it, Recurrence::class.java) },
+    occurrencesCompleted = (data["occurrencesCompleted"] as? Number)?.toInt() ?: 0,
+    cloudId = data.requireCloudId(),
+    parentCloudId = data.optString("parentCloudId"),
+    modifiedAt = data.optLong("modifiedAt")
+)
+
+internal fun parseStudySessionDoc(data: Map<String, Any?>): StudySession = StudySession(
+    date = LocalDate.parse(data.requireString("date")),
+    durationSeconds = (data["durationSeconds"] as? Number)?.toLong()
+        ?: error("missing or non-numeric 'durationSeconds'")
+)
+
 class FirebaseManager(private val context: Context) {
+    companion object {
+        private const val TAG = "FirebaseManager"
+    }
+
     private val auth = FirebaseAuth.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
     private val gson = Gson()
@@ -106,12 +274,12 @@ class FirebaseManager(private val context: Context) {
             .delete().await()
     }
 
-    private suspend fun pullAllBudgetItems(): List<Map<String, Any>> {
+    private suspend fun pullAllBudgetItems(): List<Pair<String, Map<String, Any>>> {
         val uid = userId ?: return emptyList()
         return firestore.collection("users").document(uid)
             .collection("budget")
             .get().await()
-            .documents.mapNotNull { it.data }
+            .documents.mapNotNull { d -> d.data?.let { d.id to it } }
     }
 
     // ── Categories ────────────────────────────────────────────────────────────
@@ -140,12 +308,12 @@ class FirebaseManager(private val context: Context) {
             .delete().await()
     }
 
-    private suspend fun pullAllCategories(): List<Map<String, Any>> {
+    private suspend fun pullAllCategories(): List<Pair<String, Map<String, Any>>> {
         val uid = userId ?: return emptyList()
         return firestore.collection("users").document(uid)
             .collection("categories")
             .get().await()
-            .documents.mapNotNull { it.data }
+            .documents.mapNotNull { d -> d.data?.let { d.id to it } }
     }
 
     // ── Subscriptions ─────────────────────────────────────────────────────────
@@ -177,12 +345,12 @@ class FirebaseManager(private val context: Context) {
             .delete().await()
     }
 
-    private suspend fun pullAllSubscriptions(): List<Map<String, Any>> {
+    private suspend fun pullAllSubscriptions(): List<Pair<String, Map<String, Any>>> {
         val uid = userId ?: return emptyList()
         return firestore.collection("users").document(uid)
             .collection("subscriptions")
             .get().await()
-            .documents.mapNotNull { it.data }
+            .documents.mapNotNull { d -> d.data?.let { d.id to it } }
     }
 
     // ── Notes ─────────────────────────────────────────────────────────────────
@@ -214,12 +382,12 @@ class FirebaseManager(private val context: Context) {
             .delete().await()
     }
 
-    private suspend fun pullAllNotes(): List<Map<String, Any>> {
+    private suspend fun pullAllNotes(): List<Pair<String, Map<String, Any>>> {
         val uid = userId ?: return emptyList()
         return firestore.collection("users").document(uid)
             .collection("notes")
             .get().await()
-            .documents.mapNotNull { it.data }
+            .documents.mapNotNull { d -> d.data?.let { d.id to it } }
     }
 
     // ── Reminders ─────────────────────────────────────────────────────────────
@@ -254,12 +422,12 @@ class FirebaseManager(private val context: Context) {
             .delete().await()
     }
 
-    private suspend fun pullAllReminders(): List<Map<String, Any>> {
+    private suspend fun pullAllReminders(): List<Pair<String, Map<String, Any>>> {
         val uid = userId ?: return emptyList()
         return firestore.collection("users").document(uid)
             .collection("reminders")
             .get().await()
-            .documents.mapNotNull { it.data }
+            .documents.mapNotNull { d -> d.data?.let { d.id to it } }
     }
 
     // ── Study Sessions ────────────────────────────────────────────────────────
@@ -278,12 +446,12 @@ class FirebaseManager(private val context: Context) {
             ).await()
     }
 
-    private suspend fun pullAllStudySessions(): List<Map<String, Any>> {
+    private suspend fun pullAllStudySessions(): List<Pair<String, Map<String, Any>>> {
         val uid = userId ?: return emptyList()
         return firestore.collection("users").document(uid)
             .collection("study_sessions")
             .get().await()
-            .documents.mapNotNull { it.data }
+            .documents.mapNotNull { d -> d.data?.let { d.id to it } }
     }
 
     // ── Screen Time ───────────────────────────────────────────────────────────
@@ -377,44 +545,51 @@ class FirebaseManager(private val context: Context) {
 
     suspend fun performInitialSync(db: AppDatabase) {
         if (userId == null) return
+        // Each step is isolated so one entity's failure (network, malformed data)
+        // can't abort the others. Categories must run before budget items (FK lookup).
+        syncStep("categories") { syncCategories(db) }
+        syncStep("budget items") { syncBudgetItems(db) }
+        syncStep("subscriptions") { syncSubscriptions(db) }
+        syncStep("notes") { syncNotes(db) }
+        syncStep("reminders") { syncReminders(db) }
+        syncStep("study sessions") { syncStudySessions(db) }
+        syncStep("excluded apps") { syncExcludedApps(db) }
+    }
+
+    private suspend fun syncStep(name: String, block: suspend () -> Unit) {
         try {
-            syncCategories(db)
-            syncBudgetItems(db)
-            syncSubscriptions(db)
-            syncNotes(db)
-            syncReminders(db)
-            syncStudySessions(db)
-            syncExcludedApps(db)
+            block()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w(TAG, "Sync step '$name' failed", e)
         }
     }
 
     private suspend fun syncCategories(db: AppDatabase) {
-        val cloudDocs = pullAllCategories()
-        // cloudId → local Room id, built as we sync, needed for budget item FK resolution
-        for (doc in cloudDocs) {
-            val cloudId = doc["cloudId"] as? String ?: continue
-            val cloudModifiedAt = doc["modifiedAt"] as? Long ?: 0L
-            val name = doc["name"] as? String ?: continue
-            val colorHex = doc["colorHex"] as? String ?: continue
-
-            val local = db.categoryDao().getCategoryByCloudId(cloudId)
-            if (local == null) {
-                db.categoryDao().insertCategory(
-                    Category(name = name, colorHex = colorHex, cloudId = cloudId, modifiedAt = cloudModifiedAt)
-                )
-            } else if (cloudModifiedAt > local.modifiedAt) {
-                db.categoryDao().updateCategory(
-                    local.copy(name = name, colorHex = colorHex, modifiedAt = cloudModifiedAt)
-                )
+        for ((docId, data) in pullAllCategories()) {
+            try {
+                val parsed = parseCategoryDoc(data)
+                val local = db.categoryDao().getCategoryByCloudId(parsed.cloudId)
+                if (local == null) {
+                    db.categoryDao().insertCategory(parsed)
+                } else if (parsed.modifiedAt > local.modifiedAt) {
+                    db.categoryDao().updateCategory(
+                        local.copy(name = parsed.name, colorHex = parsed.colorHex, modifiedAt = parsed.modifiedAt)
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Skipping malformed category doc $docId", e)
             }
         }
-        // Push any locally-created categories that have no cloudId
-        for (cat in db.categoryDao().getAllCategoriesOneShot().filter { it.cloudId.isEmpty() }) {
-            val updated = cat.copy(cloudId = UUID.randomUUID().toString(), modifiedAt = System.currentTimeMillis())
-            db.categoryDao().updateCategory(updated)
-            pushCategory(updated)
+        // Assign cloudIds where missing, then push ALL local rows — not just the
+        // newly-assigned ones — so rows created or edited while signed out still reach
+        // the cloud. Safe post-pull: the pull above already applied last-writer-wins.
+        for (cat in db.categoryDao().getAllCategoriesOneShot()) {
+            val toPush = if (cat.cloudId.isEmpty()) {
+                val updated = cat.copy(cloudId = UUID.randomUUID().toString(), modifiedAt = System.currentTimeMillis())
+                db.categoryDao().updateCategory(updated)
+                updated
+            } else cat
+            pushCategory(toPush)
         }
     }
 
@@ -424,116 +599,133 @@ class FirebaseManager(private val context: Context) {
             .filter { it.cloudId.isNotEmpty() }
             .associate { it.cloudId to it.id }
 
-        for (doc in pullAllBudgetItems()) {
-            val cloudId = doc["cloudId"] as? String ?: continue
-            val cloudModifiedAt = doc["modifiedAt"] as? Long ?: 0L
-            val title = doc["title"] as? String ?: continue
-            val amount = (doc["amount"] as? Double) ?: (doc["amount"] as? Long)?.toDouble() ?: continue
-            val description = doc["description"] as? String
-            val dateStr = doc["date"] as? String ?: continue
-            val categoryCloudId = doc["categoryCloudId"] as? String
-            val date = LocalDate.parse(dateStr)
-            val categoryId = categoryCloudId?.let { catLookup[it] }
+        val pulledDocs = pullAllBudgetItems()
 
-            val local = db.budgetDao().getItemByCloudId(cloudId)
-            if (local == null) {
-                db.budgetDao().insertItem(
-                    BudgetItem(
-                        title = title, amount = amount, description = description,
-                        date = date, categoryId = categoryId, cloudId = cloudId,
-                        modifiedAt = cloudModifiedAt
-                    )
-                )
-            } else if (cloudModifiedAt > local.modifiedAt) {
-                db.budgetDao().updateItem(
-                    local.copy(
-                        title = title, amount = amount, description = description,
-                        date = date, categoryId = categoryId, modifiedAt = cloudModifiedAt
-                    )
-                )
+        // Migrate/remove legacy docs (blank cloudId, written by the old ad-hoc path)
+        // before the regular pull so they aren't logged as malformed every sync.
+        val (legacyDocs, modernDocs) = pulledDocs.partition { (_, data) ->
+            (data["cloudId"] as? String).isNullOrBlank()
+        }
+        if (legacyDocs.isNotEmpty()) {
+            val localItems = db.budgetDao().getAllItemsOneShot()
+            for ((docId, data) in legacyDocs) {
+                try {
+                    when (val action = classifyLegacyBudgetDoc(data, localItems, LocalDate.now())) {
+                        is LegacyBudgetDocAction.Migrate -> {
+                            val item = action.item.copy(
+                                cloudId = UUID.randomUUID().toString(),
+                                modifiedAt = System.currentTimeMillis()
+                            )
+                            db.budgetDao().insertItem(item)
+                            pushBudgetItem(item, null)
+                            deleteBudgetItem(docId)
+                            Log.i(TAG, "Migrated legacy budget doc $docId to cloudId ${item.cloudId}")
+                        }
+                        LegacyBudgetDocAction.DeleteOnly -> {
+                            deleteBudgetItem(docId)
+                            Log.i(TAG, "Deleted legacy budget doc $docId (duplicate or unsalvageable)")
+                        }
+                        null -> {} // unreachable: partition guarantees blank cloudId
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to migrate legacy budget doc $docId", e)
+                }
             }
         }
-        // Push locally-created items with no cloudId
+
+        for ((docId, data) in modernDocs) {
+            try {
+                val (parsed, categoryCloudId) = parseBudgetItemDoc(data)
+                val categoryId = categoryCloudId?.let { catLookup[it] }
+
+                val local = db.budgetDao().getItemByCloudId(parsed.cloudId)
+                if (local == null) {
+                    db.budgetDao().insertItem(parsed.copy(categoryId = categoryId))
+                } else if (parsed.modifiedAt > local.modifiedAt) {
+                    db.budgetDao().updateItem(
+                        local.copy(
+                            title = parsed.title, amount = parsed.amount, description = parsed.description,
+                            date = parsed.date, categoryId = categoryId, modifiedAt = parsed.modifiedAt
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Skipping malformed budget doc $docId", e)
+            }
+        }
+        // Assign cloudIds where missing, then push ALL local rows (see syncCategories).
+        // Re-fetch categories: syncCategories may have assigned cloudIds after catLookup was built.
         val allCats = db.categoryDao().getAllCategoriesOneShot()
-        for (item in db.budgetDao().getAllItemsOneShot().filter { it.cloudId.isEmpty() }) {
-            val catCloudId = item.categoryId?.let { cid -> allCats.find { it.id == cid }?.cloudId }
-            val updated = item.copy(cloudId = UUID.randomUUID().toString(), modifiedAt = System.currentTimeMillis())
-            db.budgetDao().updateItem(updated)
-            pushBudgetItem(updated, catCloudId)
+        for (item in db.budgetDao().getAllItemsOneShot()) {
+            val toPush = if (item.cloudId.isEmpty()) {
+                val updated = item.copy(cloudId = UUID.randomUUID().toString(), modifiedAt = System.currentTimeMillis())
+                db.budgetDao().updateItem(updated)
+                updated
+            } else item
+            val catCloudId = toPush.categoryId?.let { cid ->
+                allCats.find { it.id == cid }?.cloudId?.takeIf { it.isNotEmpty() }
+            }
+            pushBudgetItem(toPush, catCloudId)
         }
     }
 
     private suspend fun syncSubscriptions(db: AppDatabase) {
-        for (doc in pullAllSubscriptions()) {
-            val cloudId = doc["cloudId"] as? String ?: continue
-            val cloudModifiedAt = doc["modifiedAt"] as? Long ?: 0L
-            val name = doc["name"] as? String ?: continue
-            val amount = (doc["amount"] as? Double) ?: (doc["amount"] as? Long)?.toDouble() ?: continue
-            val renewalDateStr = doc["renewalDate"] as? String ?: continue
-            val notes = doc["notes"] as? String
-            val lastAddedDateStr = doc["lastAddedDate"] as? String
-            val renewalDate = LocalDate.parse(renewalDateStr)
-            val lastAddedDate = lastAddedDateStr?.let { LocalDate.parse(it) }
-
-            val local = db.subscriptionDao().getByCloudId(cloudId)
-            if (local == null) {
-                db.subscriptionDao().insertSubscription(
-                    Subscription(
-                        name = name, amount = amount, renewalDate = renewalDate,
-                        notes = notes, lastAddedDate = lastAddedDate, cloudId = cloudId,
-                        modifiedAt = cloudModifiedAt
+        for ((docId, data) in pullAllSubscriptions()) {
+            try {
+                val parsed = parseSubscriptionDoc(data)
+                val local = db.subscriptionDao().getByCloudId(parsed.cloudId)
+                if (local == null) {
+                    db.subscriptionDao().insertSubscription(parsed)
+                } else if (parsed.modifiedAt > local.modifiedAt) {
+                    db.subscriptionDao().updateSubscription(
+                        local.copy(
+                            name = parsed.name, amount = parsed.amount, renewalDate = parsed.renewalDate,
+                            notes = parsed.notes, lastAddedDate = parsed.lastAddedDate, modifiedAt = parsed.modifiedAt
+                        )
                     )
-                )
-            } else if (cloudModifiedAt > local.modifiedAt) {
-                db.subscriptionDao().updateSubscription(
-                    local.copy(
-                        name = name, amount = amount, renewalDate = renewalDate,
-                        notes = notes, lastAddedDate = lastAddedDate, modifiedAt = cloudModifiedAt
-                    )
-                )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Skipping malformed subscription doc $docId", e)
             }
         }
-        for (sub in db.subscriptionDao().getAllSubscriptionsSync().filter { it.cloudId.isEmpty() }) {
-            val updated = sub.copy(cloudId = UUID.randomUUID().toString(), modifiedAt = System.currentTimeMillis())
-            db.subscriptionDao().updateSubscription(updated)
-            pushSubscription(updated)
+        // Assign cloudIds where missing, then push ALL local rows (see syncCategories).
+        for (sub in db.subscriptionDao().getAllSubscriptionsSync()) {
+            val toPush = if (sub.cloudId.isEmpty()) {
+                val updated = sub.copy(cloudId = UUID.randomUUID().toString(), modifiedAt = System.currentTimeMillis())
+                db.subscriptionDao().updateSubscription(updated)
+                updated
+            } else sub
+            pushSubscription(toPush)
         }
     }
 
     private suspend fun syncNotes(db: AppDatabase) {
-        for (doc in pullAllNotes()) {
-            val cloudId = doc["cloudId"] as? String ?: continue
-            val cloudModifiedAtStr = doc["modifiedAt"] as? String ?: continue
-            val cloudModifiedAt = LocalDateTime.parse(cloudModifiedAtStr)
-            val title = doc["title"] as? String ?: continue
-            val content = doc["content"] as? String ?: continue
-            val createdAtStr = doc["createdAt"] as? String ?: continue
-            val createdAt = LocalDateTime.parse(createdAtStr)
-            val isDeleted = doc["isDeleted"] as? Boolean ?: false
-            val deletedAt = (doc["deletedAt"] as? String)?.let { LocalDateTime.parse(it) }
-
-            val local = db.noteDao().getNoteByCloudId(cloudId)
-            if (local == null) {
-                db.noteDao().insert(
-                    Note(
-                        title = title, content = content, createdAt = createdAt,
-                        modifiedAt = cloudModifiedAt, isDeleted = isDeleted,
-                        deletedAt = deletedAt, cloudId = cloudId
+        for ((docId, data) in pullAllNotes()) {
+            try {
+                val parsed = parseNoteDoc(data)
+                val local = db.noteDao().getNoteByCloudId(parsed.cloudId)
+                if (local == null) {
+                    db.noteDao().insert(parsed)
+                } else if (parsed.modifiedAt.isAfter(local.modifiedAt)) {
+                    db.noteDao().update(
+                        local.copy(
+                            title = parsed.title, content = parsed.content, modifiedAt = parsed.modifiedAt,
+                            isDeleted = parsed.isDeleted, deletedAt = parsed.deletedAt
+                        )
                     )
-                )
-            } else if (cloudModifiedAt.isAfter(local.modifiedAt)) {
-                db.noteDao().update(
-                    local.copy(
-                        title = title, content = content, modifiedAt = cloudModifiedAt,
-                        isDeleted = isDeleted, deletedAt = deletedAt
-                    )
-                )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Skipping malformed note doc $docId", e)
             }
         }
-        for (note in db.noteDao().getAllNotesOneShot().filter { it.cloudId.isEmpty() }) {
-            val updated = note.copy(cloudId = UUID.randomUUID().toString())
-            db.noteDao().update(updated)
-            pushNote(updated)
+        // Assign cloudIds where missing, then push ALL local rows (see syncCategories).
+        for (note in db.noteDao().getAllNotesOneShot()) {
+            val toPush = if (note.cloudId.isEmpty()) {
+                val updated = note.copy(cloudId = UUID.randomUUID().toString())
+                db.noteDao().update(updated)
+                updated
+            } else note
+            pushNote(toPush)
         }
     }
 
@@ -541,45 +733,32 @@ class FirebaseManager(private val context: Context) {
         val cloudDocs = pullAllReminders()
 
         // First pass: insert/update all without resolving parentId
-        for (doc in cloudDocs) {
-            val cloudId = doc["cloudId"] as? String ?: continue
-            val cloudModifiedAt = doc["modifiedAt"] as? Long ?: 0L
-            val name = doc["name"] as? String ?: continue
-            val dateStr = doc["date"] as? String ?: continue
-            val time = (doc["time"] as? String)?.let { LocalTime.parse(it) }
-            val description = doc["description"] as? String
-            val isCompleted = doc["isCompleted"] as? Boolean ?: false
-            val recurrence = (doc["recurrence"] as? String)?.let { gson.fromJson(it, Recurrence::class.java) }
-            val occurrencesCompleted = (doc["occurrencesCompleted"] as? Long)?.toInt() ?: 0
-            val parentCloudId = doc["parentCloudId"] as? String
-            val date = LocalDate.parse(dateStr)
-
-            val local = db.reminderDao().getReminderByCloudId(cloudId)
-            if (local == null) {
-                db.reminderDao().insertReminder(
-                    Reminder(
-                        name = name, date = date, time = time, description = description,
-                        isCompleted = isCompleted, recurrence = recurrence,
-                        occurrencesCompleted = occurrencesCompleted, cloudId = cloudId,
-                        parentCloudId = parentCloudId, modifiedAt = cloudModifiedAt
+        for ((docId, data) in cloudDocs) {
+            try {
+                val parsed = parseReminderDoc(data, gson)
+                val local = db.reminderDao().getReminderByCloudId(parsed.cloudId)
+                if (local == null) {
+                    db.reminderDao().insertReminder(parsed)
+                } else if (parsed.modifiedAt > local.modifiedAt) {
+                    db.reminderDao().updateReminder(
+                        local.copy(
+                            name = parsed.name, date = parsed.date, time = parsed.time,
+                            description = parsed.description, isCompleted = parsed.isCompleted,
+                            recurrence = parsed.recurrence,
+                            occurrencesCompleted = parsed.occurrencesCompleted,
+                            parentCloudId = parsed.parentCloudId, modifiedAt = parsed.modifiedAt
+                        )
                     )
-                )
-            } else if (cloudModifiedAt > local.modifiedAt) {
-                db.reminderDao().updateReminder(
-                    local.copy(
-                        name = name, date = date, time = time, description = description,
-                        isCompleted = isCompleted, recurrence = recurrence,
-                        occurrencesCompleted = occurrencesCompleted,
-                        parentCloudId = parentCloudId, modifiedAt = cloudModifiedAt
-                    )
-                )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Skipping malformed reminder doc $docId", e)
             }
         }
 
         // Second pass: resolve parentCloudId → parentId
-        for (doc in cloudDocs) {
-            val cloudId = doc["cloudId"] as? String ?: continue
-            val parentCloudId = doc["parentCloudId"] as? String ?: continue
+        for ((_, data) in cloudDocs) {
+            val cloudId = (data["cloudId"] as? String)?.takeIf { it.isNotBlank() } ?: continue
+            val parentCloudId = data["parentCloudId"] as? String ?: continue
             val child = db.reminderDao().getReminderByCloudId(cloudId) ?: continue
             val parent = db.reminderDao().getReminderByCloudId(parentCloudId) ?: continue
             if (child.parentId != parent.id) {
@@ -587,25 +766,31 @@ class FirebaseManager(private val context: Context) {
             }
         }
 
-        // Push locally-created reminders with no cloudId
+        // Assign cloudIds where missing (threading parentCloudId within the batch),
+        // then push ALL local rows (see syncCategories).
         val allLocalReminders = db.reminderDao().getAllRemindersOneShot()
         val existingCloudIdsById = allLocalReminders.associate { it.id to it.cloudId }
-        val toPush = allLocalReminders.filter { it.cloudId.isEmpty() }
-        for (reminder in resolvePendingReminderCloudIds(toPush, existingCloudIdsById)) {
+        val toAssign = allLocalReminders.filter { it.cloudId.isEmpty() }
+        for (reminder in resolvePendingReminderCloudIds(toAssign, existingCloudIdsById)) {
             val updated = reminder.copy(modifiedAt = System.currentTimeMillis())
             db.reminderDao().updateReminder(updated)
             pushReminder(updated)
         }
+        for (reminder in allLocalReminders.filter { it.cloudId.isNotEmpty() }) {
+            pushReminder(reminder)
+        }
     }
 
     private suspend fun syncStudySessions(db: AppDatabase) {
-        for (doc in pullAllStudySessions()) {
-            val dateStr = doc["date"] as? String ?: continue
-            val durationSeconds = doc["durationSeconds"] as? Long ?: continue
-            val date = LocalDate.parse(dateStr)
-            // Only insert if local doesn't have this date; local timer is source of truth
-            if (db.studySessionDao().getSessionByDate(date) == null) {
-                db.studySessionDao().insertSession(StudySession(date = date, durationSeconds = durationSeconds))
+        for ((docId, data) in pullAllStudySessions()) {
+            try {
+                val parsed = parseStudySessionDoc(data)
+                // Only insert if local doesn't have this date; local timer is source of truth
+                if (db.studySessionDao().getSessionByDate(parsed.date) == null) {
+                    db.studySessionDao().insertSession(parsed)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Skipping malformed study session doc $docId", e)
             }
         }
         // Push all local sessions to cloud (upsert by date)

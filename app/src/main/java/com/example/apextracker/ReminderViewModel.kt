@@ -13,11 +13,17 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.util.UUID
 
 class ReminderViewModel(application: Application) : AndroidViewModel(application) {
+    private companion object {
+        const val TAG = "ReminderViewModel"
+    }
+
     private val database = AppDatabase.getDatabase(application)
     private val reminderDao = database.reminderDao()
     private val settingsRepository = ReminderSettings(application)
+    private val firebaseManager = FirebaseManager(application)
 
     val activeReminders: Flow<List<Reminder>> = reminderDao.getActiveReminders()
     val completedReminders: Flow<List<Reminder>> = reminderDao.getCompletedReminders()
@@ -39,17 +45,29 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
                 date = date,
                 time = time,
                 description = description,
-                recurrence = recurrence
+                recurrence = recurrence,
+                cloudId = UUID.randomUUID().toString(),
+                modifiedAt = System.currentTimeMillis()
             )
             val id = reminderDao.insertReminder(reminder)
             scheduleIfNeeded(reminder.copy(id = id))
+            safeCloudCall(TAG, "push reminder") {
+                firebaseManager.pushReminder(reminder)
+            }
         }
     }
 
     fun updateReminder(reminder: Reminder) {
         viewModelScope.launch {
-            reminderDao.updateReminder(reminder)
-            scheduleIfNeeded(reminder)
+            val updated = reminder.copy(
+                cloudId = reminder.cloudId.ifEmpty { UUID.randomUUID().toString() },
+                modifiedAt = System.currentTimeMillis()
+            )
+            reminderDao.updateReminder(updated)
+            scheduleIfNeeded(updated)
+            safeCloudCall(TAG, "update reminder") {
+                firebaseManager.pushReminder(updated)
+            }
         }
     }
 
@@ -80,9 +98,16 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
                 // Handle completion of a recurring reminder
                 handleRecurringCompletion(reminder)
             } else {
-                val updated = reminder.copy(isCompleted = !reminder.isCompleted)
+                val updated = reminder.copy(
+                    isCompleted = !reminder.isCompleted,
+                    cloudId = reminder.cloudId.ifEmpty { UUID.randomUUID().toString() },
+                    modifiedAt = System.currentTimeMillis()
+                )
                 reminderDao.updateReminder(updated)
                 scheduleIfNeeded(updated)
+                safeCloudCall(TAG, "toggle reminder completion") {
+                    firebaseManager.pushReminder(updated)
+                }
             }
         }
     }
@@ -106,21 +131,35 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
         if (shouldContinue) {
             val nextDate = calculateNextDate(reminder.date, recurrence)
             if (nextDate != null) {
-                // Insert the next instance
+                // Insert the next instance with its own cloud identity
+                // (parentId/parentCloudId are inherited via copy, keeping chain semantics)
                 val nextReminder = reminder.copy(
                     id = 0,
                     date = nextDate,
                     isCompleted = false,
-                    occurrencesCompleted = nextOccurrencesCompleted
+                    occurrencesCompleted = nextOccurrencesCompleted,
+                    cloudId = UUID.randomUUID().toString(),
+                    modifiedAt = System.currentTimeMillis()
                 )
                 val nextId = reminderDao.insertReminder(nextReminder)
                 scheduleIfNeeded(nextReminder.copy(id = nextId))
+                safeCloudCall(TAG, "push next recurring reminder") {
+                    firebaseManager.pushReminder(nextReminder)
+                }
             }
         }
 
         // Mark current one as completed
-        reminderDao.updateReminder(reminder.copy(isCompleted = true))
+        val completed = reminder.copy(
+            isCompleted = true,
+            cloudId = reminder.cloudId.ifEmpty { UUID.randomUUID().toString() },
+            modifiedAt = System.currentTimeMillis()
+        )
+        reminderDao.updateReminder(completed)
         ReminderScheduler.cancel(getApplication(), reminder.id)
+        safeCloudCall(TAG, "push completed recurring reminder") {
+            firebaseManager.pushReminder(completed)
+        }
     }
 
     private fun calculateNextDate(currentDate: LocalDate, recurrence: Recurrence): LocalDate? {
@@ -148,19 +187,32 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             reminderDao.deleteReminder(reminder)
             ReminderScheduler.cancel(getApplication(), reminder.id)
+            safeCloudCall(TAG, "delete reminder") {
+                firebaseManager.deleteReminder(reminder.cloudId)
+            }
         }
     }
 
     fun deleteReminders(ids: List<Long>) {
         viewModelScope.launch {
+            // Capture cloudIds before the rows are gone
+            val victims = reminderDao.getRemindersByIds(ids)
             reminderDao.deleteRemindersByIds(ids)
             ids.forEach { ReminderScheduler.cancel(getApplication(), it) }
+            safeCloudCall(TAG, "delete reminders") {
+                victims.forEach { firebaseManager.deleteReminder(it.cloudId) }
+            }
         }
     }
 
     fun clearAllCompleted() {
         viewModelScope.launch {
+            // Capture cloudIds before the rows are gone
+            val victims = reminderDao.getCompletedRemindersOneShot()
             reminderDao.clearAllCompleted()
+            safeCloudCall(TAG, "clear completed reminders") {
+                victims.forEach { firebaseManager.deleteReminder(it.cloudId) }
+            }
         }
     }
 
