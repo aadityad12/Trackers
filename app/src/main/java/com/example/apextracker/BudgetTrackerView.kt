@@ -321,7 +321,7 @@ fun ExpensePieChartModern(
         } else {
             categories.find { it.id == catId }
         }
-        val color = category?.let { try { Color(android.graphics.Color.parseColor(it.colorHex)) } catch(e: Exception) { Color.Gray } } ?: Color.Gray
+        val color = category?.let { parseColorSafe(it.colorHex) } ?: Color.Gray
         val amount = catItems.sumOf { it.amount }
         chartData.add(Triple(category?.name ?: "Uncategorized", amount.toFloat(), color))
     }

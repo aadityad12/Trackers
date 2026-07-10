@@ -34,7 +34,7 @@ fun BudgetListItem(
     onClick: () -> Unit,
     isPending: Boolean = false
 ) {
-    val catColor = category?.let { Color(android.graphics.Color.parseColor(it.colorHex)) } ?: MaterialTheme.colorScheme.surface
+    val catColor = category?.let { parseColorSafe(it.colorHex) } ?: MaterialTheme.colorScheme.surface
     val displayColor = if (isPending) catColor.copy(alpha = 0.4f) else catColor
 
     val interactionSource = remember { MutableInteractionSource() }
@@ -92,7 +92,7 @@ fun BudgetListItemHeader(item: BudgetItem, category: Category?, isPending: Boole
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (category != null) {
-                val color = Color(android.graphics.Color.parseColor(category.colorHex))
+                val color = parseColorSafe(category.colorHex)
                 Box(modifier = Modifier.size(12.dp).background(if (isPending) color.copy(alpha = 0.4f) else color, CircleShape))
                 Spacer(modifier = Modifier.width(8.dp))
             }
@@ -201,7 +201,7 @@ fun CategoryDropdown(categories: List<Category>, selectedCategory: Category?, ex
                 DropdownMenuItem(
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(12.dp).background(Color(android.graphics.Color.parseColor(category.colorHex)), CircleShape))
+                            Box(modifier = Modifier.size(12.dp).background(parseColorSafe(category.colorHex), CircleShape))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(category.name)
                         }
