@@ -25,6 +25,9 @@ interface CategoryDao {
     @Query("SELECT * FROM categories WHERE cloudId = :cloudId LIMIT 1")
     suspend fun getCategoryByCloudId(cloudId: String): Category?
 
+    @Query("SELECT * FROM categories WHERE id = :id LIMIT 1")
+    suspend fun getCategoryById(id: Long): Category?
+
     @Query("SELECT * FROM categories")
     suspend fun getAllCategoriesOneShot(): List<Category>
 }

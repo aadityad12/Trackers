@@ -41,6 +41,20 @@ internal fun resolvePendingReminderCloudIds(
     }
 }
 
+/**
+ * Runs a fire-and-forget cloud operation from a ViewModel. Room is always written
+ * first and is the source of truth; a failed push (offline, signed out mid-flight)
+ * must never crash or roll back the local mutation — it's logged and reconciled by
+ * the next initial sync.
+ */
+internal suspend fun safeCloudCall(tag: String, op: String, block: suspend () -> Unit) {
+    try {
+        block()
+    } catch (e: Exception) {
+        Log.w(tag, "Cloud $op failed", e)
+    }
+}
+
 // ── Cloud document parsing ────────────────────────────────────────────────────
 // Pure functions so malformed-document handling is unit-testable. Each throws on a
 // document that can't be represented locally; callers catch per-doc and log, so one
@@ -499,11 +513,16 @@ class FirebaseManager(private val context: Context) {
                 Log.w(TAG, "Skipping malformed category doc $docId", e)
             }
         }
-        // Push any locally-created categories that have no cloudId
-        for (cat in db.categoryDao().getAllCategoriesOneShot().filter { it.cloudId.isEmpty() }) {
-            val updated = cat.copy(cloudId = UUID.randomUUID().toString(), modifiedAt = System.currentTimeMillis())
-            db.categoryDao().updateCategory(updated)
-            pushCategory(updated)
+        // Assign cloudIds where missing, then push ALL local rows — not just the
+        // newly-assigned ones — so rows created or edited while signed out still reach
+        // the cloud. Safe post-pull: the pull above already applied last-writer-wins.
+        for (cat in db.categoryDao().getAllCategoriesOneShot()) {
+            val toPush = if (cat.cloudId.isEmpty()) {
+                val updated = cat.copy(cloudId = UUID.randomUUID().toString(), modifiedAt = System.currentTimeMillis())
+                db.categoryDao().updateCategory(updated)
+                updated
+            } else cat
+            pushCategory(toPush)
         }
     }
 
@@ -533,13 +552,19 @@ class FirebaseManager(private val context: Context) {
                 Log.w(TAG, "Skipping malformed budget doc $docId", e)
             }
         }
-        // Push locally-created items with no cloudId
+        // Assign cloudIds where missing, then push ALL local rows (see syncCategories).
+        // Re-fetch categories: syncCategories may have assigned cloudIds after catLookup was built.
         val allCats = db.categoryDao().getAllCategoriesOneShot()
-        for (item in db.budgetDao().getAllItemsOneShot().filter { it.cloudId.isEmpty() }) {
-            val catCloudId = item.categoryId?.let { cid -> allCats.find { it.id == cid }?.cloudId }
-            val updated = item.copy(cloudId = UUID.randomUUID().toString(), modifiedAt = System.currentTimeMillis())
-            db.budgetDao().updateItem(updated)
-            pushBudgetItem(updated, catCloudId)
+        for (item in db.budgetDao().getAllItemsOneShot()) {
+            val toPush = if (item.cloudId.isEmpty()) {
+                val updated = item.copy(cloudId = UUID.randomUUID().toString(), modifiedAt = System.currentTimeMillis())
+                db.budgetDao().updateItem(updated)
+                updated
+            } else item
+            val catCloudId = toPush.categoryId?.let { cid ->
+                allCats.find { it.id == cid }?.cloudId?.takeIf { it.isNotEmpty() }
+            }
+            pushBudgetItem(toPush, catCloudId)
         }
     }
 
@@ -562,10 +587,14 @@ class FirebaseManager(private val context: Context) {
                 Log.w(TAG, "Skipping malformed subscription doc $docId", e)
             }
         }
-        for (sub in db.subscriptionDao().getAllSubscriptionsSync().filter { it.cloudId.isEmpty() }) {
-            val updated = sub.copy(cloudId = UUID.randomUUID().toString(), modifiedAt = System.currentTimeMillis())
-            db.subscriptionDao().updateSubscription(updated)
-            pushSubscription(updated)
+        // Assign cloudIds where missing, then push ALL local rows (see syncCategories).
+        for (sub in db.subscriptionDao().getAllSubscriptionsSync()) {
+            val toPush = if (sub.cloudId.isEmpty()) {
+                val updated = sub.copy(cloudId = UUID.randomUUID().toString(), modifiedAt = System.currentTimeMillis())
+                db.subscriptionDao().updateSubscription(updated)
+                updated
+            } else sub
+            pushSubscription(toPush)
         }
     }
 
