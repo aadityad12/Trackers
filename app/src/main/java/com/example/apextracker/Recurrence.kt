@@ -36,6 +36,22 @@ fun Recurrence.withAnchorFrom(date: LocalDate): Recurrence =
     else copy(anchorDay = date.dayOfMonth)
 
 /**
+ * First date on the recurrence grid strictly after both [currentDate] and [today], or null if
+ * the recurrence can't advance. When a recurring reminder sat overdue, this skips the missed
+ * periods instead of generating a pile-up of past occurrences — while staying on the chain's
+ * grid (a weekly-Monday reminder completed on a Thursday still advances to a Monday).
+ * For an on-time completion ([currentDate] >= [today]) this is one plain advance.
+ */
+fun calculateNextOccurrenceAfter(currentDate: LocalDate, recurrence: Recurrence, today: LocalDate): LocalDate? {
+    var next = calculateNextDate(currentDate, recurrence) ?: return null
+    var guard = 0 // defensive bound; a daily reminder missed for ~27 years is the worst case
+    while (!next.isAfter(today) && guard++ < 10_000) {
+        next = calculateNextDate(next, recurrence) ?: return null
+    }
+    return if (next.isAfter(today)) next else null
+}
+
+/**
  * Advances [currentDate] by one recurrence period, or null if the recurrence can't advance
  * (CUSTOM with no days). Monthly/yearly advancement targets [Recurrence.anchorDay] (falling back
  * to the current day-of-month), clamped to the target month's length.

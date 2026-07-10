@@ -128,13 +128,17 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
         // Anchor monthly/yearly chains to the original day-of-month before advancing,
         // so short-month clamping (Jan 31 → Feb 28) doesn't drift permanently.
         val recurrence = reminder.recurrence?.withAnchorFrom(reminder.date) ?: return
+        // Skipped (missed) periods don't count toward AFTER_OCCURRENCES — only actual completions do.
         val nextOccurrencesCompleted = reminder.occurrencesCompleted + 1
+
+        // Next occurrence on the grid after today: completing an overdue reminder catches the
+        // chain up to the future instead of inserting already-past occurrences one by one.
+        val nextDate = calculateNextOccurrenceAfter(reminder.date, recurrence, LocalDate.now())
 
         // Check if we should generate the next occurrence
         val shouldContinue = when (recurrence.endType) {
             RecurrenceEndType.NEVER -> true
             RecurrenceEndType.UNTIL_DATE -> {
-                val nextDate = calculateNextDate(reminder.date, recurrence)
                 nextDate != null && (recurrence.endDate == null || !nextDate.isAfter(recurrence.endDate))
             }
             RecurrenceEndType.AFTER_OCCURRENCES -> {
@@ -143,7 +147,6 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
         }
 
         if (shouldContinue) {
-            val nextDate = calculateNextDate(reminder.date, recurrence)
             if (nextDate != null) {
                 // Insert the next instance with its own cloud identity
                 // (parentId/parentCloudId are inherited via copy, keeping chain semantics)
