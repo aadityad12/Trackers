@@ -114,8 +114,14 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             if (app.isExcluded) {
                 excludedAppDao.includeApp(ExcludedApp(app.packageName))
+                safeCloudCall("ScreenTimeViewModel", "remove excluded app") {
+                    firebaseManager.removeExcludedApp(app.packageName)
+                }
             } else {
                 excludedAppDao.excludeApp(ExcludedApp(app.packageName))
+                safeCloudCall("ScreenTimeViewModel", "push excluded app") {
+                    firebaseManager.pushExcludedApp(app.packageName)
+                }
             }
             updateScreenTime()
         }

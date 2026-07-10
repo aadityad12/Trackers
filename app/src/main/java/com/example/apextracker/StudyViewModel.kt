@@ -14,9 +14,16 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 class StudyViewModel(application: Application) : AndroidViewModel(application) {
+    private companion object {
+        const val TAG = "StudyViewModel"
+        const val CLOUD_PUSH_INTERVAL_MILLIS = 60_000L
+    }
+
     private val database = AppDatabase.getDatabase(application)
     private val studySessionDao = database.studySessionDao()
     private val powerManager = application.getSystemService(Context.POWER_SERVICE) as PowerManager
+    private val firebaseManager = FirebaseManager(application)
+    private var lastCloudPushMillis = 0L
 
     private val _timeSeconds = MutableStateFlow(0L)
     val timeSeconds: StateFlow<Long> = _timeSeconds.asStateFlow()
@@ -50,9 +57,10 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launchPeriodic(30_000) {
             val now = LocalDate.now()
             if (now.isAfter(lastResetDate)) {
-                // Save final time for previous day
+                // Save final time for previous day — force the cloud push, it's the
+                // last chance to write that date's document
                 val finalTotal = if (_isRunning.value) calculateCurrentTotalSeconds() else _timeSeconds.value
-                saveSessionForDate(lastResetDate, finalTotal)
+                saveSessionForDate(lastResetDate, finalTotal, forcePush = true)
 
                 // Reset for new day
                 _timeSeconds.value = 0L
@@ -104,7 +112,7 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
         baseSeconds = total
         _isRunning.value = false
         timerJob?.cancel()
-        saveSessionForDate(LocalDate.now(), total)
+        saveSessionForDate(LocalDate.now(), total, forcePush = true)
     }
 
     fun resetTimerManual() {
@@ -112,13 +120,22 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
         timerJob?.cancel()
         _timeSeconds.value = 0L
         baseSeconds = 0L
-        saveSessionForDate(LocalDate.now(), 0L)
+        saveSessionForDate(LocalDate.now(), 0L, forcePush = true)
     }
 
-    private fun saveSessionForDate(date: LocalDate, duration: Long) {
+    private fun saveSessionForDate(date: LocalDate, duration: Long, forcePush: Boolean = false) {
         viewModelScope.launch {
             val session = StudySession(date = date, durationSeconds = duration)
             studySessionDao.insertSession(session)
+            // Room saves every second while running; the cloud push is throttled to a
+            // 60s heartbeat, with significant events (pause/reset/rollover) forced.
+            val now = System.currentTimeMillis()
+            if (shouldSyncNow(now, lastCloudPushMillis, forcePush, CLOUD_PUSH_INTERVAL_MILLIS)) {
+                lastCloudPushMillis = now
+                safeCloudCall(TAG, "push study session") {
+                    firebaseManager.pushStudySession(session)
+                }
+            }
         }
     }
 
