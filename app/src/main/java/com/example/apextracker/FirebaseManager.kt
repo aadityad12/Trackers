@@ -78,6 +78,73 @@ private fun Map<String, Any?>.requireDouble(key: String): Double =
 
 internal data class ParsedBudgetItem(val item: BudgetItem, val categoryCloudId: String?)
 
+// ── Legacy budget doc migration ───────────────────────────────────────────────
+// The old BudgetViewModel sync path wrote users/{uid}/budget/{roomId} docs via raw
+// POJO serialization: cloudId = "", modifiedAt = 0, date as a nested object, doc key
+// = the local Room autoincrement id. These are unreadable by the cloudId scheme and
+// used to resurrect as duplicates. During sync we migrate what's salvageable and
+// delete the legacy doc.
+
+internal sealed interface LegacyBudgetDocAction {
+    /** Salvageable and not present locally: insert locally under a fresh cloudId, push, delete legacy doc. */
+    data class Migrate(val item: BudgetItem) : LegacyBudgetDocAction
+    /** Duplicate of an existing local item, or missing required fields: just delete the legacy doc. */
+    data object DeleteOnly : LegacyBudgetDocAction
+}
+
+private fun parseLegacyDate(raw: Any?): LocalDate? = when (raw) {
+    is String -> try { LocalDate.parse(raw) } catch (e: Exception) { null }
+    // Raw POJO serialization of LocalDate produces a nested map of its getters
+    is Map<*, *> -> {
+        val year = (raw["year"] as? Number)?.toInt()
+        val month = (raw["monthValue"] as? Number)?.toInt()
+        val day = (raw["dayOfMonth"] as? Number)?.toInt()
+        if (year != null && month != null && day != null) {
+            try { LocalDate.of(year, month, day) } catch (e: Exception) { null }
+        } else null
+    }
+    else -> null
+}
+
+/**
+ * Decides what to do with a pulled budget doc that has a null/blank cloudId field.
+ * Returns null if the doc is NOT legacy (has a proper cloudId).
+ *
+ * Dedup guard: the common case is that the device which wrote the legacy doc still
+ * has the Room row, which the unified path re-pushes under a UUID — migrating would
+ * duplicate it. A local item with the same title and amount (and date, when the
+ * legacy date is readable) counts as that duplicate.
+ *
+ * The migrated item's categoryId is dropped: the legacy doc stored a local Room id
+ * from whichever install wrote it, which is meaningless on this device.
+ */
+internal fun classifyLegacyBudgetDoc(
+    data: Map<String, Any?>,
+    localItems: List<BudgetItem>,
+    fallbackDate: LocalDate
+): LegacyBudgetDocAction? {
+    if (!(data["cloudId"] as? String).isNullOrBlank()) return null // not legacy
+
+    val title = data["title"] as? String ?: return LegacyBudgetDocAction.DeleteOnly
+    val amount = (data["amount"] as? Number)?.toDouble() ?: return LegacyBudgetDocAction.DeleteOnly
+    val date = parseLegacyDate(data["date"])
+
+    val duplicatesLocal = localItems.any {
+        it.title == title && it.amount == amount && (date == null || it.date == date)
+    }
+    if (duplicatesLocal) return LegacyBudgetDocAction.DeleteOnly
+
+    return LegacyBudgetDocAction.Migrate(
+        BudgetItem(
+            title = title,
+            amount = amount,
+            description = data["description"] as? String,
+            date = date ?: fallbackDate,
+            categoryId = null
+        )
+    )
+}
+
 internal fun parseCategoryDoc(data: Map<String, Any?>): Category = Category(
     name = data.requireString("name"),
     colorHex = data.requireString("colorHex"),
@@ -532,7 +599,41 @@ class FirebaseManager(private val context: Context) {
             .filter { it.cloudId.isNotEmpty() }
             .associate { it.cloudId to it.id }
 
-        for ((docId, data) in pullAllBudgetItems()) {
+        val pulledDocs = pullAllBudgetItems()
+
+        // Migrate/remove legacy docs (blank cloudId, written by the old ad-hoc path)
+        // before the regular pull so they aren't logged as malformed every sync.
+        val (legacyDocs, modernDocs) = pulledDocs.partition { (_, data) ->
+            (data["cloudId"] as? String).isNullOrBlank()
+        }
+        if (legacyDocs.isNotEmpty()) {
+            val localItems = db.budgetDao().getAllItemsOneShot()
+            for ((docId, data) in legacyDocs) {
+                try {
+                    when (val action = classifyLegacyBudgetDoc(data, localItems, LocalDate.now())) {
+                        is LegacyBudgetDocAction.Migrate -> {
+                            val item = action.item.copy(
+                                cloudId = UUID.randomUUID().toString(),
+                                modifiedAt = System.currentTimeMillis()
+                            )
+                            db.budgetDao().insertItem(item)
+                            pushBudgetItem(item, null)
+                            deleteBudgetItem(docId)
+                            Log.i(TAG, "Migrated legacy budget doc $docId to cloudId ${item.cloudId}")
+                        }
+                        LegacyBudgetDocAction.DeleteOnly -> {
+                            deleteBudgetItem(docId)
+                            Log.i(TAG, "Deleted legacy budget doc $docId (duplicate or unsalvageable)")
+                        }
+                        null -> {} // unreachable: partition guarantees blank cloudId
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to migrate legacy budget doc $docId", e)
+                }
+            }
+        }
+
+        for ((docId, data) in modernDocs) {
             try {
                 val (parsed, categoryCloudId) = parseBudgetItemDoc(data)
                 val categoryId = categoryCloudId?.let { catLookup[it] }
