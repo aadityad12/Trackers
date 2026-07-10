@@ -617,10 +617,14 @@ class FirebaseManager(private val context: Context) {
                 Log.w(TAG, "Skipping malformed note doc $docId", e)
             }
         }
-        for (note in db.noteDao().getAllNotesOneShot().filter { it.cloudId.isEmpty() }) {
-            val updated = note.copy(cloudId = UUID.randomUUID().toString())
-            db.noteDao().update(updated)
-            pushNote(updated)
+        // Assign cloudIds where missing, then push ALL local rows (see syncCategories).
+        for (note in db.noteDao().getAllNotesOneShot()) {
+            val toPush = if (note.cloudId.isEmpty()) {
+                val updated = note.copy(cloudId = UUID.randomUUID().toString())
+                db.noteDao().update(updated)
+                updated
+            } else note
+            pushNote(toPush)
         }
     }
 
