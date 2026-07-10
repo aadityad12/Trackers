@@ -45,6 +45,8 @@ fun parseRecurrenceSafe(gson: Gson, json: String): Recurrence? {
 class Converters {
     private companion object {
         const val TAG = "Converters"
+        // LocalDate.EPOCH is an API 34+ field on Android; minSdk is 26
+        val EPOCH_DATE: LocalDate = LocalDate.of(1970, 1, 1)
     }
 
     private val gson = Gson()
@@ -70,7 +72,7 @@ class Converters {
     @TypeConverter
     fun toLocalDate(value: String?): LocalDate? {
         if (value == null) return null
-        return parseLocalDateSafe(value) ?: LocalDate.EPOCH.also {
+        return parseLocalDateSafe(value) ?: EPOCH_DATE.also {
             Log.w(TAG, "Corrupt LocalDate \"$value\" — substituting $it")
         }
     }
@@ -96,7 +98,7 @@ class Converters {
     @TypeConverter
     fun toLocalDateTime(value: String?): LocalDateTime? {
         if (value == null) return null
-        return parseLocalDateTimeSafe(value) ?: LocalDateTime.of(LocalDate.EPOCH, LocalTime.MIDNIGHT).also {
+        return parseLocalDateTimeSafe(value) ?: LocalDateTime.of(EPOCH_DATE, LocalTime.MIDNIGHT).also {
             Log.w(TAG, "Corrupt LocalDateTime \"$value\" — substituting $it")
         }
     }
