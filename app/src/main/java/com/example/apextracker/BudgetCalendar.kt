@@ -168,7 +168,7 @@ fun DayBreakdownItem(item: BudgetItem, category: Category?) {
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (category != null) {
-                    Box(modifier = Modifier.size(8.dp).background(Color(android.graphics.Color.parseColor(category.colorHex)), CircleShape))
+                    Box(modifier = Modifier.size(8.dp).background(parseColorSafe(category.colorHex), CircleShape))
                     Spacer(modifier = Modifier.width(4.dp))
                 }
                 Text(text = item.title, style = MaterialTheme.typography.bodyLarge)

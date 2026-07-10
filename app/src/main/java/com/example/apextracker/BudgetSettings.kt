@@ -168,7 +168,7 @@ fun CategoryItem(category: Category, onEdit: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                Box(modifier = Modifier.size(20.dp).background(Color(android.graphics.Color.parseColor(category.colorHex)), CircleShape))
+                Box(modifier = Modifier.size(20.dp).background(parseColorSafe(category.colorHex), CircleShape))
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(category.name, style = MaterialTheme.typography.bodyMedium)
             }
@@ -238,7 +238,7 @@ fun ColorGrid(colors: List<String>, selectedColor: String, onColorSelected: (Str
                     Box(
                         modifier = Modifier
                             .size(32.dp)
-                            .background(Color(android.graphics.Color.parseColor(color)), CircleShape)
+                            .background(parseColorSafe(color), CircleShape)
                             .border(
                                 width = if (selectedColor == color) 2.dp else 1.dp,
                                 color = if (selectedColor == color) MaterialTheme.colorScheme.primary else Color.LightGray.copy(alpha = 0.5f),
