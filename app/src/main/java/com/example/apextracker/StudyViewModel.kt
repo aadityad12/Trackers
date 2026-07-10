@@ -54,23 +54,35 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun startDailyResetCheck() {
+        // While the timer runs, the per-second ticker rolls over itself; this poll only
+        // covers the idle case (zeroing the displayed counter at midnight).
         viewModelScope.launchPeriodic(30_000) {
-            val now = LocalDate.now()
-            if (now.isAfter(lastResetDate)) {
-                // Save final time for previous day — force the cloud push, it's the
-                // last chance to write that date's document
-                val finalTotal = if (_isRunning.value) calculateCurrentTotalSeconds() else _timeSeconds.value
-                saveSessionForDate(lastResetDate, finalTotal, forcePush = true)
-
-                // Reset for new day
-                _timeSeconds.value = 0L
-                baseSeconds = 0L
-                if (_isRunning.value) {
-                    lastStartTimeMillis = System.currentTimeMillis()
-                }
-                lastResetDate = now
-            }
+            rolloverIfNeeded()
         }
+    }
+
+    /**
+     * If the calendar day advanced past [lastResetDate], saves that day's final total to its own
+     * row and resets the counter for the new day. Called from every path that writes a session
+     * (ticker, pause, reset) so a running total can never be attributed to the wrong day —
+     * previously only a 30s poll did this, and until it fired the per-second loop wrote
+     * yesterday's entire running total into the new day's row.
+     */
+    private fun rolloverIfNeeded() {
+        val now = LocalDate.now()
+        if (!now.isAfter(lastResetDate)) return
+
+        // Force the cloud push: it's the last chance to write that date's document
+        val finalTotal = if (_isRunning.value) calculateCurrentTotalSeconds() else _timeSeconds.value
+        saveSessionForDate(lastResetDate, finalTotal, forcePush = true)
+
+        // Reset for new day
+        _timeSeconds.value = 0L
+        baseSeconds = 0L
+        if (_isRunning.value) {
+            lastStartTimeMillis = System.currentTimeMillis()
+        }
+        lastResetDate = now
     }
 
     private fun calculateCurrentTotalSeconds(): Long {
@@ -96,9 +108,12 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
         
         timerJob = viewModelScope.launch {
             while (_isRunning.value) {
+                rolloverIfNeeded()
                 val current = calculateCurrentTotalSeconds()
                 _timeSeconds.value = current
-                saveSessionForDate(LocalDate.now(), current)
+                // Attribute to the tracked day, not LocalDate.now(): rolloverIfNeeded just
+                // synchronized lastResetDate, so this can never write into the wrong row.
+                saveSessionForDate(lastResetDate, current)
                 delay(1000)
             }
         }
@@ -106,21 +121,23 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
 
     fun pauseTimer() {
         if (!_isRunning.value) return
-        
+
+        rolloverIfNeeded()
         val total = calculateCurrentTotalSeconds()
         _timeSeconds.value = total
         baseSeconds = total
         _isRunning.value = false
         timerJob?.cancel()
-        saveSessionForDate(LocalDate.now(), total, forcePush = true)
+        saveSessionForDate(lastResetDate, total, forcePush = true)
     }
 
     fun resetTimerManual() {
+        rolloverIfNeeded()
         _isRunning.value = false
         timerJob?.cancel()
         _timeSeconds.value = 0L
         baseSeconds = 0L
-        saveSessionForDate(LocalDate.now(), 0L, forcePush = true)
+        saveSessionForDate(lastResetDate, 0L, forcePush = true)
     }
 
     private fun saveSessionForDate(date: LocalDate, duration: Long, forcePush: Boolean = false) {
