@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -113,9 +112,11 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
     }
 
     private suspend fun handleRecurringCompletion(reminder: Reminder) {
-        val recurrence = reminder.recurrence ?: return
+        // Anchor monthly/yearly chains to the original day-of-month before advancing,
+        // so short-month clamping (Jan 31 → Feb 28) doesn't drift permanently.
+        val recurrence = reminder.recurrence?.withAnchorFrom(reminder.date) ?: return
         val nextOccurrencesCompleted = reminder.occurrencesCompleted + 1
-        
+
         // Check if we should generate the next occurrence
         val shouldContinue = when (recurrence.endType) {
             RecurrenceEndType.NEVER -> true
@@ -137,6 +138,7 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
                     id = 0,
                     date = nextDate,
                     isCompleted = false,
+                    recurrence = recurrence,
                     occurrencesCompleted = nextOccurrencesCompleted,
                     cloudId = UUID.randomUUID().toString(),
                     modifiedAt = System.currentTimeMillis()
@@ -159,27 +161,6 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
         ReminderScheduler.cancel(getApplication(), reminder.id)
         safeCloudCall(TAG, "push completed recurring reminder") {
             firebaseManager.pushReminder(completed)
-        }
-    }
-
-    private fun calculateNextDate(currentDate: LocalDate, recurrence: Recurrence): LocalDate? {
-        return when (recurrence.frequency) {
-            RecurrenceFrequency.DAILY -> currentDate.plusDays(1)
-            RecurrenceFrequency.WEEKLY -> currentDate.plusWeeks(1)
-            RecurrenceFrequency.MONTHLY -> currentDate.plusMonths(1)
-            RecurrenceFrequency.YEARLY -> currentDate.plusYears(1)
-            RecurrenceFrequency.CUSTOM -> {
-                val days = recurrence.customDays ?: return null
-                if (days.isEmpty()) return null
-                
-                var next = currentDate.plusDays(1)
-                // Search for the next day of week in the set
-                repeat(7) {
-                    if (days.contains(next.dayOfWeek)) return next
-                    next = next.plusDays(1)
-                }
-                null
-            }
         }
     }
 
