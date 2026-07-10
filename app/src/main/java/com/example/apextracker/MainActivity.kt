@@ -1,6 +1,7 @@
 package com.example.apextracker
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
@@ -66,13 +67,27 @@ import com.example.apextracker.ui.theme.ApexTrackerTheme
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        /** Intent extra naming a navigation route to open (e.g. from a notification tap). */
+        const val EXTRA_NAVIGATE_TO = "navigate_to"
+    }
+
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { /* If denied, reminder notifications simply won't post; nothing else to do here. */ }
 
+    // Route requested by the launching intent; consumed (nulled) once navigated.
+    private var pendingRoute by mutableStateOf<String?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        pendingRoute = intent.getStringExtra(EXTRA_NAVIGATE_TO)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        pendingRoute = intent?.getStringExtra(EXTRA_NAVIGATE_TO)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -131,7 +146,9 @@ class MainActivity : ComponentActivity() {
                     currentTheme = currentTheme,
                     isDarkMode = isDarkMode,
                     onThemeChange = { currentTheme = it },
-                    onDarkModeChange = { isDarkMode = it }
+                    onDarkModeChange = { isDarkMode = it },
+                    requestedRoute = pendingRoute,
+                    onRequestedRouteConsumed = { pendingRoute = null }
                 )
             }
         }
@@ -140,10 +157,12 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun AppNavigation(
-    currentTheme: ApexTheme, 
+    currentTheme: ApexTheme,
     isDarkMode: Boolean,
     onThemeChange: (ApexTheme) -> Unit,
-    onDarkModeChange: (Boolean) -> Unit
+    onDarkModeChange: (Boolean) -> Unit,
+    requestedRoute: String? = null,
+    onRequestedRouteConsumed: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     var showSplash by remember { mutableStateOf(true) }
@@ -151,6 +170,15 @@ fun AppNavigation(
     if (showSplash) {
         SplashScreen(onFinished = { showSplash = false })
     } else {
+        // Honor a route requested by the launching intent (notification tap) once the
+        // NavHost exists — covers both cold start and onNewIntent while running.
+        LaunchedEffect(requestedRoute) {
+            if (requestedRoute != null) {
+                navController.navigate(requestedRoute) { launchSingleTop = true }
+                onRequestedRouteConsumed()
+            }
+        }
+
         val enterAnimSpec = tween<Float>(durationMillis = 400, easing = FastOutSlowInEasing)
         val exitAnimSpec = tween<Float>(durationMillis = 350, easing = FastOutSlowInEasing)
 

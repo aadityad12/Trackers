@@ -2,7 +2,9 @@ package com.example.apextracker
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
@@ -38,12 +40,26 @@ class ReminderWorker(
             notificationManager.createNotificationChannel(channel)
         }
 
+        // Tapping the notification opens the app on the Reminders screen. Request code is the
+        // reminder id so concurrent notifications don't share (and overwrite) one PendingIntent.
+        val tapIntent = Intent(applicationContext, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(MainActivity.EXTRA_NAVIGATE_TO, "reminders")
+        }
+        val contentIntent = PendingIntent.getActivity(
+            applicationContext,
+            id,
+            tapIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val builder = NotificationCompat.Builder(applicationContext, channelId)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle("Reminder: $name")
             .setContentText(description ?: "Your task is due!")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
+            .setContentIntent(contentIntent)
 
         notificationManager.notify(id, builder.build())
     }
