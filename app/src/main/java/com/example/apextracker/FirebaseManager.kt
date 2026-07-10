@@ -217,8 +217,20 @@ class FirebaseManager(private val context: Context) {
     val userId: String? get() = auth.currentUser?.uid
 
     val deviceId: String by lazy {
+        // ANDROID_ID can (rarely) be null/blank; a shared literal fallback would make all such
+        // devices on one account write to the same devices/{id} doc, overwriting each other's
+        // screen time. Generate a per-install UUID instead and persist it so it stays stable.
         Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-            ?: "unknown_device"
+            ?.takeIf { it.isNotBlank() }
+            ?: persistedFallbackDeviceId()
+    }
+
+    private fun persistedFallbackDeviceId(): String {
+        val prefs = context.getSharedPreferences("device_identity", Context.MODE_PRIVATE)
+        prefs.getString("fallback_device_id", null)?.let { return it }
+        val generated = "device_" + UUID.randomUUID().toString()
+        prefs.edit().putString("fallback_device_id", generated).apply()
+        return generated
     }
 
     private val deviceName: String get() = Build.MODEL
@@ -241,7 +253,14 @@ class FirebaseManager(private val context: Context) {
     fun getSettingsFlow(): Flow<Map<String, Any>?> = callbackFlow {
         val uid = userId ?: return@callbackFlow
         val listener = firestore.collection("users").document(uid)
-            .addSnapshotListener { snapshot, _ -> trySend(snapshot?.data) }
+            .addSnapshotListener { snapshot, _ ->
+                // Firestore fires listeners for this device's own writes too (echo). Skipping
+                // snapshots with pending local writes means only server-acknowledged remote
+                // state reaches the theme/dark-mode UI, so a local change can't bounce back
+                // and transiently revert a rapid follow-up change.
+                if (snapshot != null && snapshot.metadata.hasPendingWrites()) return@addSnapshotListener
+                trySend(snapshot?.data)
+            }
         awaitClose { listener.remove() }
     }
 

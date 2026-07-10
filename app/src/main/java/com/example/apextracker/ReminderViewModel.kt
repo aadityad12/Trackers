@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -92,35 +91,60 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
         activeReminders.first().forEach { scheduleIfNeeded(it) }
     }
 
+    /** Re-arms every active reminder — used after the exact-alarm permission is granted, so
+     *  alarms scheduled inexactly while it was denied become exact. */
+    fun rescheduleAll() {
+        viewModelScope.launch { rescheduleAllActive() }
+    }
+
+    // Reminder ids with a toggle currently being processed. Only touched on the main thread
+    // (Compose click handlers + viewModelScope), so no synchronization is needed. Guards against
+    // rapid double-taps launching two coroutines that both see the stale "incomplete" snapshot
+    // and insert two next occurrences for a recurring reminder.
+    private val togglesInFlight = mutableSetOf<Long>()
+
     fun toggleCompletion(reminder: Reminder) {
+        if (!togglesInFlight.add(reminder.id)) return
         viewModelScope.launch {
-            if (!reminder.isCompleted && reminder.recurrence != null) {
-                // Handle completion of a recurring reminder
-                handleRecurringCompletion(reminder)
-            } else {
-                val updated = reminder.copy(
-                    isCompleted = !reminder.isCompleted,
-                    cloudId = reminder.cloudId.ifEmpty { UUID.randomUUID().toString() },
-                    modifiedAt = System.currentTimeMillis()
-                )
-                reminderDao.updateReminder(updated)
-                scheduleIfNeeded(updated)
-                safeCloudCall(TAG, "toggle reminder completion") {
-                    firebaseManager.pushReminder(updated)
+            try {
+                // The UI hands us a possibly-stale snapshot; act on the row's current state.
+                val fresh = reminderDao.getReminderById(reminder.id) ?: return@launch
+                if (!fresh.isCompleted && fresh.recurrence != null) {
+                    // Handle completion of a recurring reminder
+                    handleRecurringCompletion(fresh)
+                } else {
+                    val updated = fresh.copy(
+                        isCompleted = !fresh.isCompleted,
+                        cloudId = fresh.cloudId.ifEmpty { UUID.randomUUID().toString() },
+                        modifiedAt = System.currentTimeMillis()
+                    )
+                    reminderDao.updateReminder(updated)
+                    scheduleIfNeeded(updated)
+                    safeCloudCall(TAG, "toggle reminder completion") {
+                        firebaseManager.pushReminder(updated)
+                    }
                 }
+            } finally {
+                togglesInFlight.remove(reminder.id)
             }
         }
     }
 
     private suspend fun handleRecurringCompletion(reminder: Reminder) {
-        val recurrence = reminder.recurrence ?: return
+        // Anchor monthly/yearly chains to the original day-of-month before advancing,
+        // so short-month clamping (Jan 31 → Feb 28) doesn't drift permanently.
+        val recurrence = reminder.recurrence?.withAnchorFrom(reminder.date) ?: return
+        // Skipped (missed) periods don't count toward AFTER_OCCURRENCES — only actual completions do.
         val nextOccurrencesCompleted = reminder.occurrencesCompleted + 1
-        
+
+        // Next occurrence on the grid after today: completing an overdue reminder catches the
+        // chain up to the future instead of inserting already-past occurrences one by one.
+        val nextDate = calculateNextOccurrenceAfter(reminder.date, recurrence, LocalDate.now())
+
         // Check if we should generate the next occurrence
         val shouldContinue = when (recurrence.endType) {
             RecurrenceEndType.NEVER -> true
             RecurrenceEndType.UNTIL_DATE -> {
-                val nextDate = calculateNextDate(reminder.date, recurrence)
                 nextDate != null && (recurrence.endDate == null || !nextDate.isAfter(recurrence.endDate))
             }
             RecurrenceEndType.AFTER_OCCURRENCES -> {
@@ -129,7 +153,6 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
         }
 
         if (shouldContinue) {
-            val nextDate = calculateNextDate(reminder.date, recurrence)
             if (nextDate != null) {
                 // Insert the next instance with its own cloud identity
                 // (parentId/parentCloudId are inherited via copy, keeping chain semantics)
@@ -137,6 +160,7 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
                     id = 0,
                     date = nextDate,
                     isCompleted = false,
+                    recurrence = recurrence,
                     occurrencesCompleted = nextOccurrencesCompleted,
                     cloudId = UUID.randomUUID().toString(),
                     modifiedAt = System.currentTimeMillis()
@@ -159,27 +183,6 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
         ReminderScheduler.cancel(getApplication(), reminder.id)
         safeCloudCall(TAG, "push completed recurring reminder") {
             firebaseManager.pushReminder(completed)
-        }
-    }
-
-    private fun calculateNextDate(currentDate: LocalDate, recurrence: Recurrence): LocalDate? {
-        return when (recurrence.frequency) {
-            RecurrenceFrequency.DAILY -> currentDate.plusDays(1)
-            RecurrenceFrequency.WEEKLY -> currentDate.plusWeeks(1)
-            RecurrenceFrequency.MONTHLY -> currentDate.plusMonths(1)
-            RecurrenceFrequency.YEARLY -> currentDate.plusYears(1)
-            RecurrenceFrequency.CUSTOM -> {
-                val days = recurrence.customDays ?: return null
-                if (days.isEmpty()) return null
-                
-                var next = currentDate.plusDays(1)
-                // Search for the next day of week in the set
-                repeat(7) {
-                    if (days.contains(next.dayOfWeek)) return next
-                    next = next.plusDays(1)
-                }
-                null
-            }
         }
     }
 

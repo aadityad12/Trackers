@@ -29,6 +29,9 @@ interface ReminderDao {
     @Query("SELECT * FROM reminders WHERE cloudId = :cloudId LIMIT 1")
     suspend fun getReminderByCloudId(cloudId: String): Reminder?
 
+    @Query("SELECT * FROM reminders WHERE id = :id LIMIT 1")
+    suspend fun getReminderById(id: Long): Reminder?
+
     @Query("SELECT * FROM reminders")
     suspend fun getAllRemindersOneShot(): List<Reminder>
 

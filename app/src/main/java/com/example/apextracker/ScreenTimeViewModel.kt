@@ -17,6 +17,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.util.Calendar
 
@@ -176,7 +177,9 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
         _aggregatedUsage.value = listOf(currentDevice) + otherDevices
     }
 
-    private fun calculateAppSpecificUsage(): Map<String, Long> {
+    // queryEvents is a blocking binder call and the event loop iterates the whole day's events;
+    // this used to run on Main from the 30s poll and the installedApps combine (jank/ANR risk).
+    private suspend fun calculateAppSpecificUsage(): Map<String, Long> = withContext(Dispatchers.IO) {
         val usageStatsManager = getApplication<Application>().getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val calendar = Calendar.getInstance()
         calendar.set(Calendar.HOUR_OF_DAY, 0)
@@ -210,7 +213,7 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
             }
         }
 
-        return aggregateForegroundDurations(events, startTime, endTime)
+        aggregateForegroundDurations(events, startTime, endTime)
     }
 
     private suspend fun saveTodayScreenTime(millis: Long) {

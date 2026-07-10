@@ -4,7 +4,9 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
@@ -32,14 +34,29 @@ object ReminderScheduler {
         }
     }
 
+    /** True when exact alarms are available (always below API 31, permission-gated from 31 on). */
+    fun canScheduleExactAlarms(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        return alarmManager.canScheduleExactAlarms()
+    }
+
+    /**
+     * Intent for the system screen where the user grants this app the exact-alarm special
+     * permission (API 31+; denied by default from API 33). Null below API 31 where no grant
+     * is needed.
+     */
+    fun requestExactAlarmIntent(context: Context): Intent? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
+        return Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+            .setData(Uri.fromParts("package", context.packageName, null))
+    }
+
     fun schedule(context: Context, reminder: Reminder, triggerAtMillis: Long) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val pendingIntent = buildPendingIntent(context, reminder.id, reminder.name, reminder.description)
 
-        val canScheduleExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
-            alarmManager.canScheduleExactAlarms()
-
-        if (canScheduleExact) {
+        if (canScheduleExactAlarms(context)) {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
         } else {
             alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)

@@ -158,8 +158,20 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
 
     fun deleteCategory(category: Category) {
         viewModelScope.launch {
+            // Detach referencing items first: a deleted category would otherwise leave their
+            // categoryId dangling, silently dropping those expenses out of per-category
+            // groupings. Nulling it makes them explicitly uncategorized, locally and in cloud.
+            val detached = budgetDao.getItemsByCategory(category.id).map {
+                it.copy(
+                    categoryId = null,
+                    cloudId = it.cloudId.ifEmpty { UUID.randomUUID().toString() },
+                    modifiedAt = System.currentTimeMillis()
+                )
+            }
+            detached.forEach { budgetDao.updateItem(it) }
             categoryDao.deleteCategory(category)
             safeCloudCall(TAG, "delete category") {
+                detached.forEach { firebaseManager.pushBudgetItem(it, categoryCloudId = null) }
                 firebaseManager.deleteCategory(category.cloudId)
             }
         }

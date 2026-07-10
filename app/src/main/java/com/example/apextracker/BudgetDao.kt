@@ -25,6 +25,9 @@ interface BudgetDao {
     @Query("SELECT * FROM budget_items WHERE cloudId = :cloudId LIMIT 1")
     suspend fun getItemByCloudId(cloudId: String): BudgetItem?
 
+    @Query("SELECT * FROM budget_items WHERE categoryId = :categoryId")
+    suspend fun getItemsByCategory(categoryId: Long): List<BudgetItem>
+
     @Query("SELECT * FROM budget_items")
     suspend fun getAllItemsOneShot(): List<BudgetItem>
 }
