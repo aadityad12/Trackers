@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 data class DayOverview(
@@ -66,11 +65,5 @@ class OverviewViewModel(application: Application) : AndroidViewModel(application
 
     fun selectDate(date: LocalDate) {
         _selectedDate.value = date
-    }
-
-    fun toggleReminder(reminder: Reminder) {
-        viewModelScope.launch {
-            reminderDao.updateReminder(reminder.copy(isCompleted = !reminder.isCompleted))
-        }
     }
 }

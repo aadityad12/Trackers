@@ -25,7 +25,13 @@ import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OverviewView(onBackToMenu: () -> Unit, viewModel: OverviewViewModel = viewModel()) {
+fun OverviewView(
+    onBackToMenu: () -> Unit,
+    viewModel: OverviewViewModel = viewModel(),
+    // Reminder toggles route through ReminderViewModel so completing here behaves exactly like
+    // the Reminders screen: alarm cancel/reschedule, recurrence advancement, and cloud push.
+    reminderViewModel: ReminderViewModel = viewModel()
+) {
     val selectedDate by viewModel.selectedDate.collectAsState()
     val overview by viewModel.dayOverview.collectAsState()
     var showCalendar by remember { mutableStateOf(false) }
@@ -108,19 +114,19 @@ fun OverviewView(onBackToMenu: () -> Unit, viewModel: OverviewViewModel = viewMo
                         
                         if (data.missedReminders.isNotEmpty()) {
                             items(data.missedReminders) { reminder ->
-                                ReminderSummaryCard(reminder, status = "Missed", onToggle = { viewModel.toggleReminder(it) })
+                                ReminderSummaryCard(reminder, status = "Missed", onToggle = { reminderViewModel.toggleCompletion(it) })
                             }
                         }
                         
                         if (data.pendingReminders.isNotEmpty()) {
                             items(data.pendingReminders) { reminder ->
-                                ReminderSummaryCard(reminder, status = "Pending", onToggle = { viewModel.toggleReminder(it) })
+                                ReminderSummaryCard(reminder, status = "Pending", onToggle = { reminderViewModel.toggleCompletion(it) })
                             }
                         }
 
                         if (data.completedReminders.isNotEmpty()) {
                             items(data.completedReminders) { reminder ->
-                                ReminderSummaryCard(reminder, status = "Completed", onToggle = { viewModel.toggleReminder(it) })
+                                ReminderSummaryCard(reminder, status = "Completed", onToggle = { reminderViewModel.toggleCompletion(it) })
                             }
                         }
 
