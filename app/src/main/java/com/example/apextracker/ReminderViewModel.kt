@@ -91,22 +91,35 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
         activeReminders.first().forEach { scheduleIfNeeded(it) }
     }
 
+    // Reminder ids with a toggle currently being processed. Only touched on the main thread
+    // (Compose click handlers + viewModelScope), so no synchronization is needed. Guards against
+    // rapid double-taps launching two coroutines that both see the stale "incomplete" snapshot
+    // and insert two next occurrences for a recurring reminder.
+    private val togglesInFlight = mutableSetOf<Long>()
+
     fun toggleCompletion(reminder: Reminder) {
+        if (!togglesInFlight.add(reminder.id)) return
         viewModelScope.launch {
-            if (!reminder.isCompleted && reminder.recurrence != null) {
-                // Handle completion of a recurring reminder
-                handleRecurringCompletion(reminder)
-            } else {
-                val updated = reminder.copy(
-                    isCompleted = !reminder.isCompleted,
-                    cloudId = reminder.cloudId.ifEmpty { UUID.randomUUID().toString() },
-                    modifiedAt = System.currentTimeMillis()
-                )
-                reminderDao.updateReminder(updated)
-                scheduleIfNeeded(updated)
-                safeCloudCall(TAG, "toggle reminder completion") {
-                    firebaseManager.pushReminder(updated)
+            try {
+                // The UI hands us a possibly-stale snapshot; act on the row's current state.
+                val fresh = reminderDao.getReminderById(reminder.id) ?: return@launch
+                if (!fresh.isCompleted && fresh.recurrence != null) {
+                    // Handle completion of a recurring reminder
+                    handleRecurringCompletion(fresh)
+                } else {
+                    val updated = fresh.copy(
+                        isCompleted = !fresh.isCompleted,
+                        cloudId = fresh.cloudId.ifEmpty { UUID.randomUUID().toString() },
+                        modifiedAt = System.currentTimeMillis()
+                    )
+                    reminderDao.updateReminder(updated)
+                    scheduleIfNeeded(updated)
+                    safeCloudCall(TAG, "toggle reminder completion") {
+                        firebaseManager.pushReminder(updated)
+                    }
                 }
+            } finally {
+                togglesInFlight.remove(reminder.id)
             }
         }
     }
