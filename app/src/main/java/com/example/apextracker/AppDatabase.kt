@@ -6,7 +6,12 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [BudgetItem::class, Category::class, Subscription::class, StudySession::class, ScreenTimeSession::class, ExcludedApp::class, Reminder::class, Note::class], version = 11, exportSchema = false)
+// MIGRATION POLICY (Issue #17): fallbackToDestructiveMigration() below DROPS EVERY
+// TABLE on a version mismatch. Signed-in users get their data re-pulled from
+// Firestore by the cold-start initial sync, but signed-out users lose everything.
+// Any future version bump MUST ship a real Migration object. Schema JSONs are
+// exported to app/schemas/ (checked in) so migrations can be written and tested.
+@Database(entities = [BudgetItem::class, Category::class, Subscription::class, StudySession::class, ScreenTimeSession::class, ExcludedApp::class, Reminder::class, Note::class], version = 11, exportSchema = true)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun budgetDao(): BudgetDao
