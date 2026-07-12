@@ -20,6 +20,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -71,7 +72,7 @@ fun NoteView(onBackToMenu: () -> Unit, viewModel: NoteViewModel = viewModel()) {
         Scaffold(
             topBar = {
                 CenterAlignedTopAppBar(
-                    title = { Text("Notes", fontWeight = FontWeight.Bold) },
+                    title = { Text(stringResource(R.string.notes_title), fontWeight = FontWeight.Bold) },
                     navigationIcon = {
                         IconButton(onClick = onBackToMenu) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -95,7 +96,7 @@ fun NoteView(onBackToMenu: () -> Unit, viewModel: NoteViewModel = viewModel()) {
         ) { innerPadding ->
             if (activeNotes.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
-                    Text("No notes yet", color = MaterialTheme.colorScheme.outline)
+                    Text(stringResource(R.string.notes_empty), color = MaterialTheme.colorScheme.outline)
                 }
             } else {
                 LazyColumn(
@@ -146,7 +147,7 @@ fun NoteCard(note: Note, onClick: () -> Unit, onDelete: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Modified: ${note.modifiedAt.format(DateTimeFormatter.ofPattern("MMM dd, HH:mm"))}",
+                text = stringResource(R.string.notes_modified_prefix, note.modifiedAt.format(DateTimeFormatter.ofPattern("MMM dd, HH:mm"))),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline
             )
@@ -173,7 +174,7 @@ fun NoteEditor(note: Note, onDismiss: () -> Unit, onSave: (String, String) -> Un
                 },
                 actions = {
                     TextButton(onClick = { onSave(title, contentValue.text) }) {
-                        Text("Save", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.action_save), fontWeight = FontWeight.Bold)
                     }
                 }
             )
@@ -183,7 +184,7 @@ fun NoteEditor(note: Note, onDismiss: () -> Unit, onSave: (String, String) -> Un
             TextField(
                 value = title,
                 onValueChange = { title = it },
-                placeholder = { Text("Title") },
+                placeholder = { Text(stringResource(R.string.notes_placeholder_title)) },
                 modifier = Modifier.fillMaxWidth(),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
@@ -199,7 +200,7 @@ fun NoteEditor(note: Note, onDismiss: () -> Unit, onSave: (String, String) -> Un
                 onValueChange = { newValue ->
                     contentValue = handleNoteContentChange(newValue, contentValue)
                 },
-                placeholder = { Text("Start typing...") },
+                placeholder = { Text(stringResource(R.string.notes_placeholder_content)) },
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
@@ -347,7 +348,7 @@ fun RecycleBinView(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Recycle Bin") },
+                title = { Text(stringResource(R.string.notes_recycle_bin)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -358,7 +359,7 @@ fun RecycleBinView(
     ) { innerPadding ->
         if (notes.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
-                Text("Recycle bin is empty", color = MaterialTheme.colorScheme.outline)
+                Text(stringResource(R.string.notes_recycle_empty), color = MaterialTheme.colorScheme.outline)
             }
         } else {
             LazyColumn(
@@ -379,7 +380,7 @@ fun RecycleBinView(
                                     modifier = Modifier.weight(1f),
                                     contentPadding = PaddingValues(0.dp)
                                 ) {
-                                    Text("Restore", fontSize = 12.sp)
+                                    Text(stringResource(R.string.notes_restore), fontSize = 12.sp)
                                 }
                                 OutlinedButton(
                                     onClick = { onDeletePermanently(note) },
@@ -387,7 +388,7 @@ fun RecycleBinView(
                                     contentPadding = PaddingValues(0.dp),
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                                 ) {
-                                    Text("Delete Forever", fontSize = 12.sp)
+                                    Text(stringResource(R.string.notes_delete_forever), fontSize = 12.sp)
                                 }
                             }
                         }
@@ -405,12 +406,12 @@ fun NoteSettingsDialog(viewModel: NoteViewModel, onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Note Settings") },
+        title = { Text(stringResource(R.string.notes_settings_title)) },
         text = {
             Column {
-                Text("Recycle Bin Retention")
+                Text(stringResource(R.string.notes_retention))
                 Text(
-                    "Notes will be permanently deleted after ${sliderValue.toInt()} hours.",
+                    stringResource(R.string.notes_deleted_after, sliderValue.toInt()),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline
                 )
@@ -422,9 +423,9 @@ fun NoteSettingsDialog(viewModel: NoteViewModel, onDismiss: () -> Unit) {
                     steps = 167
                 )
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("1h", style = MaterialTheme.typography.labelSmall)
-                    Text("72h (Default)", style = MaterialTheme.typography.labelSmall)
-                    Text("168h", style = MaterialTheme.typography.labelSmall)
+                    Text(stringResource(R.string.notes_retention_1h), style = MaterialTheme.typography.labelSmall)
+                    Text(stringResource(R.string.notes_retention_72h), style = MaterialTheme.typography.labelSmall)
+                    Text(stringResource(R.string.notes_retention_168h), style = MaterialTheme.typography.labelSmall)
                 }
             }
         },
@@ -433,12 +434,12 @@ fun NoteSettingsDialog(viewModel: NoteViewModel, onDismiss: () -> Unit) {
                 viewModel.setRetentionHours(sliderValue.toInt())
                 onDismiss()
             }) {
-                Text("Save")
+                Text(stringResource(R.string.action_save))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.action_cancel))
             }
         }
     )

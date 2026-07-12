@@ -22,8 +22,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -54,6 +56,7 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
     var selectedCompletedIds by remember { mutableStateOf(setOf<Long>()) }
     var isSelectionMode by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
 
     // Exact-alarm permission is denied by default on API 33+; without it reminders fire
@@ -87,9 +90,9 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
             CenterAlignedTopAppBar(
                 title = { 
                     if (isSelectionMode) {
-                        Text("${selectedCompletedIds.size} SELECTED", style = MaterialTheme.typography.titleSmall)
+                        Text(stringResource(R.string.reminders_selected_count, selectedCompletedIds.size), style = MaterialTheme.typography.titleSmall)
                     } else {
-                        Text("TASK LIST", 
+                        Text(stringResource(R.string.reminders_title), 
                             style = MaterialTheme.typography.titleSmall
                         )
                     }
@@ -165,12 +168,12 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    "Reminders may be late",
+                                    stringResource(R.string.reminders_late_banner_title),
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    "Allow exact alarms so notifications fire on time.",
+                                    stringResource(R.string.reminders_late_banner_text),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -178,7 +181,7 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                             TextButton(onClick = {
                                 ReminderScheduler.requestExactAlarmIntent(context)?.let { context.startActivity(it) }
                             }) {
-                                Text("ALLOW", fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.reminders_allow), fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -187,7 +190,7 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
 
             item {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text("ACTIVE", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.reminders_active), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             }
 
             if (sortedActiveReminders.isEmpty()) {
@@ -198,7 +201,7 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Text("All tasks completed", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+                            Text(stringResource(R.string.reminders_all_done), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
                         }
                     }
                 }
@@ -221,13 +224,13 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("COMPLETED", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.outline)
+                        Text(stringResource(R.string.reminders_completed), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.outline)
                         
                         TextButton(
                             onClick = { showCompletedReminders = !showCompletedReminders },
                             contentPadding = PaddingValues(0.dp)
                         ) {
-                            Text(if (showCompletedReminders) "HIDE" else "SHOW (${completedReminders.size})", style = MaterialTheme.typography.labelSmall)
+                            Text(if (showCompletedReminders) stringResource(R.string.reminders_hide) else stringResource(R.string.reminders_show_count, completedReminders.size), style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
@@ -265,7 +268,7 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                             ) {
-                                Text("Clear All Completed", style = MaterialTheme.typography.labelSmall)
+                                Text(stringResource(R.string.reminders_clear_completed), style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }
@@ -275,7 +278,7 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
 
         if (showAddDialog) {
             ReminderEditDialog(
-                title = "New Reminder",
+                title = stringResource(R.string.reminders_new_title),
                 onDismiss = { showAddDialog = false },
                 onConfirm = { name, date, time, description, recurrence ->
                     viewModel.addReminder(name, date, time, description, recurrence)
@@ -286,7 +289,7 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
 
         if (reminderToEdit != null) {
             ReminderEditDialog(
-                title = "Edit Reminder",
+                title = stringResource(R.string.reminders_edit_title),
                 initialName = reminderToEdit!!.name,
                 initialDescription = reminderToEdit!!.description ?: "",
                 initialDate = reminderToEdit!!.date,
@@ -309,8 +312,8 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                     reminderToEdit = null
                     scope.launch {
                         val result = snackbarHostState.showSnackbar(
-                            message = "Deleted \"${deleted.name}\"",
-                            actionLabel = "Undo",
+                            message = resources.getString(R.string.deleted_quoted, deleted.name),
+                            actionLabel = resources.getString(R.string.action_undo),
                             duration = SnackbarDuration.Short
                         )
                         // The cloud delete has already been pushed; undoing re-pushes
@@ -338,8 +341,8 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
         if (showClearAllConfirm) {
             AlertDialog(
                 onDismissRequest = { showClearAllConfirm = false },
-                title = { Text("Clear Completed?") },
-                text = { Text("Permanently delete all completed tasks?") },
+                title = { Text(stringResource(R.string.reminders_clear_confirm_title)) },
+                text = { Text(stringResource(R.string.reminders_clear_confirm_text)) },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -348,12 +351,12 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
-                        Text("Delete")
+                        Text(stringResource(R.string.action_delete))
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { showClearAllConfirm = false }) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.action_cancel))
                     }
                 }
             )
@@ -391,13 +394,13 @@ fun ReminderEditDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
+                    label = { Text(stringResource(R.string.label_name)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
-                    label = { Text("Description (Optional)") },
+                    label = { Text(stringResource(R.string.label_description_optional)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 
@@ -428,7 +431,7 @@ fun ReminderEditDialog(
                 
                 if (time != null) {
                     TextButton(onClick = { time = null }) {
-                        Text("Set as All Day")
+                        Text(stringResource(R.string.reminders_set_all_day))
                     }
                 }
 
@@ -439,14 +442,14 @@ fun ReminderEditDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Recurrence: ${recurrence?.frequency?.name ?: "None"}", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.reminders_recurrence_prefix, recurrence?.frequency?.name ?: stringResource(R.string.reminders_recurrence_none)), style = MaterialTheme.typography.bodyMedium)
                     TextButton(onClick = { showRecurrencePicker = true }) {
                         Text(if (recurrence == null) "Set" else "Change")
                     }
                 }
                 if (recurrence != null) {
                     TextButton(onClick = { recurrence = null }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
-                        Text("Remove Recurrence")
+                        Text(stringResource(R.string.reminders_remove_recurrence))
                     }
                 }
             }
@@ -456,18 +459,18 @@ fun ReminderEditDialog(
                 onClick = { if (name.isNotBlank()) onConfirm(name, date, time, description, recurrence) },
                 enabled = name.isNotBlank()
             ) {
-                Text("Save")
+                Text(stringResource(R.string.action_save))
             }
         },
         dismissButton = {
             Row {
                 if (onDelete != null) {
                     TextButton(onClick = onDelete, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
-                        Text("Delete")
+                        Text(stringResource(R.string.action_delete))
                     }
                 }
                 TextButton(onClick = onDismiss) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         }
@@ -499,16 +502,16 @@ fun ReminderSettingsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Reminder Settings") },
+        title = { Text(stringResource(R.string.reminders_settings_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Enable Notifications", modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.reminders_enable_notifications), modifier = Modifier.weight(1f))
                     Switch(checked = enabled, onCheckedChange = onToggleEnabled)
                 }
                 
                 Column {
-                    Text("All-day reminders time", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.reminders_all_day_time), style = MaterialTheme.typography.labelMedium)
                     Button(
                         onClick = {
                             TimePickerDialog(context, { _, hour, minute ->
@@ -522,20 +525,20 @@ fun ReminderSettingsDialog(
                 }
 
                 Column {
-                    Text("Specific time offset (minutes)", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.reminders_offset_label), style = MaterialTheme.typography.labelMedium)
                     Slider(
                         value = offset.toFloat(),
                         onValueChange = { onSetOffset(it.toInt()) },
                         valueRange = 0f..120f,
                         steps = 23
                     )
-                    Text("${offset} minutes before", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.reminders_minutes_before, offset), style = MaterialTheme.typography.bodySmall)
                 }
             }
         },
         confirmButton = {
             Button(onClick = onDismiss) {
-                Text("Close")
+                Text(stringResource(R.string.action_close))
             }
         }
     )
@@ -635,7 +638,7 @@ fun ReminderItemModern(
                     if (isOverdue && !reminder.isCompleted) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "OVERDUE",
+                            text = stringResource(R.string.reminders_overdue),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Black,
                             color = MaterialTheme.colorScheme.error

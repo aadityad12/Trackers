@@ -32,6 +32,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -53,6 +55,7 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
     var showCalendar by rememberSaveable { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val resources = LocalResources.current
     // Selected month is shared between the list and calendar views so toggling
     // doesn't jump the user to a different month.
     var selectedMonth by rememberSaveable(stateSaver = YearMonthSaver) { mutableStateOf(YearMonth.now()) }
@@ -61,7 +64,7 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
         topBar = {
             CenterAlignedTopAppBar(
                 title = { 
-                    Text("BUDGET FLOW", 
+                    Text(stringResource(R.string.budget_title), 
                         style = MaterialTheme.typography.titleSmall
                     )
                 },
@@ -125,7 +128,7 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
 
         if (showAddDialog) {
             BudgetItemDialog(
-                title = "Add Budget Item",
+                title = stringResource(R.string.budget_add_item_title),
                 categories = categories,
                 onDismiss = { showAddDialog = false },
                 onConfirm = { title, amount, description, date, categoryId ->
@@ -137,7 +140,7 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
 
         if (itemToEdit != null) {
             BudgetItemDialog(
-                title = "Edit Budget Item",
+                title = stringResource(R.string.budget_edit_item_title),
                 initialTitle = itemToEdit!!.title,
                 initialAmount = itemToEdit!!.amount.toString(),
                 initialDescription = itemToEdit!!.description ?: "",
@@ -161,8 +164,8 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
                     itemToEdit = null
                     scope.launch {
                         val result = snackbarHostState.showSnackbar(
-                            message = "Deleted \"${deleted.title}\"",
-                            actionLabel = "Undo",
+                            message = resources.getString(R.string.deleted_quoted, deleted.title),
+                            actionLabel = resources.getString(R.string.action_undo),
                             duration = SnackbarDuration.Short
                         )
                         // The cloud delete has already been pushed; undoing re-pushes
@@ -235,7 +238,7 @@ fun BudgetOverview(
                 
                 item { 
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("TRANSACTIONS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    Text(stringResource(R.string.budget_transactions), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 }
                 
                 items(pendingSubs.sortedBy { it.renewalDate }) { sub ->
@@ -261,7 +264,7 @@ fun BudgetOverview(
             } else {
                 item {
                     Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                        Text("No data for this period", color = MaterialTheme.colorScheme.outline)
+                        Text(stringResource(R.string.budget_no_data), color = MaterialTheme.colorScheme.outline)
                     }
                 }
             }
@@ -320,7 +323,7 @@ fun SummaryCardModern(
             ) {
                 Column {
                     Text(
-                        text = "Total Monthly Spend",
+                        text = stringResource(R.string.budget_total_monthly_spend),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                     )
@@ -432,7 +435,7 @@ fun ExpensePieChartModern(
                 }
             }
             if (sortedData.size > 4) {
-                Text("+ ${sortedData.size - 4} more", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f))
+                Text(stringResource(R.string.budget_plus_n_more, sortedData.size - 4), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f))
             }
         }
     }

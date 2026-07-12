@@ -1,4 +1,148 @@
 <resources>
     <string name="app_name">ApexTracker</string>
     <string name="default_web_client_id">1093081201704-d6udjaapaslivieabf8397o81ul1qod4.apps.googleusercontent.com</string>
+
+    <!-- Shared actions -->
+    <string name="action_save">Save</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_close">Close</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_done">Done</string>
+    <string name="action_undo">Undo</string>
+    <string name="action_reset">Reset</string>
+    <string name="deleted_quoted">Deleted \"%1$s\"</string>
+
+    <!-- Main menu / settings sheet -->
+    <string name="app_title_caps">APEX TRACKER</string>
+    <string name="menu_settings">Settings</string>
+    <string name="menu_account">Account</string>
+    <string name="menu_appearance">Appearance</string>
+    <string name="menu_color_accent">Color Accent</string>
+    <string name="menu_dark_mode">Dark Mode</string>
+    <string name="sign_in_google">Sign in with Google</string>
+    <string name="user_fallback">User</string>
+    <string name="module_overview">Overview</string>
+    <string name="module_overview_desc">Day at a glance</string>
+    <string name="module_budget">Budget</string>
+    <string name="module_budget_desc">Expenses</string>
+    <string name="module_study">Study</string>
+    <string name="module_study_desc">Stopwatch</string>
+    <string name="module_screen">Screen</string>
+    <string name="module_screen_desc">Usage</string>
+    <string name="module_tasks">Tasks</string>
+    <string name="module_tasks_desc">Reminders</string>
+    <string name="module_notes">Notes</string>
+    <string name="module_notes_desc">Ideas</string>
+
+    <!-- Overview -->
+    <string name="overview_title">DAILY INSIGHTS</string>
+    <string name="overview_tasks">TASKS</string>
+    <string name="overview_missed">MISSED</string>
+    <string name="overview_all_clear">All clear for today</string>
+    <string name="overview_stat_spent">Spent</string>
+    <string name="overview_stat_study">Study</string>
+    <string name="overview_stat_screen">Screen</string>
+
+    <!-- Budget -->
+    <string name="budget_title">BUDGET FLOW</string>
+    <string name="budget_transactions">TRANSACTIONS</string>
+    <string name="budget_no_data">No data for this period</string>
+    <string name="budget_total_monthly_spend">Total Monthly Spend</string>
+    <string name="budget_plus_n_more">+ %1$d more</string>
+    <string name="budget_add_item_title">Add Budget Item</string>
+    <string name="budget_edit_item_title">Edit Budget Item</string>
+    <string name="budget_date_prefix">Date: %1$s</string>
+    <string name="budget_no_category">No Category</string>
+    <string name="budget_create_category">Create New Category</string>
+    <string name="budget_new_category">New Category</string>
+    <string name="budget_edit_category">Edit Category</string>
+    <string name="budget_select_color">Select Color:</string>
+    <string name="budget_add_subscription">Add New Subscription</string>
+    <string name="budget_new_subscription">New Subscription</string>
+    <string name="budget_edit_subscription">Edit Subscription</string>
+    <string name="budget_renews_prefix">Renews: %1$s</string>
+    <string name="budget_breakdown_title">Breakdown for %1$s</string>
+    <string name="budget_total">Total</string>
+    <string name="label_title">Title</string>
+    <string name="label_amount">Amount</string>
+    <string name="label_name">Name</string>
+    <string name="label_category">Category</string>
+    <string name="label_category_name">Category Name</string>
+    <string name="label_description_optional">Description (Optional)</string>
+    <string name="label_notes_optional">Notes (Optional)</string>
+
+    <!-- Study -->
+    <string name="study_title">STUDY SESSION</string>
+    <string name="study_reset_confirm_title">Reset Timer?</string>
+    <string name="study_reset_confirm_text">Reset today\'s timer to 0:00? This can\'t be undone.</string>
+    <string name="study_recent_history">Recent History</string>
+    <string name="study_no_history">No history yet</string>
+    <string name="study_focusing">FOCUSING</string>
+    <string name="study_ready">READY</string>
+
+    <!-- Screen time -->
+    <string name="screen_time_title">Screen Time</string>
+    <string name="screen_device_breakdown">Device Breakdown</string>
+    <string name="screen_todays_apps">Today\'s Apps</string>
+    <string name="screen_daily_history">Daily History</string>
+    <string name="screen_no_usage">No app usage detected</string>
+    <string name="screen_no_history">No history recorded yet</string>
+    <string name="screen_total_apex_time">Total Apex Time</string>
+    <string name="screen_connected_devices">%1$d Connected Devices</string>
+    <string name="screen_tracking_prefs">Tracking Preferences</string>
+    <string name="screen_tracking_prefs_desc">Toggle off apps you don\'t want to include in your total screen time.</string>
+    <string name="screen_permission_title">Permission Required</string>
+    <string name="screen_permission_text">Apex Tracker needs \'Usage Access\' permission to track your screen time. This information is only stored on your device.</string>
+    <string name="screen_grant_permission">Grant Permission</string>
+
+    <!-- Reminders -->
+    <string name="reminders_title">TASK LIST</string>
+    <string name="reminders_selected_count">%1$d SELECTED</string>
+    <string name="reminders_active">ACTIVE</string>
+    <string name="reminders_completed">COMPLETED</string>
+    <string name="reminders_all_done">All tasks completed</string>
+    <string name="reminders_late_banner_title">Reminders may be late</string>
+    <string name="reminders_late_banner_text">Allow exact alarms so notifications fire on time.</string>
+    <string name="reminders_allow">ALLOW</string>
+    <string name="reminders_hide">HIDE</string>
+    <string name="reminders_show_count">SHOW (%1$d)</string>
+    <string name="reminders_clear_completed">Clear All Completed</string>
+    <string name="reminders_clear_confirm_title">Clear Completed?</string>
+    <string name="reminders_clear_confirm_text">Permanently delete all completed tasks?</string>
+    <string name="reminders_new_title">New Reminder</string>
+    <string name="reminders_edit_title">Edit Reminder</string>
+    <string name="reminders_set_all_day">Set as All Day</string>
+    <string name="reminders_recurrence_prefix">Recurrence: %1$s</string>
+    <string name="reminders_recurrence_none">None</string>
+    <string name="reminders_remove_recurrence">Remove Recurrence</string>
+    <string name="reminders_overdue">OVERDUE</string>
+    <string name="reminders_settings_title">Reminder Settings</string>
+    <string name="reminders_enable_notifications">Enable Notifications</string>
+    <string name="reminders_all_day_time">All-day reminders time</string>
+    <string name="reminders_offset_label">Specific time offset (minutes)</string>
+    <string name="reminders_minutes_before">%1$d minutes before</string>
+
+    <!-- Recurrence picker -->
+    <string name="recurrence_dialog_title">Set Recurrence</string>
+    <string name="recurrence_frequency">Frequency</string>
+    <string name="recurrence_repeat_on">Repeat on:</string>
+    <string name="recurrence_ends">Ends</string>
+    <string name="recurrence_after_occurrences">After Occurrences</string>
+
+    <!-- Notes -->
+    <string name="notes_title">Notes</string>
+    <string name="notes_empty">No notes yet</string>
+    <string name="notes_placeholder_title">Title</string>
+    <string name="notes_placeholder_content">Start typing...</string>
+    <string name="notes_recycle_bin">Recycle Bin</string>
+    <string name="notes_recycle_empty">Recycle bin is empty</string>
+    <string name="notes_restore">Restore</string>
+    <string name="notes_delete_forever">Delete Forever</string>
+    <string name="notes_settings_title">Note Settings</string>
+    <string name="notes_retention">Recycle Bin Retention</string>
+    <string name="notes_retention_1h">1h</string>
+    <string name="notes_retention_72h">72h (Default)</string>
+    <string name="notes_retention_168h">168h</string>
+    <string name="notes_deleted_after">Notes will be permanently deleted after %1$d hours.</string>
+    <string name="notes_modified_prefix">Modified: %1$s</string>
 </resources>

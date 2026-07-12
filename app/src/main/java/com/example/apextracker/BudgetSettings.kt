@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -80,7 +81,7 @@ fun BudgetSettingsDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Done")
+                Text(stringResource(R.string.action_done))
             }
         }
     )
@@ -116,7 +117,7 @@ fun CategoriesView(
 
     Column(modifier = Modifier.fillMaxSize()) {
         Button(onClick = { showAddDialog = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("Create New Category")
+            Text(stringResource(R.string.budget_create_category))
         }
         Spacer(modifier = Modifier.height(8.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -131,7 +132,7 @@ fun CategoriesView(
 
     if (showAddDialog) {
         CategoryDialog(
-            title = "New Category",
+            title = stringResource(R.string.budget_new_category),
             onDismiss = { showAddDialog = false },
             onConfirm = { name, color -> onAdd(name, color) }
         )
@@ -139,7 +140,7 @@ fun CategoriesView(
 
     if (categoryToEdit != null) {
         CategoryDialog(
-            title = "Edit Category",
+            title = stringResource(R.string.budget_edit_category),
             initialName = categoryToEdit!!.name,
             initialColor = categoryToEdit!!.colorHex,
             onDismiss = { categoryToEdit = null },
@@ -212,10 +213,10 @@ fun CategoryDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Category Name") },
+                    label = { Text(stringResource(R.string.label_category_name)) },
                     modifier = Modifier.fillMaxWidth()
                 )
-                Text("Select Color:")
+                Text(stringResource(R.string.budget_select_color))
                 ColorGrid(colors, selectedColor) { selectedColor = it }
             }
         },
@@ -224,7 +225,7 @@ fun CategoryDialog(
                 Text(if (initialName.isEmpty()) "Create" else "Save")
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } }
     )
 }
 
@@ -260,7 +261,7 @@ fun SubscriptionsView(viewModel: BudgetViewModel) {
 
     Column(modifier = Modifier.fillMaxSize()) {
         Button(onClick = { showAddDialog = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("Add New Subscription")
+            Text(stringResource(R.string.budget_add_subscription))
         }
         Spacer(modifier = Modifier.height(8.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -272,7 +273,7 @@ fun SubscriptionsView(viewModel: BudgetViewModel) {
 
     if (showAddDialog) {
         SubscriptionDialog(
-            title = "New Subscription",
+            title = stringResource(R.string.budget_new_subscription),
             onDismiss = { showAddDialog = false },
             onConfirm = { name, amount, date, notes ->
                 viewModel.addSubscription(name, amount, date, notes)
@@ -282,7 +283,7 @@ fun SubscriptionsView(viewModel: BudgetViewModel) {
 
     if (subToEdit != null) {
         SubscriptionDialog(
-            title = "Edit Subscription",
+            title = stringResource(R.string.budget_edit_subscription),
             initialName = subToEdit!!.name,
             initialAmount = subToEdit!!.amount.toString(),
             initialDate = subToEdit!!.renewalDate,
@@ -313,7 +314,7 @@ fun SubscriptionItem(subscription: Subscription, onClick: () -> Unit) {
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(subscription.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                Text("Renews: ${subscription.renewalDate.format(DateTimeFormatter.ofPattern("MMM dd"))}", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.budget_renews_prefix, subscription.renewalDate.format(DateTimeFormatter.ofPattern("MMM dd"))), style = MaterialTheme.typography.bodySmall)
             }
             Text(formatCurrency(subscription.amount), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
         }
@@ -355,17 +356,17 @@ fun SubscriptionDialog(
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = amount, onValueChange = { if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d{0,2}$"))) amount = it }, label = { Text("Amount") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(stringResource(R.string.label_name)) }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = amount, onValueChange = { if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d{0,2}$"))) amount = it }, label = { Text(stringResource(R.string.label_amount)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
                 TextButton(onClick = { datePickerDialog.show() }, modifier = Modifier.fillMaxWidth()) { Text("Next Renewal: ${date.format(DateTimeFormatter.ISO_LOCAL_DATE)}") }
-                OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Notes (Optional)") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text(stringResource(R.string.label_notes_optional)) }, modifier = Modifier.fillMaxWidth())
             }
         },
         confirmButton = {
             Button(onClick = { if (name.isNotBlank()) onConfirm(name, amount.toDoubleOrNull() ?: 0.0, date, notes.ifBlank { null }); onDismiss() }) {
-                Text("Save")
+                Text(stringResource(R.string.action_save))
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } }
     )
 }

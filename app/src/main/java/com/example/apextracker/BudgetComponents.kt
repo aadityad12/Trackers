@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -150,17 +151,17 @@ fun BudgetItemDialog(
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(value = itemTitle, onValueChange = { itemTitle = it }, label = { Text("Title") }, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
-                OutlinedTextField(value = amount, onValueChange = { if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d{0,2}$"))) amount = it }, label = { Text("Amount") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
+                OutlinedTextField(value = itemTitle, onValueChange = { itemTitle = it }, label = { Text(stringResource(R.string.label_title)) }, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
+                OutlinedTextField(value = amount, onValueChange = { if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d{0,2}$"))) amount = it }, label = { Text(stringResource(R.string.label_amount)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
                 CategoryDropdown(categories, selectedCategory, expanded, onExpandedChange = { expanded = it }, onCategorySelected = { selectedCategory = it; expanded = false })
-                OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description (Optional)") }, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
+                OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text(stringResource(R.string.label_description_optional)) }, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
                 Button(
                     onClick = { datePickerDialog.show() }, 
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.filledTonalButtonColors(),
                     shape = MaterialTheme.shapes.medium
                 ) { 
-                    Text("Date: ${date.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))}") 
+                    Text(stringResource(R.string.budget_date_prefix, date.format(DateTimeFormatter.ofPattern("MMM dd, yyyy")))) 
                 }
             }
         },
@@ -169,12 +170,12 @@ fun BudgetItemDialog(
                 onClick = { if (itemTitle.isNotBlank()) onConfirm(itemTitle, amount.toDoubleOrNull() ?: 0.0, description.ifBlank { null }, date, selectedCategory?.id) },
                 shape = MaterialTheme.shapes.medium
             ) { 
-                Text("Save") 
+                Text(stringResource(R.string.action_save)) 
             } 
         },
         dismissButton = { 
             TextButton(onClick = onDismiss) { 
-                Text("Cancel") 
+                Text(stringResource(R.string.action_cancel)) 
             } 
         },
         shape = MaterialTheme.shapes.extraLarge
@@ -189,13 +190,13 @@ fun CategoryDropdown(categories: List<Category>, selectedCategory: Category?, ex
             value = selectedCategory?.name ?: "No Category", 
             onValueChange = {}, 
             readOnly = true, 
-            label = { Text("Category") }, 
+            label = { Text(stringResource(R.string.label_category)) }, 
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) }, 
             modifier = Modifier.menuAnchor().fillMaxWidth(),
             shape = MaterialTheme.shapes.medium
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { onExpandedChange(false) }) {
-            DropdownMenuItem(text = { Text("No Category") }, onClick = { onCategorySelected(null) })
+            DropdownMenuItem(text = { Text(stringResource(R.string.budget_no_category)) }, onClick = { onCategorySelected(null) })
             categories.forEach { category ->
                 DropdownMenuItem(
                     text = {

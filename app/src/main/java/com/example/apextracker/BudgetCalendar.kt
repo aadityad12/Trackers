@@ -40,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.LocalDate
@@ -147,7 +148,7 @@ fun CalendarDayCard(day: Int, date: LocalDate, totalSpent: Double, onClick: () -
 fun DayBreakdownDialog(date: LocalDate, items: List<BudgetItem>, categories: List<Category>, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Breakdown for ${date.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))}") },
+        title = { Text(stringResource(R.string.budget_breakdown_title, date.format(DateTimeFormatter.ofPattern("MMM dd, yyyy")))) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items.forEach { item ->
@@ -162,7 +163,7 @@ fun DayBreakdownDialog(date: LocalDate, items: List<BudgetItem>, categories: Lis
                 TotalRow(items.sumOf { it.amount })
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) } }
     )
 }
 
@@ -186,7 +187,7 @@ fun DayBreakdownItem(item: BudgetItem, category: Category?) {
 @Composable
 fun TotalRow(total: Double) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(text = "Total", style = MaterialTheme.typography.titleMedium)
+        Text(text = stringResource(R.string.budget_total), style = MaterialTheme.typography.titleMedium)
         Text(text = formatCurrency(total), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
     }
 }

@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
@@ -43,7 +44,7 @@ fun ScreenTimeTrackerView(onBackToMenu: () -> Unit, viewModel: ScreenTimeViewMod
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Screen Time") },
+                title = { Text(stringResource(R.string.screen_time_title)) },
                 navigationIcon = {
                     IconButton(onClick = if (showSettings) { { showSettings = false } } else onBackToMenu) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -82,7 +83,7 @@ fun ScreenTimeTrackerView(onBackToMenu: () -> Unit, viewModel: ScreenTimeViewMod
                     if (aggregatedUsage.size > 1) {
                         item {
                             Text(
-                                "Device Breakdown",
+                                stringResource(R.string.screen_device_breakdown),
                                 style = MaterialTheme.typography.titleMedium
                             )
                             Spacer(modifier = Modifier.height(12.dp))
@@ -96,7 +97,7 @@ fun ScreenTimeTrackerView(onBackToMenu: () -> Unit, viewModel: ScreenTimeViewMod
 
                     item {
                         Text(
-                            "Today's Apps",
+                            stringResource(R.string.screen_todays_apps),
                             style = MaterialTheme.typography.titleMedium
                         )
                     }
@@ -105,7 +106,7 @@ fun ScreenTimeTrackerView(onBackToMenu: () -> Unit, viewModel: ScreenTimeViewMod
                     if (activeApps.isEmpty()) {
                         item {
                             Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                                Text("No app usage detected", color = MaterialTheme.colorScheme.outline)
+                                Text(stringResource(R.string.screen_no_usage), color = MaterialTheme.colorScheme.outline)
                             }
                         }
                     } else {
@@ -116,7 +117,7 @@ fun ScreenTimeTrackerView(onBackToMenu: () -> Unit, viewModel: ScreenTimeViewMod
 
                     item {
                         Text(
-                            "Daily History",
+                            stringResource(R.string.screen_daily_history),
                             style = MaterialTheme.typography.titleMedium
                         )
                     }
@@ -124,7 +125,7 @@ fun ScreenTimeTrackerView(onBackToMenu: () -> Unit, viewModel: ScreenTimeViewMod
                     val history = allSessions.filter { it.date.isBefore(LocalDate.now()) }
                     if (history.isEmpty()) {
                         item {
-                            Text("No history recorded yet", color = MaterialTheme.colorScheme.outline)
+                            Text(stringResource(R.string.screen_no_history), color = MaterialTheme.colorScheme.outline)
                         }
                     } else {
                         items(history.take(7)) { session ->
@@ -151,7 +152,7 @@ fun TotalApexTimeCard(devices: List<DeviceSession>) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Total Apex Time",
+                text = stringResource(R.string.screen_total_apex_time),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
@@ -168,7 +169,7 @@ fun TotalApexTimeCard(devices: List<DeviceSession>) {
                     modifier = Modifier.padding(top = 8.dp)
                 ) {
                     Text(
-                        text = "${devices.size} Connected Devices",
+                        text = stringResource(R.string.screen_connected_devices, devices.size),
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                         color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -234,12 +235,12 @@ fun AppUsageItem(app: AppUsageInfo) {
 fun ExcludeAppsList(apps: List<AppUsageInfo>, onToggle: (AppUsageInfo) -> Unit) {
     Column(modifier = Modifier.fillMaxSize()) {
         Text(
-            "Tracking Preferences",
+            stringResource(R.string.screen_tracking_prefs),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold
         )
         Text(
-            "Toggle off apps you don't want to include in your total screen time.",
+            stringResource(R.string.screen_tracking_prefs_desc),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.outline,
             modifier = Modifier.padding(bottom = 16.dp)
@@ -304,19 +305,19 @@ fun PermissionRequestCard(onGrantClick: () -> Unit) {
     ) {
         Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                "Permission Required",
+                stringResource(R.string.screen_permission_title),
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onErrorContainer
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                "Apex Tracker needs 'Usage Access' permission to track your screen time. This information is only stored on your device.",
+                stringResource(R.string.screen_permission_text),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onErrorContainer
             )
             Spacer(modifier = Modifier.height(16.dp))
             Button(onClick = onGrantClick) {
-                Text("Grant Permission")
+                Text(stringResource(R.string.screen_grant_permission))
             }
         }
     }

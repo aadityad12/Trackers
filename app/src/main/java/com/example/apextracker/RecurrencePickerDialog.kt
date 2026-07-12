@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import java.time.DayOfWeek
 import java.time.format.TextStyle
@@ -31,7 +32,7 @@ fun RecurrencePickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Set Recurrence") },
+        title = { Text(stringResource(R.string.recurrence_dialog_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 // Frequency
@@ -41,7 +42,7 @@ fun RecurrencePickerDialog(
                         value = frequency.name,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Frequency") },
+                        label = { Text(stringResource(R.string.recurrence_frequency)) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = frequencyExpanded) },
                         modifier = Modifier.menuAnchor()
                     )
@@ -56,7 +57,7 @@ fun RecurrencePickerDialog(
                 }
 
                 if (frequency == RecurrenceFrequency.CUSTOM) {
-                    Text("Repeat on:")
+                    Text(stringResource(R.string.recurrence_repeat_on))
                     val locale = LocalLocale.current.platformLocale
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         DayOfWeek.values().forEach { day ->
@@ -84,7 +85,7 @@ fun RecurrencePickerDialog(
                        value = endType.name,
                        onValueChange = {},
                        readOnly = true,
-                       label = { Text("Ends") },
+                       label = { Text(stringResource(R.string.recurrence_ends)) },
                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = endTypeExpanded) },
                        modifier = Modifier.menuAnchor()
                    )
@@ -102,7 +103,7 @@ fun RecurrencePickerDialog(
                     OutlinedTextField(
                         value = occurrences.toString(),
                         onValueChange = { occurrences = it.toIntOrNull() ?: 1 },
-                        label = { Text("After Occurrences") }
+                        label = { Text(stringResource(R.string.recurrence_after_occurrences)) }
                     )
                 }
             }
@@ -117,12 +118,12 @@ fun RecurrencePickerDialog(
                 )
                 onConfirm(recurrence)
             }) {
-                Text("Done")
+                Text(stringResource(R.string.action_done))
             }
         },
         dismissButton = { 
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.action_cancel))
             }
         }
     )
