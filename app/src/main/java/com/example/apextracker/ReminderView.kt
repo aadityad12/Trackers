@@ -84,12 +84,10 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
             CenterAlignedTopAppBar(
                 title = { 
                     if (isSelectionMode) {
-                        Text("${selectedCompletedIds.size} SELECTED", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black)
+                        Text("${selectedCompletedIds.size} SELECTED", style = MaterialTheme.typography.titleSmall)
                     } else {
                         Text("TASK LIST", 
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 2.sp
+                            style = MaterialTheme.typography.titleSmall
                         )
                     }
                 },
@@ -185,7 +183,7 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
 
             item {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text("ACTIVE", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text("ACTIVE", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             }
 
             if (sortedActiveReminders.isEmpty()) {
@@ -219,7 +217,7 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("COMPLETED", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.outline)
+                        Text("COMPLETED", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.outline)
                         
                         TextButton(
                             onClick = { showCompletedReminders = !showCompletedReminders },

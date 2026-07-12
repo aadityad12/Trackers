@@ -59,9 +59,7 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
             CenterAlignedTopAppBar(
                 title = { 
                     Text("BUDGET FLOW", 
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 2.sp
+                        style = MaterialTheme.typography.titleSmall
                     )
                 },
                 navigationIcon = {
@@ -220,7 +218,7 @@ fun BudgetOverview(
                 
                 item { 
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("TRANSACTIONS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text("TRANSACTIONS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 }
                 
                 items(pendingSubs.sortedBy { it.renewalDate }) { sub ->

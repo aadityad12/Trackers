@@ -83,8 +83,7 @@ fun ScreenTimeTrackerView(onBackToMenu: () -> Unit, viewModel: ScreenTimeViewMod
                         item {
                             Text(
                                 "Device Breakdown",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
+                                style = MaterialTheme.typography.titleMedium
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -98,8 +97,7 @@ fun ScreenTimeTrackerView(onBackToMenu: () -> Unit, viewModel: ScreenTimeViewMod
                     item {
                         Text(
                             "Today's Apps",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            style = MaterialTheme.typography.titleMedium
                         )
                     }
 
@@ -119,8 +117,7 @@ fun ScreenTimeTrackerView(onBackToMenu: () -> Unit, viewModel: ScreenTimeViewMod
                     item {
                         Text(
                             "Daily History",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            style = MaterialTheme.typography.titleMedium
                         )
                     }
 

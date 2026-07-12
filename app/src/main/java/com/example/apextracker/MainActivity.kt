@@ -464,8 +464,7 @@ fun MainMenu(
                 Text(
                     "Account",
                     style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 
@@ -529,8 +528,7 @@ fun MainMenu(
                 Text(
                     "Appearance",
                     style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
+                    color = MaterialTheme.colorScheme.primary
                 )
                 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -564,8 +562,7 @@ fun MainMenu(
                 Text(
                     "Color Accent",
                     style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
+                    color = MaterialTheme.colorScheme.primary
                 )
                 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -738,8 +735,9 @@ fun GridModuleCard(module: AppModule, onModuleSelected: (String) -> Unit, modifi
             Column {
                 Text(
                     text = module.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
+                    // labelLarge (Bold 14sp), not titleSmall — the menu card title is
+                    // not the tracked ALL-CAPS screen-header style.
+                    style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1
                 )
@@ -747,8 +745,7 @@ fun GridModuleCard(module: AppModule, onModuleSelected: (String) -> Unit, modifi
                     text = module.description,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    maxLines = 1,
-                    fontSize = 11.sp
+                    maxLines = 1
                 )
             }
         }

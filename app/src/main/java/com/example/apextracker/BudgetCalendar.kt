@@ -186,7 +186,7 @@ fun DayBreakdownItem(item: BudgetItem, category: Category?) {
 @Composable
 fun TotalRow(total: Double) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(text = "Total", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Text(text = "$${String.format(Locale.US, "%.2f", total)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Text(text = "Total", style = MaterialTheme.typography.titleMedium)
+        Text(text = "$${String.format(Locale.US, "%.2f", total)}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
     }
 }

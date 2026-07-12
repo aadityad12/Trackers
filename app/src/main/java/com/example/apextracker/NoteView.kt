@@ -126,7 +126,6 @@ fun NoteCard(note: Note, onClick: () -> Unit, onDelete: () -> Unit) {
                 Text(
                     text = note.title.ifBlank { "Untitled" },
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis

@@ -70,9 +70,7 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
             CenterAlignedTopAppBar(
                 title = { 
                     Text("STUDY SESSION", 
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 2.sp
+                        style = MaterialTheme.typography.titleSmall
                     )
                 },
                 navigationIcon = {
@@ -240,7 +238,6 @@ fun StudyTimerDisplay(seconds: Long, isRunning: Boolean) {
             Text(
                 text = if (isRunning) "FOCUSING" else "READY",
                 style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.outline,
                 letterSpacing = 4.sp
             )
@@ -263,8 +260,7 @@ fun SessionItemCompact(session: StudySession) {
             Column {
                 Text(
                     text = session.date.format(DateTimeFormatter.ofPattern("MMM dd")),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.titleMedium
                 )
                 Text(
                     text = session.date.format(DateTimeFormatter.ofPattern("EEEE")),

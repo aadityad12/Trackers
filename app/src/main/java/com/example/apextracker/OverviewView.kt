@@ -41,9 +41,7 @@ fun OverviewView(
             CenterAlignedTopAppBar(
                 title = { 
                     Text("DAILY INSIGHTS", 
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 2.sp
+                        style = MaterialTheme.typography.titleSmall
                     )
                 },
                 navigationIcon = {
@@ -109,7 +107,7 @@ fun OverviewView(
                         // Reminders Section
                         item {
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text("TASKS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Text("TASKS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                         }
                         
                         if (data.missedReminders.isNotEmpty()) {

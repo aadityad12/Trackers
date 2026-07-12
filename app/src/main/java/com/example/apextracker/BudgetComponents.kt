@@ -98,8 +98,7 @@ fun BudgetListItemHeader(item: BudgetItem, category: Category?, isPending: Boole
             }
             Text(
                 text = item.title, 
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                style = MaterialTheme.typography.titleMedium
             )
         }
         Text(
