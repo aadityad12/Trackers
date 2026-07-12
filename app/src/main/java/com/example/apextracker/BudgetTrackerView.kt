@@ -15,11 +15,15 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +49,10 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
     var showAddDialog by remember { mutableStateOf(false) }
     var itemToEdit by remember { mutableStateOf<BudgetItem?>(null) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showCalendar by rememberSaveable { mutableStateOf(false) }
+    // Selected month is shared between the list and calendar views so toggling
+    // doesn't jump the user to a different month.
+    var selectedMonth by rememberSaveable(stateSaver = YearMonthSaver) { mutableStateOf(YearMonth.now()) }
 
     Scaffold(
         topBar = {
@@ -62,6 +70,13 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showCalendar = !showCalendar }) {
+                        Icon(
+                            if (showCalendar) Icons.Default.ViewAgenda else Icons.Default.CalendarMonth,
+                            contentDescription = if (showCalendar) "Show list" else "Show calendar",
+                            tint = if (showCalendar) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                        )
+                    }
                     IconButton(onClick = { showSettingsDialog = true }) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
@@ -87,7 +102,23 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
         ) {
-            BudgetOverview(items, categories, subscriptions, onEdit = { itemToEdit = it })
+            if (showCalendar) {
+                // Like the list view, the calendar only shows BudgetItems — pending
+                // future subscription renewals aren't items yet, so they don't appear.
+                BudgetCalendarView(
+                    items = items,
+                    categories = categories,
+                    currentMonth = selectedMonth,
+                    onMonthChange = { selectedMonth = it }
+                )
+            } else {
+                BudgetOverview(
+                    items, categories, subscriptions,
+                    selectedMonth = selectedMonth,
+                    onMonthChange = { selectedMonth = it },
+                    onEdit = { itemToEdit = it }
+                )
+            }
         }
 
         if (showAddDialog) {
@@ -139,15 +170,21 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
     }
 }
 
+// YearMonth isn't Parcelable, so rememberSaveable needs an explicit saver.
+private val YearMonthSaver = Saver<YearMonth, String>(
+    save = { it.toString() },
+    restore = { YearMonth.parse(it) }
+)
+
 @Composable
 fun BudgetOverview(
-    items: List<BudgetItem>, 
-    categories: List<Category>, 
+    items: List<BudgetItem>,
+    categories: List<Category>,
     subscriptions: List<Subscription>,
+    selectedMonth: YearMonth,
+    onMonthChange: (YearMonth) -> Unit,
     onEdit: (BudgetItem) -> Unit
 ) {
-    var selectedMonth by remember { mutableStateOf(YearMonth.now()) }
-    
     val availableMonths = items.map { YearMonth.from(it.date) }.distinct().sortedDescending()
     val monthToDisplay = if (availableMonths.contains(selectedMonth)) selectedMonth 
                          else availableMonths.firstOrNull() ?: selectedMonth
@@ -166,7 +203,7 @@ fun BudgetOverview(
     Column(modifier = Modifier.fillMaxSize()) {
         MonthSelectorCompact(
             currentMonth = monthToDisplay,
-            onMonthChange = { selectedMonth = it }
+            onMonthChange = onMonthChange
         )
 
         LazyColumn(

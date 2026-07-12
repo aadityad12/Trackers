@@ -48,8 +48,12 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Composable
-fun BudgetCalendarView(items: List<BudgetItem>, categories: List<Category>) {
-    var currentMonth by remember { mutableStateOf(YearMonth.now()) }
+fun BudgetCalendarView(
+    items: List<BudgetItem>,
+    categories: List<Category>,
+    currentMonth: YearMonth,
+    onMonthChange: (YearMonth) -> Unit
+) {
     var selectedDayItems by remember { mutableStateOf<List<BudgetItem>?>(null) }
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
 
@@ -59,7 +63,7 @@ fun BudgetCalendarView(items: List<BudgetItem>, categories: List<Category>) {
     val paddingDays = (0 until firstDayOfMonth).toList()
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        BudgetMonthSelector(currentMonth = currentMonth, onMonthChange = { currentMonth = it })
+        BudgetMonthSelector(currentMonth = currentMonth, onMonthChange = onMonthChange)
         Spacer(modifier = Modifier.height(16.dp))
         WeekdayHeaders()
         Spacer(modifier = Modifier.height(8.dp))
