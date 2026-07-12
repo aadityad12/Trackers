@@ -32,8 +32,9 @@ JAVA_HOME="<jdk17-path>" ./gradlew lintDebug
 # Run instrumented tests (requires connected device/emulator)
 JAVA_HOME="<jdk17-path>" ./gradlew connectedAndroidTest
 
-# Run a single unit test class
-JAVA_HOME="<jdk17-path>" ./gradlew test --tests "com.example.apextracker.ExampleUnitTest"
+# Run a single unit test class (the aggregate `test` task rejects --tests on Gradle 9.4;
+# target the variant task instead)
+JAVA_HOME="<jdk17-path>" ./gradlew testDebugUnitTest --tests "com.example.apextracker.ExampleUnitTest"
 
 # Clean build
 JAVA_HOME="<jdk17-path>" ./gradlew clean
@@ -62,7 +63,7 @@ Note: unit tests (as of 2026-07-10) cover the pure logic extracted during the fi
 
 Settings dialogs for each module live in `*Settings.kt` files (e.g., `BudgetSettings.kt`, `ReminderSettings.kt`).
 
-`BudgetCalendar.kt`'s `BudgetCalendarView` composable is **not wired into any navigation route** — it's a complete, working calendar UI that's currently unreachable dead code from the user's perspective. Either wire it in (e.g. a tab/toggle inside `budget_tracker`) or remove it.
+`BudgetCalendar.kt`'s `BudgetCalendarView` is reachable as of 2026-07-11 (Issue #32): a list/calendar `IconButton` toggle in the Budget top bar, with the selected month hoisted into `BudgetTrackerApp` and shared between both views.
 
 ### Database
 - `AppDatabase.kt` — Room singleton (`budget_database`), **version 11** (not 10 — bumped since this doc was last written and not updated at the time), uses `fallbackToDestructiveMigration`. Contains all 8 DAOs: `budgetDao`, `categoryDao`, `subscriptionDao`, `studySessionDao`, `screenTimeSessionDao`, `excludedAppDao`, `reminderDao`, `noteDao`.
@@ -79,8 +80,8 @@ Settings dialogs for each module live in `*Settings.kt` files (e.g., `BudgetSett
 ### Theming
 - `ui/theme/Theme.kt` — `ApexTrackerTheme` composable wraps Material3 with a custom `ApexTheme` enum (EMERALD, OCEAN, MAGMA, ROYAL). Both dark and light variants exist. The active theme and dark mode toggle are stored in `rememberSaveable` at the `MainActivity` level, pushed to Firestore on change, and pulled back via a live Firestore listener when signed in (bidirectional sync — see Known Issues for a possible echo-loop concern).
 - `ui/theme/Color.kt` — All named color tokens. (Dead/duplicate tokens `ElectricBlue`, `CyberCyan`, `CyberGreen`, `SoftGreen` were removed in the 2026-07-07 cleanup — the first two were exact hex duplicates of `OceanPrimary`/`OceanSecondary` under a "keeping for reference" comment, and none were referenced anywhere.)
-- `ui/theme/Type.kt` — Typography definitions. Only a couple of styles are actually filled in; most screens override typography ad hoc per-`Text()` call rather than through named `Typography` styles. Worth fleshing out `Typography` properly if doing a broader UI pass.
-- Light-mode note: `shiftColorForLightMode()` in `Theme.kt` adjusts `primary`/`secondary` for light backgrounds but **not `tertiary`**, so tertiary accents may look washed out in light mode — likely just an oversight, not intentional.
+- `ui/theme/Type.kt` — Full `Typography` as of 2026-07-11 (Issue #33): M3 default metrics with three app-wide deviations — `titleSmall` = Black + 2sp tracking (the ALL-CAPS top-bar header style), `titleMedium` = Bold, `labelLarge` = Bold. Use named styles instead of inline `fontWeight`; remaining inline overrides are deliberate one-offs (stopwatch numerals, ExtraBold/Black accents).
+- `shiftColorForLightMode()` in `Theme.kt` now shifts `tertiary` too and defines `tertiaryContainer`/`onTertiaryContainer` (Issue #34, 2026-07-11); dark scheme untouched.
 
 ### Background Work
 - `ReminderWorker.kt` — a `CoroutineWorker` that posts a notification via the `reminder_channel` notification channel. As of the 2026-07-09 fix pass it is reachable: `ReminderScheduler` (object) sets an exact `AlarmManager` alarm per active reminder → `ReminderAlarmReceiver` (BroadcastReceiver) enqueues `ReminderWorker` via WorkManager → notification posts. `ReminderBootReceiver` re-arms alarms after reboot. Scheduling is wired into every `ReminderViewModel` mutation path (add/update/toggle/delete/settings changes).
@@ -95,7 +96,7 @@ Settings dialogs for each module live in `*Settings.kt` files (e.g., `BudgetSett
 - Firebase sync is fire-and-forget inside `viewModelScope.launch` via `safeCloudCall()`; local Room is always updated first. As of 2026-07-09 (Issue #4) this convention is actually implemented across all ViewModels — see "Authentication & Cloud Sync" above.
 - Light/dark mode detection in Composables uses the extension `Color.isLight()` defined at the bottom of `MainActivity.kt`.
 - The `BudgetViewModel` auto-creates `BudgetItem` entries for due subscriptions on init and on any subscription change (`checkAndAddSubscriptions()`), which back-fills one `BudgetItem` per elapsed month if a subscription's renewal date is far in the past.
-- "Xh Ym" duration formatting goes through the shared `formatDurationCompact(millis)` in `DurationFormat.kt` (consolidated 2026-07-09; `StudyTrackerView.formatTime` remains separate — it's the HH:MM:SS stopwatch display, a different format). Periodic 30s polling loops go through `CoroutineScope.launchPeriodic()` in `PeriodicRefresh.kt`. Currency formatting is still hand-rolled per call site.
+- "Xh Ym" duration formatting goes through the shared `formatDurationCompact(millis)` in `DurationFormat.kt` (consolidated 2026-07-09; `StudyTrackerView.formatTime` remains separate — it's the HH:MM:SS stopwatch display, a different format). Periodic 30s polling loops go through `CoroutineScope.launchPeriodic()` in `PeriodicRefresh.kt`. Currency rendering goes through `formatCurrency()` in `CurrencyFormat.kt` (fixed-USD until a currency setting exists; Issue #36). User-facing UI strings live in `res/values/strings.xml` via `stringResource()` (Issue #36) — add new UI strings there, keyed by screen (`budget_*`, `reminders_*`, shared `action_*`); contentDescriptions are the known leftover.
 
 ## Known Issues (as of 2026-07-07 audit)
 
