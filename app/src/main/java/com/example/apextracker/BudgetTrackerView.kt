@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -50,6 +51,8 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
     var itemToEdit by remember { mutableStateOf<BudgetItem?>(null) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showCalendar by rememberSaveable { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     // Selected month is shared between the list and calendar views so toggling
     // doesn't jump the user to a different month.
     var selectedMonth by rememberSaveable(stateSaver = YearMonthSaver) { mutableStateOf(YearMonth.now()) }
@@ -84,6 +87,7 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
                 )
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showAddDialog = true },
@@ -152,8 +156,21 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
                     itemToEdit = null
                 },
                 onDelete = {
-                    viewModel.deleteItem(itemToEdit!!)
+                    val deleted = itemToEdit!!
+                    viewModel.deleteItem(deleted)
                     itemToEdit = null
+                    scope.launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = "Deleted \"${deleted.title}\"",
+                            actionLabel = "Undo",
+                            duration = SnackbarDuration.Short
+                        )
+                        // The cloud delete has already been pushed; undoing re-pushes
+                        // the same cloudId, which recreates the doc.
+                        if (result == SnackbarResult.ActionPerformed) {
+                            viewModel.restoreItem(deleted)
+                        }
+                    }
                 }
             )
         }

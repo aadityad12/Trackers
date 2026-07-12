@@ -65,6 +65,31 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
         allSessions.filter { it.date.isBefore(today) }.sortedByDescending { it.date }
     }
 
+    var showResetConfirm by remember { mutableStateOf(false) }
+    if (showResetConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetConfirm = false },
+            title = { Text("Reset Timer?") },
+            text = { Text("Reset today's timer to 0:00? This can't be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.resetTimerManual()
+                        showResetConfirm = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Reset")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -79,7 +104,7 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.resetTimerManual() }) {
+                    IconButton(onClick = { showResetConfirm = true }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Reset")
                     }
                 },

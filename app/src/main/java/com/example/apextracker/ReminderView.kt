@@ -30,6 +30,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -52,6 +53,8 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
     
     var selectedCompletedIds by remember { mutableStateOf(setOf<Long>()) }
     var isSelectionMode by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     // Exact-alarm permission is denied by default on API 33+; without it reminders fire
     // inexactly (possibly hours late). Track it across resumes so returning from the system
@@ -125,6 +128,7 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                 )
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             if (!isSelectionMode) {
                 FloatingActionButton(
@@ -300,8 +304,21 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                     reminderToEdit = null
                 },
                 onDelete = {
-                    viewModel.deleteReminder(reminderToEdit!!)
+                    val deleted = reminderToEdit!!
+                    viewModel.deleteReminder(deleted)
                     reminderToEdit = null
+                    scope.launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = "Deleted \"${deleted.name}\"",
+                            actionLabel = "Undo",
+                            duration = SnackbarDuration.Short
+                        )
+                        // The cloud delete has already been pushed; undoing re-pushes
+                        // the same cloudId, which recreates the doc (and re-arms the alarm).
+                        if (result == SnackbarResult.ActionPerformed) {
+                            viewModel.restoreReminder(deleted)
+                        }
+                    }
                 }
             )
         }
