@@ -98,7 +98,7 @@ fun OverviewView(
                                     .padding(vertical = 8.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                StatCard("Spent", "$${String.format("%.2f", data.totalSpent)}", Icons.Default.AccountBalanceWallet, MaterialTheme.colorScheme.primaryContainer, Modifier.weight(1f))
+                                StatCard("Spent", formatCurrency(data.totalSpent), Icons.Default.AccountBalanceWallet, MaterialTheme.colorScheme.primaryContainer, Modifier.weight(1f))
                                 StatCard("Study", formatDurationCompact(data.studyTimeMinutes * 60000), Icons.Default.Timer, MaterialTheme.colorScheme.secondaryContainer, Modifier.weight(1f))
                                 StatCard("Screen", formatDurationCompact(data.screenTimeMinutes * 60000), Icons.Default.Monitor, MaterialTheme.colorScheme.tertiaryContainer, Modifier.weight(1f))
                             }

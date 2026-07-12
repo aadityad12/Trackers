@@ -137,7 +137,7 @@ fun CalendarDayCard(day: Int, date: LocalDate, totalSpent: Double, onClick: () -
         Column(modifier = Modifier.padding(2.dp).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text(text = day.toString(), style = MaterialTheme.typography.bodyMedium)
             if (totalSpent > 0) {
-                Text(text = "$${String.format(Locale.US, "%.2f", totalSpent)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontSize = 9.sp, maxLines = 1)
+                Text(text = formatCurrency(totalSpent), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontSize = 9.sp, maxLines = 1)
             }
         }
     }
@@ -179,7 +179,7 @@ fun DayBreakdownItem(item: BudgetItem, category: Category?) {
             }
             if (!item.description.isNullOrBlank()) Text(text = item.description, style = MaterialTheme.typography.bodySmall)
         }
-        Text(text = "$${String.format(Locale.US, "%.2f", item.amount)}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+        Text(text = formatCurrency(item.amount), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -187,6 +187,6 @@ fun DayBreakdownItem(item: BudgetItem, category: Category?) {
 fun TotalRow(total: Double) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(text = "Total", style = MaterialTheme.typography.titleMedium)
-        Text(text = "$${String.format(Locale.US, "%.2f", total)}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+        Text(text = formatCurrency(total), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
     }
 }

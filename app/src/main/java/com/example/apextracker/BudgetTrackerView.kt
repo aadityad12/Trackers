@@ -325,7 +325,7 @@ fun SummaryCardModern(
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                     )
                     Text(
-                        text = "$${String.format(Locale.US, "%,.2f", total)}",
+                        text = formatCurrency(total),
                         style = MaterialTheme.typography.displaySmall,
                         fontWeight = FontWeight.Black,
                         color = MaterialTheme.colorScheme.onPrimaryContainer

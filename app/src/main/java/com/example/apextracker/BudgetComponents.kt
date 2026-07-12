@@ -102,7 +102,7 @@ fun BudgetListItemHeader(item: BudgetItem, category: Category?, isPending: Boole
             )
         }
         Text(
-            text = "$${String.format(Locale.US, "%.2f", item.amount)}",
+            text = formatCurrency(item.amount),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.ExtraBold,
             color = if (isPending) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.primary

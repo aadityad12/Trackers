@@ -315,7 +315,7 @@ fun SubscriptionItem(subscription: Subscription, onClick: () -> Unit) {
                 Text(subscription.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
                 Text("Renews: ${subscription.renewalDate.format(DateTimeFormatter.ofPattern("MMM dd"))}", style = MaterialTheme.typography.bodySmall)
             }
-            Text("$${String.format(Locale.US, "%.2f", subscription.amount)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+            Text(formatCurrency(subscription.amount), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
         }
     }
 }
