@@ -75,22 +75,22 @@ fun NoteView(onBackToMenu: () -> Unit, viewModel: NoteViewModel = viewModel()) {
                     title = { Text(stringResource(R.string.notes_title), fontWeight = FontWeight.Bold) },
                     navigationIcon = {
                         IconButton(onClick = onBackToMenu) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                         }
                     },
                     actions = {
                         IconButton(onClick = { showRecycleBin = true }) {
-                            Icon(Icons.Default.DeleteSweep, contentDescription = "Recycle Bin")
+                            Icon(Icons.Default.DeleteSweep, contentDescription = stringResource(R.string.notes_recycle_bin))
                         }
                         IconButton(onClick = { showSettings = true }) {
-                            Icon(Icons.Default.Settings, contentDescription = "Settings")
+                            Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.menu_settings))
                         }
                     }
                 )
             },
             floatingActionButton = {
                 FloatingActionButton(onClick = { noteToEdit = Note(title = "", content = "") }) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Note")
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.cd_add_note))
                 }
             }
         ) { innerPadding ->
@@ -132,7 +132,7 @@ fun NoteCard(note: Note, onClick: () -> Unit, onDelete: () -> Unit) {
                     overflow = TextOverflow.Ellipsis
                 )
                 IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f))
+                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.action_delete), tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f))
                 }
             }
             if (note.content.isNotBlank()) {
@@ -169,7 +169,7 @@ fun NoteEditor(note: Note, onDismiss: () -> Unit, onSave: (String, String) -> Un
                 title = { Text(if (note.id == 0L) "New Note" else "Edit Note") },
                 navigationIcon = {
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Cancel")
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_cancel))
                     }
                 },
                 actions = {
@@ -351,7 +351,7 @@ fun RecycleBinView(
                 title = { Text(stringResource(R.string.notes_recycle_bin)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 }
             )

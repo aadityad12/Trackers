@@ -70,19 +70,19 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
                 },
                 navigationIcon = {
                     IconButton(onClick = onBackToMenu) {
-                        Icon(Icons.Default.Home, contentDescription = "Home")
+                        Icon(Icons.Default.Home, contentDescription = stringResource(R.string.cd_home))
                     }
                 },
                 actions = {
                     IconButton(onClick = { showCalendar = !showCalendar }) {
                         Icon(
                             if (showCalendar) Icons.Default.ViewAgenda else Icons.Default.CalendarMonth,
-                            contentDescription = if (showCalendar) "Show list" else "Show calendar",
+                            contentDescription = if (showCalendar) stringResource(R.string.cd_show_list) else stringResource(R.string.cd_show_calendar),
                             tint = if (showCalendar) MaterialTheme.colorScheme.primary else LocalContentColor.current
                         )
                     }
                     IconButton(onClick = { showSettingsDialog = true }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.menu_settings))
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
@@ -98,7 +98,7 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 shape = RoundedCornerShape(16.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Item")
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.cd_add_item))
             }
         }
     ) { innerPadding ->
@@ -285,7 +285,7 @@ fun MonthSelectorCompact(currentMonth: YearMonth, onMonthChange: (YearMonth) -> 
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = { onMonthChange(currentMonth.minusMonths(1)) }) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Prev")
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = stringResource(R.string.cd_prev))
             }
             
             Text(
@@ -296,7 +296,7 @@ fun MonthSelectorCompact(currentMonth: YearMonth, onMonthChange: (YearMonth) -> 
             )
 
             IconButton(onClick = { onMonthChange(currentMonth.plusMonths(1)) }) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next")
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.cd_next))
             }
         }
     }
