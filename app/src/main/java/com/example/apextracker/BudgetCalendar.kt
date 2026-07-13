@@ -40,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.LocalDate
@@ -48,8 +49,12 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Composable
-fun BudgetCalendarView(items: List<BudgetItem>, categories: List<Category>) {
-    var currentMonth by remember { mutableStateOf(YearMonth.now()) }
+fun BudgetCalendarView(
+    items: List<BudgetItem>,
+    categories: List<Category>,
+    currentMonth: YearMonth,
+    onMonthChange: (YearMonth) -> Unit
+) {
     var selectedDayItems by remember { mutableStateOf<List<BudgetItem>?>(null) }
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
 
@@ -59,7 +64,7 @@ fun BudgetCalendarView(items: List<BudgetItem>, categories: List<Category>) {
     val paddingDays = (0 until firstDayOfMonth).toList()
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        BudgetMonthSelector(currentMonth = currentMonth, onMonthChange = { currentMonth = it })
+        BudgetMonthSelector(currentMonth = currentMonth, onMonthChange = onMonthChange)
         Spacer(modifier = Modifier.height(16.dp))
         WeekdayHeaders()
         Spacer(modifier = Modifier.height(8.dp))
@@ -133,7 +138,7 @@ fun CalendarDayCard(day: Int, date: LocalDate, totalSpent: Double, onClick: () -
         Column(modifier = Modifier.padding(2.dp).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text(text = day.toString(), style = MaterialTheme.typography.bodyMedium)
             if (totalSpent > 0) {
-                Text(text = "$${String.format(Locale.US, "%.2f", totalSpent)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontSize = 9.sp, maxLines = 1)
+                Text(text = formatCurrency(totalSpent), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontSize = 9.sp, maxLines = 1)
             }
         }
     }
@@ -143,7 +148,7 @@ fun CalendarDayCard(day: Int, date: LocalDate, totalSpent: Double, onClick: () -
 fun DayBreakdownDialog(date: LocalDate, items: List<BudgetItem>, categories: List<Category>, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Breakdown for ${date.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))}") },
+        title = { Text(stringResource(R.string.budget_breakdown_title, date.format(DateTimeFormatter.ofPattern("MMM dd, yyyy")))) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items.forEach { item ->
@@ -158,7 +163,7 @@ fun DayBreakdownDialog(date: LocalDate, items: List<BudgetItem>, categories: Lis
                 TotalRow(items.sumOf { it.amount })
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) } }
     )
 }
 
@@ -175,14 +180,14 @@ fun DayBreakdownItem(item: BudgetItem, category: Category?) {
             }
             if (!item.description.isNullOrBlank()) Text(text = item.description, style = MaterialTheme.typography.bodySmall)
         }
-        Text(text = "$${String.format(Locale.US, "%.2f", item.amount)}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+        Text(text = formatCurrency(item.amount), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
     }
 }
 
 @Composable
 fun TotalRow(total: Double) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(text = "Total", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Text(text = "$${String.format(Locale.US, "%.2f", total)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Text(text = stringResource(R.string.budget_total), style = MaterialTheme.typography.titleMedium)
+        Text(text = formatCurrency(total), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
     }
 }

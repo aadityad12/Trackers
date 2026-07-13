@@ -196,6 +196,19 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    /** Undo for [deleteReminder]: re-inserts the preserved reminder unchanged (REPLACE
+     *  keeps its Room id) and re-arms its alarm. The cloud delete has already been
+     *  pushed by then; re-pushing the same cloudId recreates the doc. */
+    fun restoreReminder(reminder: Reminder) {
+        viewModelScope.launch {
+            reminderDao.insertReminder(reminder)
+            scheduleIfNeeded(reminder)
+            safeCloudCall(TAG, "restore reminder") {
+                firebaseManager.pushReminder(reminder)
+            }
+        }
+    }
+
     fun deleteReminders(ids: List<Long>) {
         viewModelScope.launch {
             // Capture cloudIds before the rows are gone

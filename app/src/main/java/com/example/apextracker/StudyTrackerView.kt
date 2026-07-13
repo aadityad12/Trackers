@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -65,14 +66,37 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
         allSessions.filter { it.date.isBefore(today) }.sortedByDescending { it.date }
     }
 
+    var showResetConfirm by remember { mutableStateOf(false) }
+    if (showResetConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetConfirm = false },
+            title = { Text(stringResource(R.string.study_reset_confirm_title)) },
+            text = { Text(stringResource(R.string.study_reset_confirm_text)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.resetTimerManual()
+                        showResetConfirm = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text(stringResource(R.string.action_reset))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetConfirm = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = { 
-                    Text("STUDY SESSION", 
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 2.sp
+                    Text(stringResource(R.string.study_title), 
+                        style = MaterialTheme.typography.titleSmall
                     )
                 },
                 navigationIcon = {
@@ -81,7 +105,7 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.resetTimerManual() }) {
+                    IconButton(onClick = { showResetConfirm = true }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Reset")
                     }
                 },
@@ -121,7 +145,7 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Recent History",
+                        text = stringResource(R.string.study_recent_history),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Black
                     )
@@ -132,7 +156,7 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
                 
                 if (pastSessions.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No history yet", color = MaterialTheme.colorScheme.outline)
+                        Text(stringResource(R.string.study_no_history), color = MaterialTheme.colorScheme.outline)
                     }
                 } else {
                     LazyColumn(
@@ -238,9 +262,8 @@ fun StudyTimerDisplay(seconds: Long, isRunning: Boolean) {
                 color = if (isRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = if (isRunning) "FOCUSING" else "READY",
+                text = if (isRunning) stringResource(R.string.study_focusing) else stringResource(R.string.study_ready),
                 style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.outline,
                 letterSpacing = 4.sp
             )
@@ -263,8 +286,7 @@ fun SessionItemCompact(session: StudySession) {
             Column {
                 Text(
                     text = session.date.format(DateTimeFormatter.ofPattern("MMM dd")),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.titleMedium
                 )
                 Text(
                     text = session.date.format(DateTimeFormatter.ofPattern("EEEE")),

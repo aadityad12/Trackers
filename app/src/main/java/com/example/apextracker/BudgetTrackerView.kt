@@ -15,11 +15,15 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,9 +32,12 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -45,15 +52,20 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
     var showAddDialog by remember { mutableStateOf(false) }
     var itemToEdit by remember { mutableStateOf<BudgetItem?>(null) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showCalendar by rememberSaveable { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val resources = LocalResources.current
+    // Selected month is shared between the list and calendar views so toggling
+    // doesn't jump the user to a different month.
+    var selectedMonth by rememberSaveable(stateSaver = YearMonthSaver) { mutableStateOf(YearMonth.now()) }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = { 
-                    Text("BUDGET FLOW", 
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 2.sp
+                    Text(stringResource(R.string.budget_title), 
+                        style = MaterialTheme.typography.titleSmall
                     )
                 },
                 navigationIcon = {
@@ -62,6 +74,13 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showCalendar = !showCalendar }) {
+                        Icon(
+                            if (showCalendar) Icons.Default.ViewAgenda else Icons.Default.CalendarMonth,
+                            contentDescription = if (showCalendar) "Show list" else "Show calendar",
+                            tint = if (showCalendar) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                        )
+                    }
                     IconButton(onClick = { showSettingsDialog = true }) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
@@ -71,6 +90,7 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
                 )
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showAddDialog = true },
@@ -87,12 +107,28 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
         ) {
-            BudgetOverview(items, categories, subscriptions, onEdit = { itemToEdit = it })
+            if (showCalendar) {
+                // Like the list view, the calendar only shows BudgetItems — pending
+                // future subscription renewals aren't items yet, so they don't appear.
+                BudgetCalendarView(
+                    items = items,
+                    categories = categories,
+                    currentMonth = selectedMonth,
+                    onMonthChange = { selectedMonth = it }
+                )
+            } else {
+                BudgetOverview(
+                    items, categories, subscriptions,
+                    selectedMonth = selectedMonth,
+                    onMonthChange = { selectedMonth = it },
+                    onEdit = { itemToEdit = it }
+                )
+            }
         }
 
         if (showAddDialog) {
             BudgetItemDialog(
-                title = "Add Budget Item",
+                title = stringResource(R.string.budget_add_item_title),
                 categories = categories,
                 onDismiss = { showAddDialog = false },
                 onConfirm = { title, amount, description, date, categoryId ->
@@ -104,7 +140,7 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
 
         if (itemToEdit != null) {
             BudgetItemDialog(
-                title = "Edit Budget Item",
+                title = stringResource(R.string.budget_edit_item_title),
                 initialTitle = itemToEdit!!.title,
                 initialAmount = itemToEdit!!.amount.toString(),
                 initialDescription = itemToEdit!!.description ?: "",
@@ -123,8 +159,21 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
                     itemToEdit = null
                 },
                 onDelete = {
-                    viewModel.deleteItem(itemToEdit!!)
+                    val deleted = itemToEdit!!
+                    viewModel.deleteItem(deleted)
                     itemToEdit = null
+                    scope.launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = resources.getString(R.string.deleted_quoted, deleted.title),
+                            actionLabel = resources.getString(R.string.action_undo),
+                            duration = SnackbarDuration.Short
+                        )
+                        // The cloud delete has already been pushed; undoing re-pushes
+                        // the same cloudId, which recreates the doc.
+                        if (result == SnackbarResult.ActionPerformed) {
+                            viewModel.restoreItem(deleted)
+                        }
+                    }
                 }
             )
         }
@@ -139,15 +188,21 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
     }
 }
 
+// YearMonth isn't Parcelable, so rememberSaveable needs an explicit saver.
+private val YearMonthSaver = Saver<YearMonth, String>(
+    save = { it.toString() },
+    restore = { YearMonth.parse(it) }
+)
+
 @Composable
 fun BudgetOverview(
-    items: List<BudgetItem>, 
-    categories: List<Category>, 
+    items: List<BudgetItem>,
+    categories: List<Category>,
     subscriptions: List<Subscription>,
+    selectedMonth: YearMonth,
+    onMonthChange: (YearMonth) -> Unit,
     onEdit: (BudgetItem) -> Unit
 ) {
-    var selectedMonth by remember { mutableStateOf(YearMonth.now()) }
-    
     val availableMonths = items.map { YearMonth.from(it.date) }.distinct().sortedDescending()
     val monthToDisplay = if (availableMonths.contains(selectedMonth)) selectedMonth 
                          else availableMonths.firstOrNull() ?: selectedMonth
@@ -166,7 +221,7 @@ fun BudgetOverview(
     Column(modifier = Modifier.fillMaxSize()) {
         MonthSelectorCompact(
             currentMonth = monthToDisplay,
-            onMonthChange = { selectedMonth = it }
+            onMonthChange = onMonthChange
         )
 
         LazyColumn(
@@ -183,7 +238,7 @@ fun BudgetOverview(
                 
                 item { 
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("TRANSACTIONS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text(stringResource(R.string.budget_transactions), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 }
                 
                 items(pendingSubs.sortedBy { it.renewalDate }) { sub ->
@@ -209,7 +264,7 @@ fun BudgetOverview(
             } else {
                 item {
                     Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                        Text("No data for this period", color = MaterialTheme.colorScheme.outline)
+                        Text(stringResource(R.string.budget_no_data), color = MaterialTheme.colorScheme.outline)
                     }
                 }
             }
@@ -268,12 +323,12 @@ fun SummaryCardModern(
             ) {
                 Column {
                     Text(
-                        text = "Total Monthly Spend",
+                        text = stringResource(R.string.budget_total_monthly_spend),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                     )
                     Text(
-                        text = "$${String.format(Locale.US, "%,.2f", total)}",
+                        text = formatCurrency(total),
                         style = MaterialTheme.typography.displaySmall,
                         fontWeight = FontWeight.Black,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -380,7 +435,7 @@ fun ExpensePieChartModern(
                 }
             }
             if (sortedData.size > 4) {
-                Text("+ ${sortedData.size - 4} more", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f))
+                Text(stringResource(R.string.budget_plus_n_more, sortedData.size - 4), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f))
             }
         }
     }

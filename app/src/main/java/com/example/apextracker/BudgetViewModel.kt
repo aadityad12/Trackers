@@ -128,6 +128,18 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    /** Undo for [deleteItem]: re-inserts the preserved item unchanged (REPLACE keeps its
+     *  Room id). The cloud delete has already been pushed by then; re-pushing the same
+     *  cloudId recreates the doc. */
+    fun restoreItem(item: BudgetItem) {
+        viewModelScope.launch {
+            budgetDao.insertItem(item)
+            safeCloudCall(TAG, "restore budget item") {
+                firebaseManager.pushBudgetItem(item, categoryCloudIdFor(item.categoryId))
+            }
+        }
+    }
+
     fun addCategory(name: String, colorHex: String) {
         viewModelScope.launch {
             val category = Category(

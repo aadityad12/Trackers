@@ -17,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -40,10 +41,8 @@ fun OverviewView(
         topBar = {
             CenterAlignedTopAppBar(
                 title = { 
-                    Text("DAILY INSIGHTS", 
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 2.sp
+                    Text(stringResource(R.string.overview_title), 
+                        style = MaterialTheme.typography.titleSmall
                     )
                 },
                 navigationIcon = {
@@ -100,16 +99,16 @@ fun OverviewView(
                                     .padding(vertical = 8.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                StatCard("Spent", "$${String.format("%.2f", data.totalSpent)}", Icons.Default.AccountBalanceWallet, MaterialTheme.colorScheme.primaryContainer, Modifier.weight(1f))
-                                StatCard("Study", formatDurationCompact(data.studyTimeMinutes * 60000), Icons.Default.Timer, MaterialTheme.colorScheme.secondaryContainer, Modifier.weight(1f))
-                                StatCard("Screen", formatDurationCompact(data.screenTimeMinutes * 60000), Icons.Default.Monitor, MaterialTheme.colorScheme.tertiaryContainer, Modifier.weight(1f))
+                                StatCard(stringResource(R.string.overview_stat_spent), formatCurrency(data.totalSpent), Icons.Default.AccountBalanceWallet, MaterialTheme.colorScheme.primaryContainer, Modifier.weight(1f))
+                                StatCard(stringResource(R.string.overview_stat_study), formatDurationCompact(data.studyTimeMinutes * 60000), Icons.Default.Timer, MaterialTheme.colorScheme.secondaryContainer, Modifier.weight(1f))
+                                StatCard(stringResource(R.string.overview_stat_screen), formatDurationCompact(data.screenTimeMinutes * 60000), Icons.Default.Monitor, MaterialTheme.colorScheme.tertiaryContainer, Modifier.weight(1f))
                             }
                         }
 
                         // Reminders Section
                         item {
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text("TASKS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Text(stringResource(R.string.overview_tasks), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                         }
                         
                         if (data.missedReminders.isNotEmpty()) {
@@ -138,7 +137,7 @@ fun OverviewView(
                                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
-                                        Text("All clear for today", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+                                        Text(stringResource(R.string.overview_all_clear), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
                                     }
                                 }
                             }
@@ -248,7 +247,7 @@ fun ReminderSummaryCard(reminder: Reminder, status: String, onToggle: (Reminder)
                 }
             }
             if (status == "Missed") {
-                Text("MISSED", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.error)
+                Text(stringResource(R.string.overview_missed), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.error)
             }
         }
     }

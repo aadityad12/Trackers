@@ -50,7 +50,8 @@ private fun getDarkColorScheme(primary: Color, secondary: Color, tertiary: Color
 private fun getLightColorScheme(primary: Color, secondary: Color, tertiary: Color): ColorScheme {
     val adjPrimary = shiftColorForLightMode(primary)
     val adjSecondary = shiftColorForLightMode(secondary)
-    
+    val adjTertiary = shiftColorForLightMode(tertiary)
+
     return lightColorScheme(
         primary = adjPrimary,
         onPrimary = Color.White,
@@ -60,8 +61,10 @@ private fun getLightColorScheme(primary: Color, secondary: Color, tertiary: Colo
         onSecondary = Color.White,
         secondaryContainer = adjSecondary.copy(alpha = 0.1f),
         onSecondaryContainer = adjSecondary,
-        tertiary = tertiary,
+        tertiary = adjTertiary,
         onTertiary = Color.White,
+        tertiaryContainer = adjTertiary.copy(alpha = 0.1f),
+        onTertiaryContainer = adjTertiary,
         background = LightBackground,
         onBackground = LightTextPrimary,
         surface = LightSurface,

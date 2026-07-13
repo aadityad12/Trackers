@@ -10,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -55,6 +56,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -276,7 +278,7 @@ fun SplashScreen(onFinished: () -> Unit) {
             ApexLogo(modifier = Modifier.size(120.dp))
             Spacer(modifier = Modifier.height(24.dp))
             Text(
-                text = "APEX TRACKER",
+                text = stringResource(R.string.app_title_caps),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 4.sp,
@@ -311,8 +313,8 @@ fun ApexLogo(modifier: Modifier = Modifier, color: Color = MaterialTheme.colorSc
 }
 
 data class AppModule(
-    val title: String,
-    val description: String,
+    @StringRes val titleRes: Int,
+    @StringRes val descriptionRes: Int,
     val icon: ImageVector,
     val route: String,
     val isProminent: Boolean = false,
@@ -331,12 +333,12 @@ fun MainMenu(
 ) {
     val modules = remember {
         listOf(
-            AppModule("Overview", "Day at a glance", Icons.Default.GridView, "overview", true),
-            AppModule("Budget", "Expenses", Icons.Default.AccountBalanceWallet, "budget_tracker"),
-            AppModule("Study", "Stopwatch", Icons.Default.Timer, "study_tracker"),
-            AppModule("Screen", "Usage", Icons.Default.Monitor, "screen_time"),
-            AppModule("Tasks", "Reminders", Icons.Default.Notifications, "reminders"),
-            AppModule("Notes", "Ideas", Icons.AutoMirrored.Filled.Notes, "notes")
+            AppModule(R.string.module_overview, R.string.module_overview_desc, Icons.Default.GridView, "overview", true),
+            AppModule(R.string.module_budget, R.string.module_budget_desc, Icons.Default.AccountBalanceWallet, "budget_tracker"),
+            AppModule(R.string.module_study, R.string.module_study_desc, Icons.Default.Timer, "study_tracker"),
+            AppModule(R.string.module_screen, R.string.module_screen_desc, Icons.Default.Monitor, "screen_time"),
+            AppModule(R.string.module_tasks, R.string.module_tasks_desc, Icons.Default.Notifications, "reminders"),
+            AppModule(R.string.module_notes, R.string.module_notes_desc, Icons.AutoMirrored.Filled.Notes, "notes")
         )
     }
 
@@ -370,7 +372,7 @@ fun MainMenu(
                         ApexLogo(modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            "APEX TRACKER",
+                            stringResource(R.string.app_title_caps),
                             fontWeight = FontWeight.Black,
                             style = MaterialTheme.typography.titleMedium,
                             letterSpacing = 2.sp
@@ -465,7 +467,7 @@ fun MainMenu(
                     .padding(bottom = 32.dp)
             ) {
                 Text(
-                    "Settings",
+                    stringResource(R.string.menu_settings),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Black,
                     color = MaterialTheme.colorScheme.onSurface
@@ -475,10 +477,9 @@ fun MainMenu(
 
                 // User Profile / Auth Section
                 Text(
-                    "Account",
+                    stringResource(R.string.menu_account),
                     style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 
@@ -516,7 +517,7 @@ fun MainMenu(
                             }
                             Spacer(modifier = Modifier.width(16.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(user?.displayName ?: "User", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                                Text(user?.displayName ?: stringResource(R.string.user_fallback), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
                                 Text(user?.email ?: "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             IconButton(onClick = { authViewModel.signOut(context) }) {
@@ -532,7 +533,7 @@ fun MainMenu(
                         ) {
                             Icon(Icons.Default.Cloud, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Sign in with Google")
+                            Text(stringResource(R.string.sign_in_google))
                         }
                     }
                 }
@@ -540,10 +541,9 @@ fun MainMenu(
                 Spacer(modifier = Modifier.height(24.dp))
                 
                 Text(
-                    "Appearance",
+                    stringResource(R.string.menu_appearance),
                     style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
+                    color = MaterialTheme.colorScheme.primary
                 )
                 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -563,7 +563,7 @@ fun MainMenu(
                             tint = MaterialTheme.colorScheme.primary
                         )
                         Spacer(modifier = Modifier.width(16.dp))
-                        Text("Dark Mode", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(R.string.menu_dark_mode), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
                         Switch(
                             checked = isDarkMode, 
                             onCheckedChange = onDarkModeChange,
@@ -575,10 +575,9 @@ fun MainMenu(
                 Spacer(modifier = Modifier.height(24.dp))
                 
                 Text(
-                    "Color Accent",
+                    stringResource(R.string.menu_color_accent),
                     style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
+                    color = MaterialTheme.colorScheme.primary
                 )
                 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -675,14 +674,14 @@ fun ProminentModuleCard(module: AppModule, onModuleSelected: (String) -> Unit, m
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = module.title,
+                        text = stringResource(module.titleRes),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Black,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1
                     )
                     Text(
-                        text = module.description,
+                        text = stringResource(module.descriptionRes),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
@@ -750,18 +749,18 @@ fun GridModuleCard(module: AppModule, onModuleSelected: (String) -> Unit, modifi
             }
             Column {
                 Text(
-                    text = module.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
+                    text = stringResource(module.titleRes),
+                    // labelLarge (Bold 14sp), not titleSmall — the menu card title is
+                    // not the tracked ALL-CAPS screen-header style.
+                    style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1
                 )
                 Text(
-                    text = module.description,
+                    text = stringResource(module.descriptionRes),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    maxLines = 1,
-                    fontSize = 11.sp
+                    maxLines = 1
                 )
             }
         }
