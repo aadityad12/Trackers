@@ -43,6 +43,12 @@ android {
     }
 }
 
+// Room exports schema JSONs here (checked in) so future migrations can be
+// written and tested against the historical schema. See AppDatabase.kt.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

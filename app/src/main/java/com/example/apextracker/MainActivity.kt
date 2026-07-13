@@ -70,6 +70,10 @@ class MainActivity : ComponentActivity() {
     companion object {
         /** Intent extra naming a navigation route to open (e.g. from a notification tap). */
         const val EXTRA_NAVIGATE_TO = "navigate_to"
+
+        // Process-scoped so activity recreation (rotation, theme change) doesn't
+        // re-trigger the cold-start initial sync. See shouldRunInitialSync().
+        private var initialSyncRanThisProcess = false
     }
 
     private val notificationPermissionLauncher = registerForActivityResult(
@@ -106,9 +110,18 @@ class MainActivity : ComponentActivity() {
             val firebaseManager = remember { FirebaseManager(this) }
             var previousUser by remember { mutableStateOf(firebaseManager.currentUser) }
 
-            // Trigger full initial sync on new sign-in (null → non-null transition only)
+            // Trigger full initial sync on new sign-in AND once per process when a
+            // signed-in session was restored on cold start (Issue #17 — the transition
+            // check alone never fires for returning users, so cross-device changes and
+            // post-destructive-migration restores never arrived).
             LaunchedEffect(user) {
-                if (user != null && previousUser == null) {
+                if (shouldRunInitialSync(
+                        signedIn = user != null,
+                        wasSignedOut = previousUser == null,
+                        alreadyRanThisProcess = initialSyncRanThisProcess
+                    )
+                ) {
+                    initialSyncRanThisProcess = true
                     authViewModel.setSyncing(true)
                     try {
                         firebaseManager.performInitialSync(AppDatabase.getDatabase(applicationContext))
