@@ -101,12 +101,12 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
                 },
                 navigationIcon = {
                     IconButton(onClick = onBackToMenu) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
                 actions = {
                     IconButton(onClick = { showResetConfirm = true }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Reset")
+                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.action_reset))
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(

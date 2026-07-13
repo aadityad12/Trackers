@@ -47,13 +47,13 @@ fun OverviewView(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBackToMenu) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
                 actions = {
                     IconButton(onClick = { showCalendar = !showCalendar }) {
                         Icon(if (showCalendar) Icons.Default.ViewAgenda else Icons.Default.CalendarMonth, 
-                            contentDescription = "Toggle calendar view",
+                            contentDescription = stringResource(R.string.cd_toggle_calendar_view),
                             tint = if (showCalendar) MaterialTheme.colorScheme.primary else LocalContentColor.current
                         )
                     }
@@ -162,7 +162,7 @@ fun CompactDateNavigator(selectedDate: LocalDate, onDateSelected: (LocalDate) ->
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = { onDateSelected(selectedDate.minusDays(1)) }) {
-                Icon(Icons.Default.ChevronLeft, contentDescription = "Prev")
+                Icon(Icons.Default.ChevronLeft, contentDescription = stringResource(R.string.cd_prev))
             }
             
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -179,7 +179,7 @@ fun CompactDateNavigator(selectedDate: LocalDate, onDateSelected: (LocalDate) ->
             }
 
             IconButton(onClick = { onDateSelected(selectedDate.plusDays(1)) }) {
-                Icon(Icons.Default.ChevronRight, contentDescription = "Next")
+                Icon(Icons.Default.ChevronRight, contentDescription = stringResource(R.string.cd_next))
             }
         }
     }

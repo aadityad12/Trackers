@@ -44,7 +44,7 @@ fun BudgetSettingsDialog(
             ) {
                 if (activeSubScreen != null) {
                     IconButton(onClick = { activeSubScreen = null }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 }
                 Text(
@@ -173,7 +173,7 @@ fun CategoryItem(category: Category, onEdit: () -> Unit) {
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(category.name, style = MaterialTheme.typography.bodyMedium)
             }
-            Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+            Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.cd_edit), modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
         }
     }
 }
@@ -203,7 +203,7 @@ fun CategoryDialog(
                 Text(title)
                 if (onDelete != null) {
                     IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.action_delete), tint = MaterialTheme.colorScheme.error)
                     }
                 }
             }
@@ -349,7 +349,7 @@ fun SubscriptionDialog(
                 Text(title)
                 if (onDelete != null) {
                     IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.action_delete), tint = MaterialTheme.colorScheme.error)
                     }
                 }
             }

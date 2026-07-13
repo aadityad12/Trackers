@@ -144,7 +144,7 @@ fun BudgetItemDialog(
                 Text(title, fontWeight = FontWeight.Bold)
                 if (onDelete != null) {
                     IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.action_delete), tint = MaterialTheme.colorScheme.error)
                     }
                 }
             }

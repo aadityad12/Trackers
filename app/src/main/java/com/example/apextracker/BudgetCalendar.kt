@@ -38,15 +38,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
-import java.util.Locale
+import java.time.format.TextStyle
 
 @Composable
 fun BudgetCalendarView(
@@ -90,23 +92,25 @@ fun BudgetMonthSelector(currentMonth: YearMonth, onMonthChange: (YearMonth) -> U
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = { onMonthChange(currentMonth.minusMonths(1)) }) {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous Month")
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = stringResource(R.string.cd_previous_month))
         }
         Text(
             text = currentMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
             style = MaterialTheme.typography.titleLarge
         )
         IconButton(onClick = { onMonthChange(currentMonth.plusMonths(1)) }) {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next Month")
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.cd_next_month))
         }
     }
 }
 
 @Composable
 fun WeekdayHeaders() {
+    val locale = LocalLocale.current.platformLocale
     Row(modifier = Modifier.fillMaxWidth()) {
-        listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat").forEach { day ->
-            Text(text = day, modifier = Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+        val firstDay = DayOfWeek.SUNDAY
+        (0..6).map { firstDay.plus(it.toLong()) }.forEach { day ->
+            Text(text = day.getDisplayName(TextStyle.SHORT, locale), modifier = Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
         }
     }
 }

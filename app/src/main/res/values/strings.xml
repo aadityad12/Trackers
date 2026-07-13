@@ -145,4 +145,26 @@
     <string name="notes_retention_168h">168h</string>
     <string name="notes_deleted_after">Notes will be permanently deleted after %1$d hours.</string>
     <string name="notes_modified_prefix">Modified: %1$s</string>
+
+    <!-- Content descriptions (accessibility / TalkBack) -->
+    <string name="cd_back">Back</string>
+    <string name="cd_home">Home</string>
+    <string name="cd_edit">Edit</string>
+    <string name="cd_prev">Prev</string>
+    <string name="cd_next">Next</string>
+    <string name="cd_previous_month">Previous Month</string>
+    <string name="cd_next_month">Next Month</string>
+    <string name="cd_sync_status">Sync Status</string>
+    <string name="cd_profile_picture">Profile Picture</string>
+    <string name="cd_sign_out">Sign Out</string>
+    <string name="cd_add_note">Add Note</string>
+    <string name="cd_add_reminder">Add Reminder</string>
+    <string name="cd_add_item">Add Item</string>
+    <string name="cd_toggle_calendar_view">Toggle calendar view</string>
+    <string name="cd_show_list">Show list</string>
+    <string name="cd_show_calendar">Show calendar</string>
+    <string name="cd_exit_selection">Exit selection</string>
+    <string name="cd_delete_selected">Delete selected</string>
+    <string name="cd_recurring">Recurring</string>
+    <string name="cd_exclude_apps">Exclude Apps</string>
 </resources>

@@ -386,7 +386,7 @@ fun MainMenu(
                         
                         Icon(
                             imageVector = syncIcon,
-                            contentDescription = "Sync Status",
+                            contentDescription = stringResource(R.string.cd_sync_status),
                             tint = syncTint,
                             modifier = Modifier.padding(end = 8.dp).size(20.dp)
                         )
@@ -394,7 +394,7 @@ fun MainMenu(
                     IconButton(onClick = { showSettingsDialog = true }) {
                         Icon(
                             imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings",
+                            contentDescription = stringResource(R.string.menu_settings),
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -496,7 +496,7 @@ fun MainMenu(
                             if (user?.photoUrl != null) {
                                 AsyncImage(
                                     model = user?.photoUrl,
-                                    contentDescription = "Profile Picture",
+                                    contentDescription = stringResource(R.string.cd_profile_picture),
                                     modifier = Modifier.size(48.dp).clip(CircleShape),
                                     contentScale = ContentScale.Crop
                                 )
@@ -521,7 +521,7 @@ fun MainMenu(
                                 Text(user?.email ?: "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             IconButton(onClick = { authViewModel.signOut(context) }) {
-                                Icon(Icons.Default.Logout, contentDescription = "Sign Out", tint = MaterialTheme.colorScheme.error)
+                                Icon(Icons.Default.Logout, contentDescription = stringResource(R.string.cd_sign_out), tint = MaterialTheme.colorScheme.error)
                             }
                         }
                     } else {

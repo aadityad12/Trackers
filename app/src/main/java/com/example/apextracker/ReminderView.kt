@@ -103,11 +103,11 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                             isSelectionMode = false
                             selectedCompletedIds = emptySet()
                         }) {
-                            Icon(Icons.Default.Close, contentDescription = "Exit selection")
+                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_exit_selection))
                         }
                     } else {
                         IconButton(onClick = onBackToMenu) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                         }
                     }
                 },
@@ -118,11 +118,11 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                             isSelectionMode = false
                             selectedCompletedIds = emptySet()
                         }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete selected")
+                            Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.cd_delete_selected))
                         }
                     } else {
                         IconButton(onClick = { showSettingsDialog = true }) {
-                            Icon(Icons.Default.Settings, contentDescription = "Settings")
+                            Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.menu_settings))
                         }
                     }
                 },
@@ -140,7 +140,7 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                     shape = RoundedCornerShape(16.dp)
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Reminder")
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.cd_add_reminder))
                 }
             }
         }
@@ -608,7 +608,7 @@ fun ReminderItemModern(
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
                             imageVector = Icons.Default.Refresh,
-                            contentDescription = "Recurring",
+                            contentDescription = stringResource(R.string.cd_recurring),
                             modifier = Modifier.size(14.dp),
                             tint = MaterialTheme.colorScheme.outline
                         )
@@ -651,7 +651,7 @@ fun ReminderItemModern(
                 IconButton(onClick = onEdit, modifier = Modifier.size(24.dp)) {
                     Icon(
                         imageVector = Icons.Default.ChevronRight, 
-                        contentDescription = "Edit",
+                        contentDescription = stringResource(R.string.cd_edit),
                         tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
                     )
                 }

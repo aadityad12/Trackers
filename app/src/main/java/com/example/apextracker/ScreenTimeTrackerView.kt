@@ -47,13 +47,13 @@ fun ScreenTimeTrackerView(onBackToMenu: () -> Unit, viewModel: ScreenTimeViewMod
                 title = { Text(stringResource(R.string.screen_time_title)) },
                 navigationIcon = {
                     IconButton(onClick = if (showSettings) { { showSettings = false } } else onBackToMenu) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
                 actions = {
                     if (hasPermission && !showSettings) {
                         IconButton(onClick = { showSettings = true }) {
-                            Icon(Icons.Default.Settings, contentDescription = "Exclude Apps")
+                            Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.cd_exclude_apps))
                         }
                     }
                 }
