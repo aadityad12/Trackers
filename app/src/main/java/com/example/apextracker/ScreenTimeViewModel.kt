@@ -44,6 +44,12 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
     private val _aggregatedUsage = MutableStateFlow<List<DeviceSession>>(emptyList())
     val aggregatedUsage: StateFlow<List<DeviceSession>> = _aggregatedUsage.asStateFlow()
 
+    // Updated by the live cross-device listener (arbitrary cadence); recombined with the
+    // freshly-measured self value on every 30s tick in refreshAggregatedUsage(). Each side
+    // has exactly one writer, so there's no race — worst case is a few hundred ms staleness
+    // on one side, never a dropped entry.
+    private var latestOtherDevices: List<DeviceSession> = emptyList()
+
     private val _excludedApps = excludedAppDao.getExcludedApps()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -62,6 +68,14 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
         checkPermission()
         loadInstalledApps()
         startScreenTimeUpdates()
+        viewModelScope.launch {
+            if (firebaseManager.userId != null) {
+                firebaseManager.getOtherDevicesScreenTimeFlow().collect { others ->
+                    latestOtherDevices = others
+                    refreshAggregatedUsage(_todayScreenTimeMillis.value)
+                }
+            }
+        }
     }
 
     fun checkPermission() {
@@ -165,8 +179,7 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
         refreshAggregatedUsage(totalFilteredTime)
     }
 
-    private suspend fun refreshAggregatedUsage(currentDeviceMillis: Long) {
-        val otherDevices = if (firebaseManager.userId != null) firebaseManager.getOtherDevicesTodayUsage() else emptyList()
+    private fun refreshAggregatedUsage(currentDeviceMillis: Long) {
         val currentDevice = DeviceSession(
             deviceId = firebaseManager.deviceId,
             deviceName = Build.MODEL,
@@ -174,7 +187,7 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
             durationMillis = currentDeviceMillis,
             isCurrentDevice = true
         )
-        _aggregatedUsage.value = listOf(currentDevice) + otherDevices
+        _aggregatedUsage.value = listOf(currentDevice) + latestOtherDevices
     }
 
     // queryEvents is a blocking binder call and the event loop iterates the whole day's events;
