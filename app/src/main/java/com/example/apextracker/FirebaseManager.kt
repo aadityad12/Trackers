@@ -6,7 +6,10 @@ import android.provider.Settings
 import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.SetOptions
 import com.google.gson.Gson
 import kotlinx.coroutines.channels.awaitClose
@@ -500,40 +503,6 @@ class FirebaseManager(private val context: Context) {
             ).await()
     }
 
-    suspend fun getOtherDevicesTodayUsage(): List<DeviceSession> {
-        val uid = userId ?: return emptyList()
-        val today = LocalDate.now().toString()
-
-        val devicesSnapshot = firestore.collection("users").document(uid)
-            .collection("devices")
-            .get().await()
-
-        val result = mutableListOf<DeviceSession>()
-        for (deviceDoc in devicesSnapshot.documents) {
-            val dId = deviceDoc.id
-            if (dId == deviceId) continue
-            val dName = deviceDoc.getString("deviceName") ?: dId
-
-            val sessionDoc = firestore.collection("users").document(uid)
-                .collection("devices").document(dId)
-                .collection("screen_time").document(today)
-                .get().await()
-
-            if (sessionDoc.exists()) {
-                val millis = sessionDoc.getLong("durationMillis") ?: 0L
-                result.add(
-                    DeviceSession(
-                        deviceId = dId,
-                        deviceName = dName,
-                        date = today,
-                        durationMillis = millis,
-                        isCurrentDevice = false
-                    )
-                )
-            }
-        }
-        return result
-    }
 
     // ── Excluded Apps ─────────────────────────────────────────────────────────
 
@@ -583,21 +552,55 @@ class FirebaseManager(private val context: Context) {
         }
     }
 
+    private suspend fun applyCategoryDoc(db: AppDatabase, docId: String, data: Map<String, Any?>) {
+        try {
+            val parsed = parseCategoryDoc(data)
+            val local = db.categoryDao().getCategoryByCloudId(parsed.cloudId)
+            if (local == null) {
+                db.categoryDao().insertCategory(parsed)
+            } else if (parsed.modifiedAt > local.modifiedAt) {
+                db.categoryDao().updateCategory(
+                    local.copy(name = parsed.name, colorHex = parsed.colorHex, modifiedAt = parsed.modifiedAt)
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Skipping malformed category doc $docId", e)
+        }
+    }
+
+    private suspend fun removeCategoryByCloudId(db: AppDatabase, cloudId: String) {
+        val local = db.categoryDao().getCategoryByCloudId(cloudId)
+        if (local == null || local.cloudId.isEmpty()) return
+        db.categoryDao().deleteCategory(local)
+    }
+
+    private fun categoryChangesFlow(): Flow<List<DocumentChange>> = callbackFlow {
+        val uid = userId ?: return@callbackFlow awaitClose { }
+        val listener = firestore.collection("users").document(uid)
+            .collection("categories")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) { Log.w(TAG, "Category listener error", error); return@addSnapshotListener }
+                if (snapshot == null || snapshot.metadata.hasPendingWrites()) return@addSnapshotListener
+                trySend(snapshot.documentChanges)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun collectCategoryChanges(db: AppDatabase) {
+        categoryChangesFlow().collect { changes ->
+            for (change in changes) {
+                val docId = change.document.id
+                when (change.type) {
+                    DocumentChange.Type.ADDED, DocumentChange.Type.MODIFIED -> applyCategoryDoc(db, docId, change.document.data)
+                    DocumentChange.Type.REMOVED -> removeCategoryByCloudId(db, docId)
+                }
+            }
+        }
+    }
+
     private suspend fun syncCategories(db: AppDatabase) {
         for ((docId, data) in pullAllCategories()) {
-            try {
-                val parsed = parseCategoryDoc(data)
-                val local = db.categoryDao().getCategoryByCloudId(parsed.cloudId)
-                if (local == null) {
-                    db.categoryDao().insertCategory(parsed)
-                } else if (parsed.modifiedAt > local.modifiedAt) {
-                    db.categoryDao().updateCategory(
-                        local.copy(name = parsed.name, colorHex = parsed.colorHex, modifiedAt = parsed.modifiedAt)
-                    )
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Skipping malformed category doc $docId", e)
-            }
+            applyCategoryDoc(db, docId, data)
         }
         // Assign cloudIds where missing, then push ALL local rows — not just the
         // newly-assigned ones — so rows created or edited while signed out still reach
@@ -609,6 +612,62 @@ class FirebaseManager(private val context: Context) {
                 updated
             } else cat
             pushCategory(toPush)
+        }
+    }
+
+    private suspend fun applyBudgetItemDoc(db: AppDatabase, docId: String, data: Map<String, Any?>, catLookup: Map<String, Long>) {
+        try {
+            val (parsed, categoryCloudId) = parseBudgetItemDoc(data)
+            val categoryId = categoryCloudId?.let { catLookup[it] }
+
+            val local = db.budgetDao().getItemByCloudId(parsed.cloudId)
+            if (local == null) {
+                db.budgetDao().insertItem(parsed.copy(categoryId = categoryId))
+            } else if (parsed.modifiedAt > local.modifiedAt) {
+                db.budgetDao().updateItem(
+                    local.copy(
+                        title = parsed.title, amount = parsed.amount, description = parsed.description,
+                        date = parsed.date, categoryId = categoryId, modifiedAt = parsed.modifiedAt
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Skipping malformed budget doc $docId", e)
+        }
+    }
+
+    private suspend fun removeBudgetItemByCloudId(db: AppDatabase, cloudId: String) {
+        val local = db.budgetDao().getItemByCloudId(cloudId)
+        if (local == null || local.cloudId.isEmpty()) return
+        db.budgetDao().deleteItem(local)
+    }
+
+    private fun budgetItemChangesFlow(): Flow<List<DocumentChange>> = callbackFlow {
+        val uid = userId ?: return@callbackFlow awaitClose { }
+        val listener = firestore.collection("users").document(uid)
+            .collection("budget")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) { Log.w(TAG, "Budget item listener error", error); return@addSnapshotListener }
+                if (snapshot == null || snapshot.metadata.hasPendingWrites()) return@addSnapshotListener
+                trySend(snapshot.documentChanges)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun collectBudgetItemChanges(db: AppDatabase) {
+        budgetItemChangesFlow().collect { changes ->
+            // Recomputed each fire: a referenced category may have arrived via its own
+            // listener at any time, independent of this snapshot.
+            val catLookup = db.categoryDao().getAllCategoriesOneShot()
+                .filter { it.cloudId.isNotEmpty() }
+                .associate { it.cloudId to it.id }
+            for (change in changes) {
+                val docId = change.document.id
+                when (change.type) {
+                    DocumentChange.Type.ADDED, DocumentChange.Type.MODIFIED -> applyBudgetItemDoc(db, docId, change.document.data, catLookup)
+                    DocumentChange.Type.REMOVED -> removeBudgetItemByCloudId(db, docId)
+                }
+            }
         }
     }
 
@@ -653,24 +712,7 @@ class FirebaseManager(private val context: Context) {
         }
 
         for ((docId, data) in modernDocs) {
-            try {
-                val (parsed, categoryCloudId) = parseBudgetItemDoc(data)
-                val categoryId = categoryCloudId?.let { catLookup[it] }
-
-                val local = db.budgetDao().getItemByCloudId(parsed.cloudId)
-                if (local == null) {
-                    db.budgetDao().insertItem(parsed.copy(categoryId = categoryId))
-                } else if (parsed.modifiedAt > local.modifiedAt) {
-                    db.budgetDao().updateItem(
-                        local.copy(
-                            title = parsed.title, amount = parsed.amount, description = parsed.description,
-                            date = parsed.date, categoryId = categoryId, modifiedAt = parsed.modifiedAt
-                        )
-                    )
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Skipping malformed budget doc $docId", e)
-            }
+            applyBudgetItemDoc(db, docId, data, catLookup)
         }
         // Assign cloudIds where missing, then push ALL local rows (see syncCategories).
         // Re-fetch categories: syncCategories may have assigned cloudIds after catLookup was built.
@@ -688,24 +730,58 @@ class FirebaseManager(private val context: Context) {
         }
     }
 
+    private suspend fun applySubscriptionDoc(db: AppDatabase, docId: String, data: Map<String, Any?>) {
+        try {
+            val parsed = parseSubscriptionDoc(data)
+            val local = db.subscriptionDao().getByCloudId(parsed.cloudId)
+            if (local == null) {
+                db.subscriptionDao().insertSubscription(parsed)
+            } else if (parsed.modifiedAt > local.modifiedAt) {
+                db.subscriptionDao().updateSubscription(
+                    local.copy(
+                        name = parsed.name, amount = parsed.amount, renewalDate = parsed.renewalDate,
+                        notes = parsed.notes, lastAddedDate = parsed.lastAddedDate, modifiedAt = parsed.modifiedAt
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Skipping malformed subscription doc $docId", e)
+        }
+    }
+
+    private suspend fun removeSubscriptionByCloudId(db: AppDatabase, cloudId: String) {
+        val local = db.subscriptionDao().getByCloudId(cloudId)
+        if (local == null || local.cloudId.isEmpty()) return
+        db.subscriptionDao().deleteSubscription(local)
+    }
+
+    private fun subscriptionChangesFlow(): Flow<List<DocumentChange>> = callbackFlow {
+        val uid = userId ?: return@callbackFlow awaitClose { }
+        val listener = firestore.collection("users").document(uid)
+            .collection("subscriptions")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) { Log.w(TAG, "Subscription listener error", error); return@addSnapshotListener }
+                if (snapshot == null || snapshot.metadata.hasPendingWrites()) return@addSnapshotListener
+                trySend(snapshot.documentChanges)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun collectSubscriptionChanges(db: AppDatabase) {
+        subscriptionChangesFlow().collect { changes ->
+            for (change in changes) {
+                val docId = change.document.id
+                when (change.type) {
+                    DocumentChange.Type.ADDED, DocumentChange.Type.MODIFIED -> applySubscriptionDoc(db, docId, change.document.data)
+                    DocumentChange.Type.REMOVED -> removeSubscriptionByCloudId(db, docId)
+                }
+            }
+        }
+    }
+
     private suspend fun syncSubscriptions(db: AppDatabase) {
         for ((docId, data) in pullAllSubscriptions()) {
-            try {
-                val parsed = parseSubscriptionDoc(data)
-                val local = db.subscriptionDao().getByCloudId(parsed.cloudId)
-                if (local == null) {
-                    db.subscriptionDao().insertSubscription(parsed)
-                } else if (parsed.modifiedAt > local.modifiedAt) {
-                    db.subscriptionDao().updateSubscription(
-                        local.copy(
-                            name = parsed.name, amount = parsed.amount, renewalDate = parsed.renewalDate,
-                            notes = parsed.notes, lastAddedDate = parsed.lastAddedDate, modifiedAt = parsed.modifiedAt
-                        )
-                    )
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Skipping malformed subscription doc $docId", e)
-            }
+            applySubscriptionDoc(db, docId, data)
         }
         // Assign cloudIds where missing, then push ALL local rows (see syncCategories).
         for (sub in db.subscriptionDao().getAllSubscriptionsSync()) {
@@ -718,24 +794,58 @@ class FirebaseManager(private val context: Context) {
         }
     }
 
+    private suspend fun applyNoteDoc(db: AppDatabase, docId: String, data: Map<String, Any?>) {
+        try {
+            val parsed = parseNoteDoc(data)
+            val local = db.noteDao().getNoteByCloudId(parsed.cloudId)
+            if (local == null) {
+                db.noteDao().insert(parsed)
+            } else if (parsed.modifiedAt.isAfter(local.modifiedAt)) {
+                db.noteDao().update(
+                    local.copy(
+                        title = parsed.title, content = parsed.content, modifiedAt = parsed.modifiedAt,
+                        isDeleted = parsed.isDeleted, deletedAt = parsed.deletedAt
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Skipping malformed note doc $docId", e)
+        }
+    }
+
+    private suspend fun removeNoteByCloudId(db: AppDatabase, cloudId: String) {
+        val local = db.noteDao().getNoteByCloudId(cloudId)
+        if (local == null || local.cloudId.isEmpty()) return
+        db.noteDao().deletePermanently(local)
+    }
+
+    private fun noteChangesFlow(): Flow<List<DocumentChange>> = callbackFlow {
+        val uid = userId ?: return@callbackFlow awaitClose { }
+        val listener = firestore.collection("users").document(uid)
+            .collection("notes")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) { Log.w(TAG, "Note listener error", error); return@addSnapshotListener }
+                if (snapshot == null || snapshot.metadata.hasPendingWrites()) return@addSnapshotListener
+                trySend(snapshot.documentChanges)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun collectNoteChanges(db: AppDatabase) {
+        noteChangesFlow().collect { changes ->
+            for (change in changes) {
+                val docId = change.document.id
+                when (change.type) {
+                    DocumentChange.Type.ADDED, DocumentChange.Type.MODIFIED -> applyNoteDoc(db, docId, change.document.data)
+                    DocumentChange.Type.REMOVED -> removeNoteByCloudId(db, docId)
+                }
+            }
+        }
+    }
+
     private suspend fun syncNotes(db: AppDatabase) {
         for ((docId, data) in pullAllNotes()) {
-            try {
-                val parsed = parseNoteDoc(data)
-                val local = db.noteDao().getNoteByCloudId(parsed.cloudId)
-                if (local == null) {
-                    db.noteDao().insert(parsed)
-                } else if (parsed.modifiedAt.isAfter(local.modifiedAt)) {
-                    db.noteDao().update(
-                        local.copy(
-                            title = parsed.title, content = parsed.content, modifiedAt = parsed.modifiedAt,
-                            isDeleted = parsed.isDeleted, deletedAt = parsed.deletedAt
-                        )
-                    )
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Skipping malformed note doc $docId", e)
-            }
+            applyNoteDoc(db, docId, data)
         }
         // Assign cloudIds where missing, then push ALL local rows (see syncCategories).
         for (note in db.noteDao().getAllNotesOneShot()) {
@@ -748,33 +858,36 @@ class FirebaseManager(private val context: Context) {
         }
     }
 
-    private suspend fun syncReminders(db: AppDatabase) {
-        val cloudDocs = pullAllReminders()
-
-        // First pass: insert/update all without resolving parentId
-        for ((docId, data) in cloudDocs) {
-            try {
-                val parsed = parseReminderDoc(data, gson)
-                val local = db.reminderDao().getReminderByCloudId(parsed.cloudId)
-                if (local == null) {
-                    db.reminderDao().insertReminder(parsed)
-                } else if (parsed.modifiedAt > local.modifiedAt) {
-                    db.reminderDao().updateReminder(
-                        local.copy(
-                            name = parsed.name, date = parsed.date, time = parsed.time,
-                            description = parsed.description, isCompleted = parsed.isCompleted,
-                            recurrence = parsed.recurrence,
-                            occurrencesCompleted = parsed.occurrencesCompleted,
-                            parentCloudId = parsed.parentCloudId, modifiedAt = parsed.modifiedAt
-                        )
+    private suspend fun applyReminderDoc(db: AppDatabase, docId: String, data: Map<String, Any?>) {
+        try {
+            val parsed = parseReminderDoc(data, gson)
+            val local = db.reminderDao().getReminderByCloudId(parsed.cloudId)
+            if (local == null) {
+                db.reminderDao().insertReminder(parsed)
+            } else if (parsed.modifiedAt > local.modifiedAt) {
+                db.reminderDao().updateReminder(
+                    local.copy(
+                        name = parsed.name, date = parsed.date, time = parsed.time,
+                        description = parsed.description, isCompleted = parsed.isCompleted,
+                        recurrence = parsed.recurrence,
+                        occurrencesCompleted = parsed.occurrencesCompleted,
+                        parentCloudId = parsed.parentCloudId, modifiedAt = parsed.modifiedAt
                     )
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Skipping malformed reminder doc $docId", e)
+                )
             }
+        } catch (e: Exception) {
+            Log.w(TAG, "Skipping malformed reminder doc $docId", e)
         }
+    }
 
-        // Second pass: resolve parentCloudId → parentId
+    private suspend fun removeReminderByCloudId(db: AppDatabase, cloudId: String) {
+        val local = db.reminderDao().getReminderByCloudId(cloudId)
+        if (local == null || local.cloudId.isEmpty()) return
+        db.reminderDao().deleteReminder(local)
+    }
+
+    /** Resolves parentCloudId → parentId once all rows in [cloudDocs] exist locally. Safe to re-run: only writes when the link actually changed. */
+    private suspend fun resolveReminderParentLinks(db: AppDatabase, cloudDocs: List<Pair<String, Map<String, Any?>>>) {
         for ((_, data) in cloudDocs) {
             val cloudId = (data["cloudId"] as? String)?.takeIf { it.isNotBlank() } ?: continue
             val parentCloudId = data["parentCloudId"] as? String ?: continue
@@ -784,6 +897,46 @@ class FirebaseManager(private val context: Context) {
                 db.reminderDao().updateReminder(child.copy(parentId = parent.id))
             }
         }
+    }
+
+    private fun reminderChangesFlow(): Flow<QuerySnapshot?> = callbackFlow {
+        val uid = userId ?: return@callbackFlow awaitClose { }
+        val listener = firestore.collection("users").document(uid)
+            .collection("reminders")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) { Log.w(TAG, "Reminder listener error", error); return@addSnapshotListener }
+                if (snapshot == null || snapshot.metadata.hasPendingWrites()) return@addSnapshotListener
+                trySend(snapshot)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun collectReminderChanges(db: AppDatabase) {
+        reminderChangesFlow().collect { snapshot ->
+            if (snapshot == null) return@collect
+            for (change in snapshot.documentChanges) {
+                val docId = change.document.id
+                when (change.type) {
+                    DocumentChange.Type.ADDED, DocumentChange.Type.MODIFIED -> applyReminderDoc(db, docId, change.document.data)
+                    DocumentChange.Type.REMOVED -> removeReminderByCloudId(db, docId)
+                }
+            }
+            // Re-resolve against the full current doc set, not just this batch's changes —
+            // a parent and child can arrive in different snapshot fires.
+            resolveReminderParentLinks(db, snapshot.documents.mapNotNull { d -> d.data?.let { d.id to it } })
+        }
+    }
+
+    private suspend fun syncReminders(db: AppDatabase) {
+        val cloudDocs = pullAllReminders()
+
+        // First pass: insert/update all without resolving parentId
+        for ((docId, data) in cloudDocs) {
+            applyReminderDoc(db, docId, data)
+        }
+
+        // Second pass: resolve parentCloudId → parentId
+        resolveReminderParentLinks(db, cloudDocs)
 
         // Assign cloudIds where missing (threading parentCloudId within the batch),
         // then push ALL local rows (see syncCategories).
@@ -800,17 +953,46 @@ class FirebaseManager(private val context: Context) {
         }
     }
 
+    private suspend fun applyStudySessionDoc(db: AppDatabase, docId: String, data: Map<String, Any?>) {
+        try {
+            val parsed = parseStudySessionDoc(data)
+            // Only insert if local doesn't have this date; local timer is source of truth
+            if (db.studySessionDao().getSessionByDate(parsed.date) == null) {
+                db.studySessionDao().insertSession(parsed)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Skipping malformed study session doc $docId", e)
+        }
+    }
+
+    private fun studySessionChangesFlow(): Flow<List<DocumentChange>> = callbackFlow {
+        val uid = userId ?: return@callbackFlow awaitClose { }
+        val listener = firestore.collection("users").document(uid)
+            .collection("study_sessions")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) { Log.w(TAG, "Study session listener error", error); return@addSnapshotListener }
+                if (snapshot == null || snapshot.metadata.hasPendingWrites()) return@addSnapshotListener
+                trySend(snapshot.documentChanges)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun collectStudySessionChanges(db: AppDatabase) {
+        studySessionChangesFlow().collect { changes ->
+            for (change in changes) {
+                val docId = change.document.id
+                when (change.type) {
+                    DocumentChange.Type.ADDED, DocumentChange.Type.MODIFIED -> applyStudySessionDoc(db, docId, change.document.data)
+                    // Study sessions aren't user-deletable; local timer stays source of truth.
+                    DocumentChange.Type.REMOVED -> {}
+                }
+            }
+        }
+    }
+
     private suspend fun syncStudySessions(db: AppDatabase) {
         for ((docId, data) in pullAllStudySessions()) {
-            try {
-                val parsed = parseStudySessionDoc(data)
-                // Only insert if local doesn't have this date; local timer is source of truth
-                if (db.studySessionDao().getSessionByDate(parsed.date) == null) {
-                    db.studySessionDao().insertSession(parsed)
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Skipping malformed study session doc $docId", e)
-            }
+            applyStudySessionDoc(db, docId, data)
         }
         // Push all local sessions to cloud (upsert by date)
         for (session in db.studySessionDao().getAllSessionsOneShot()) {
@@ -826,6 +1008,84 @@ class FirebaseManager(private val context: Context) {
         // Push all local apps to cloud
         for (app in db.excludedAppDao().getAllExcludedAppsOneShot()) {
             pushExcludedApp(app.packageName)
+        }
+    }
+
+    private fun excludedAppChangesFlow(): Flow<List<DocumentChange>> = callbackFlow {
+        val uid = userId ?: return@callbackFlow awaitClose { }
+        val listener = firestore.collection("users").document(uid)
+            .collection("excluded_apps")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) { Log.w(TAG, "Excluded app listener error", error); return@addSnapshotListener }
+                if (snapshot == null || snapshot.metadata.hasPendingWrites()) return@addSnapshotListener
+                trySend(snapshot.documentChanges)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun collectExcludedAppChanges(db: AppDatabase) {
+        excludedAppChangesFlow().collect { changes ->
+            for (change in changes) {
+                // docId IS the packageName for this collection — no cloudId indirection.
+                val packageName = change.document.id
+                when (change.type) {
+                    DocumentChange.Type.ADDED, DocumentChange.Type.MODIFIED -> db.excludedAppDao().excludeApp(ExcludedApp(packageName = packageName))
+                    DocumentChange.Type.REMOVED -> db.excludedAppDao().includeApp(ExcludedApp(packageName = packageName))
+                }
+            }
+        }
+    }
+
+    // ── Live screen-time listener (devices subtree) ──────────────────────────
+    // Not routed through SyncCoordinator/Room: this feeds ScreenTimeViewModel's
+    // UI-facing DeviceSession list directly, not a persisted entity.
+
+    fun getOtherDevicesScreenTimeFlow(): Flow<List<DeviceSession>> = callbackFlow {
+        val uid = userId ?: return@callbackFlow awaitClose { }
+        val today = LocalDate.now().toString()
+        val childListeners = mutableMapOf<String, ListenerRegistration>()
+        val latestByDevice = mutableMapOf<String, DeviceSession>()
+
+        fun emit() = trySend(latestByDevice.values.toList())
+
+        val devicesListener = firestore.collection("users").document(uid)
+            .collection("devices")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) { Log.w(TAG, "Devices listener error", error); return@addSnapshotListener }
+                if (snapshot == null) return@addSnapshotListener
+                for (change in snapshot.documentChanges) {
+                    val dId = change.document.id
+                    if (dId == deviceId) continue
+                    when (change.type) {
+                        DocumentChange.Type.ADDED -> {
+                            if (childListeners.containsKey(dId)) continue
+                            val dName = change.document.getString("deviceName") ?: dId
+                            val reg = firestore.collection("users").document(uid)
+                                .collection("devices").document(dId)
+                                .collection("screen_time").document(today)
+                                .addSnapshotListener { sessionSnap, sessionError ->
+                                    if (sessionError != null) { Log.w(TAG, "Screen time listener error for $dId", sessionError); return@addSnapshotListener }
+                                    if (sessionSnap != null && sessionSnap.metadata.hasPendingWrites()) return@addSnapshotListener
+                                    if (sessionSnap != null && sessionSnap.exists()) {
+                                        val millis = sessionSnap.getLong("durationMillis") ?: 0L
+                                        latestByDevice[dId] = DeviceSession(dId, dName, today, millis, false)
+                                        emit()
+                                    }
+                                }
+                            childListeners[dId] = reg
+                        }
+                        DocumentChange.Type.REMOVED -> {
+                            childListeners.remove(dId)?.remove()
+                            latestByDevice.remove(dId)
+                            emit()
+                        }
+                        DocumentChange.Type.MODIFIED -> {} // device display name changing live isn't required
+                    }
+                }
+            }
+        awaitClose {
+            devicesListener.remove()
+            childListeners.values.forEach { it.remove() }
         }
     }
 }

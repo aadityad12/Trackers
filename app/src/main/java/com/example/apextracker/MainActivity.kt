@@ -131,6 +131,11 @@ class MainActivity : ComponentActivity() {
                         authViewModel.setSyncing(false)
                     }
                 }
+                if (user != null) {
+                    SyncCoordinator.start(firebaseManager, AppDatabase.getDatabase(applicationContext))
+                } else {
+                    SyncCoordinator.stop()
+                }
                 previousUser = user
             }
 
