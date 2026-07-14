@@ -181,6 +181,8 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
         if (showSettingsDialog) {
             BudgetSettingsDialog(
                 categories = categories,
+                allItems = items,
+                currentMonth = selectedMonth,
                 viewModel = viewModel,
                 onDismiss = { showSettingsDialog = false }
             )

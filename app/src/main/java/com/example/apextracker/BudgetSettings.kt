@@ -24,16 +24,21 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Composable
 fun BudgetSettingsDialog(
     categories: List<Category>,
+    allItems: List<BudgetItem>,
+    currentMonth: YearMonth,
     viewModel: BudgetViewModel,
     onDismiss: () -> Unit
 ) {
     var activeSubScreen by remember { mutableStateOf<String?>(null) }
+    var showExportDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -74,6 +79,7 @@ fun BudgetSettingsDialog(
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             BudgetSettingsItem("Manage Categories") { activeSubScreen = "categories" }
                             BudgetSettingsItem("Manage Subscriptions") { activeSubScreen = "subscriptions" }
+                            BudgetSettingsItem(stringResource(R.string.budget_export_csv)) { showExportDialog = true }
                         }
                     }
                 }
@@ -84,6 +90,43 @@ fun BudgetSettingsDialog(
                 Text(stringResource(R.string.action_done))
             }
         }
+    )
+
+    if (showExportDialog) {
+        BudgetExportScopeDialog(
+            onDismiss = { showExportDialog = false },
+            onExport = { scopeToCurrentMonth ->
+                val exportItems = if (scopeToCurrentMonth) {
+                    allItems.filter { YearMonth.from(it.date) == currentMonth }
+                } else {
+                    allItems
+                }
+                val csv = buildBudgetCsv(exportItems, categories)
+                val fileName = if (scopeToCurrentMonth) "budget_$currentMonth.csv" else "budget_all_time.csv"
+                shareBudgetCsv(context, csv, fileName)
+                showExportDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+fun BudgetExportScopeDialog(onDismiss: () -> Unit, onExport: (scopeToCurrentMonth: Boolean) -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.budget_export_scope_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { onExport(true) }, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.budget_export_current_month))
+                }
+                Button(onClick = { onExport(false) }, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.budget_export_all_time))
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } }
     )
 }
 
