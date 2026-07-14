@@ -63,6 +63,10 @@
     <string name="budget_renews_prefix">Renews: %1$s</string>
     <string name="budget_breakdown_title">Breakdown for %1$s</string>
     <string name="budget_total">Total</string>
+    <string name="budget_export_csv">Export CSV</string>
+    <string name="budget_export_scope_title">Export Budget CSV</string>
+    <string name="budget_export_current_month">Current Month</string>
+    <string name="budget_export_all_time">All Time</string>
     <string name="label_title">Title</string>
     <string name="label_amount">Amount</string>
     <string name="label_name">Name</string>
