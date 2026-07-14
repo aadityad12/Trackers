@@ -185,7 +185,8 @@ internal fun parseNoteDoc(data: Map<String, Any?>): Note = Note(
     modifiedAt = LocalDateTime.parse(data.requireString("modifiedAt")),
     isDeleted = data["isDeleted"] as? Boolean ?: false,
     deletedAt = data.optString("deletedAt")?.let { LocalDateTime.parse(it) },
-    cloudId = data.requireCloudId()
+    cloudId = data.requireCloudId(),
+    isPinned = data["isPinned"] as? Boolean ?: false
 )
 
 internal fun parseReminderDoc(data: Map<String, Any?>, gson: Gson): Reminder = Reminder(
@@ -390,7 +391,8 @@ class FirebaseManager(private val context: Context) {
                     "createdAt" to note.createdAt.toString(),
                     "modifiedAt" to note.modifiedAt.toString(),
                     "isDeleted" to note.isDeleted,
-                    "deletedAt" to note.deletedAt?.toString()
+                    "deletedAt" to note.deletedAt?.toString(),
+                    "isPinned" to note.isPinned
                 ),
                 SetOptions.merge()
             ).await()
@@ -804,7 +806,7 @@ class FirebaseManager(private val context: Context) {
                 db.noteDao().update(
                     local.copy(
                         title = parsed.title, content = parsed.content, modifiedAt = parsed.modifiedAt,
-                        isDeleted = parsed.isDeleted, deletedAt = parsed.deletedAt
+                        isDeleted = parsed.isDeleted, deletedAt = parsed.deletedAt, isPinned = parsed.isPinned
                     )
                 )
             }

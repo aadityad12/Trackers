@@ -140,6 +140,11 @@
     <string name="notes_empty">No notes yet</string>
     <string name="notes_placeholder_title">Title</string>
     <string name="notes_placeholder_content">Start typing...</string>
+    <string name="notes_search_hint">Search notes</string>
+    <string name="notes_search_no_results">No notes match \"%1$s\"</string>
+    <string name="cd_search">Search</string>
+    <string name="cd_pin_note">Pin note</string>
+    <string name="cd_unpin_note">Unpin note</string>
     <string name="notes_recycle_bin">Recycle Bin</string>
     <string name="notes_recycle_empty">Recycle bin is empty</string>
     <string name="notes_restore">Restore</string>

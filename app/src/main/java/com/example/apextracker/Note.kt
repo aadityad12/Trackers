@@ -14,5 +14,6 @@ data class Note(
     val modifiedAt: LocalDateTime = LocalDateTime.now(),
     val isDeleted: Boolean = false,
     val deletedAt: LocalDateTime? = null,
-    val cloudId: String = ""
+    val cloudId: String = "",
+    val isPinned: Boolean = false
 )

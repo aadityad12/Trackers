@@ -144,12 +144,12 @@ class FirebaseDocParsingTest {
     // ── Note ──────────────────────────────────────────────────────────────────
 
     @Test
-    fun `note doc round-trips including soft-delete state`() {
+    fun `note doc round-trips including soft-delete state and pin`() {
         val parsed = parseNoteDoc(
             mapOf(
                 "cloudId" to "n-1", "title" to "Shopping", "content" to "- milk",
                 "createdAt" to "2026-07-01T10:00:00", "modifiedAt" to "2026-07-09T12:30:00",
-                "isDeleted" to true, "deletedAt" to "2026-07-09T12:30:00"
+                "isDeleted" to true, "deletedAt" to "2026-07-09T12:30:00", "isPinned" to true
             )
         )
         assertEquals("n-1", parsed.cloudId)
@@ -159,10 +159,11 @@ class FirebaseDocParsingTest {
         assertEquals(LocalDateTime.of(2026, 7, 9, 12, 30), parsed.modifiedAt)
         assertEquals(true, parsed.isDeleted)
         assertEquals(LocalDateTime.of(2026, 7, 9, 12, 30), parsed.deletedAt)
+        assertEquals(true, parsed.isPinned)
     }
 
     @Test
-    fun `note doc without soft-delete fields defaults to not deleted`() {
+    fun `note doc without soft-delete or pin fields defaults to not deleted and not pinned`() {
         val parsed = parseNoteDoc(
             mapOf(
                 "cloudId" to "n-1", "title" to "", "content" to "x",
@@ -172,6 +173,7 @@ class FirebaseDocParsingTest {
         assertFalse(parsed.isDeleted)
         assertNull(parsed.deletedAt)
         assertEquals("", parsed.title) // empty (but present) title is legitimate
+        assertFalse(parsed.isPinned) // old cloud docs written before pinning existed still parse fine
     }
 
     @Test
