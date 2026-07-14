@@ -20,12 +20,12 @@ class ReminderWorker(
         val reminderDescription = inputData.getString("reminder_description")
         val reminderId = inputData.getLong("reminder_id", 0)
 
-        sendNotification(reminderName, reminderDescription, reminderId.toInt())
+        sendNotification(reminderName, reminderDescription, reminderId)
 
         return Result.success()
     }
 
-    private fun sendNotification(name: String, description: String?, id: Int) {
+    private fun sendNotification(name: String, description: String?, id: Long) {
         val channelId = "reminder_channel"
         val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
@@ -48,8 +48,35 @@ class ReminderWorker(
         }
         val contentIntent = PendingIntent.getActivity(
             applicationContext,
-            id,
+            id.toInt(),
             tapIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Distinct request codes (id vs -id) so Done and Snooze don't share one PendingIntent.
+        val completeIntent = Intent(applicationContext, ReminderActionReceiver::class.java).apply {
+            action = ReminderActionReceiver.ACTION_COMPLETE
+            putExtra(ReminderScheduler.EXTRA_REMINDER_ID, id)
+            putExtra(ReminderScheduler.EXTRA_REMINDER_NAME, name)
+            putExtra(ReminderScheduler.EXTRA_REMINDER_DESCRIPTION, description)
+        }
+        val completePendingIntent = PendingIntent.getBroadcast(
+            applicationContext,
+            id.toInt(),
+            completeIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val snoozeIntent = Intent(applicationContext, ReminderActionReceiver::class.java).apply {
+            action = ReminderActionReceiver.ACTION_SNOOZE
+            putExtra(ReminderScheduler.EXTRA_REMINDER_ID, id)
+            putExtra(ReminderScheduler.EXTRA_REMINDER_NAME, name)
+            putExtra(ReminderScheduler.EXTRA_REMINDER_DESCRIPTION, description)
+        }
+        val snoozePendingIntent = PendingIntent.getBroadcast(
+            applicationContext,
+            (-id).toInt(),
+            snoozeIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -60,7 +87,9 @@ class ReminderWorker(
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(contentIntent)
+            .addAction(android.R.drawable.checkbox_on_background, applicationContext.getString(R.string.reminders_notif_done), completePendingIntent)
+            .addAction(android.R.drawable.ic_popup_reminder, applicationContext.getString(R.string.reminders_notif_snooze), snoozePendingIntent)
 
-        notificationManager.notify(id, builder.build())
+        notificationManager.notify(id.toInt(), builder.build())
     }
 }
