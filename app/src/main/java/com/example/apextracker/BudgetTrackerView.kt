@@ -235,6 +235,11 @@ fun BudgetOverview(
                 SummaryCardModern(totalExpenditure, monthItems, categories, pendingSubs)
             }
 
+            item {
+                Spacer(modifier = Modifier.height(12.dp))
+                BudgetTrendsCard(items = items, selectedMonth = monthToDisplay, onMonthSelected = onMonthChange)
+            }
+
             if (monthItems.isNotEmpty() || pendingSubs.isNotEmpty()) {
                 val sortedItems = monthItems.sortedByDescending { it.date }
                 

@@ -46,6 +46,8 @@
     <!-- Budget -->
     <string name="budget_title">BUDGET FLOW</string>
     <string name="budget_transactions">TRANSACTIONS</string>
+    <string name="budget_trends_title">SPENDING TRENDS</string>
+    <string name="budget_trends_empty">No spending data yet</string>
     <string name="budget_no_data">No data for this period</string>
     <string name="budget_total_monthly_spend">Total Monthly Spend</string>
     <string name="budget_plus_n_more">+ %1$d more</string>
