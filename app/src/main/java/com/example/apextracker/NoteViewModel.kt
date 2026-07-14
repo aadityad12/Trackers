@@ -25,6 +25,18 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
 
     val recycleBinRetentionHours = noteSettings.recycleBinRetentionHours
 
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    val filteredNotes: StateFlow<List<Note>> = combine(activeNotes, _searchQuery) { notes, query ->
+        if (query.isBlank()) notes
+        else notes.filter { it.title.contains(query, ignoreCase = true) || it.content.contains(query, ignoreCase = true) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun setSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+
     fun addNote(title: String, content: String) {
         viewModelScope.launch {
             val now = LocalDateTime.now()
@@ -50,6 +62,20 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
             )
             noteDao.update(updated)
             safeCloudCall(TAG, "update note") {
+                firebaseManager.pushNote(updated)
+            }
+        }
+    }
+
+    fun togglePin(note: Note) {
+        viewModelScope.launch {
+            val updated = note.copy(
+                isPinned = !note.isPinned,
+                modifiedAt = LocalDateTime.now(),
+                cloudId = note.cloudId.ifEmpty { UUID.randomUUID().toString() }
+            )
+            noteDao.update(updated)
+            safeCloudCall(TAG, "toggle pin") {
                 firebaseManager.pushNote(updated)
             }
         }

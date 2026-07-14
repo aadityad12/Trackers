@@ -10,6 +10,7 @@ import androidx.compose.material.icons.automirrored.filled.FormatIndentDecrease
 import androidx.compose.material.icons.automirrored.filled.FormatIndentIncrease
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,8 +36,11 @@ fun NoteView(onBackToMenu: () -> Unit, viewModel: NoteViewModel = viewModel()) {
     var showRecycleBin by remember { mutableStateOf(false) }
     var noteToEdit by remember { mutableStateOf<Note?>(null) }
     var showSettings by remember { mutableStateOf(false) }
+    var isSearching by remember { mutableStateOf(false) }
 
     val activeNotes by viewModel.activeNotes.collectAsState()
+    val filteredNotes by viewModel.filteredNotes.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
     val deletedNotes by viewModel.deletedNotes.collectAsState()
 
     LaunchedEffect(Unit) {
@@ -47,6 +51,10 @@ fun NoteView(onBackToMenu: () -> Unit, viewModel: NoteViewModel = viewModel()) {
         NoteEditor(
             note = noteToEdit!!,
             onDismiss = { noteToEdit = null },
+            onTogglePin = {
+                viewModel.togglePin(noteToEdit!!)
+                noteToEdit = noteToEdit!!.copy(isPinned = !noteToEdit!!.isPinned)
+            },
             onSave = { title, content ->
                 if (noteToEdit!!.id == 0L) {
                     viewModel.addNote(title, content)
@@ -72,18 +80,41 @@ fun NoteView(onBackToMenu: () -> Unit, viewModel: NoteViewModel = viewModel()) {
         Scaffold(
             topBar = {
                 CenterAlignedTopAppBar(
-                    title = { Text(stringResource(R.string.notes_title), fontWeight = FontWeight.Bold) },
+                    title = {
+                        if (isSearching) {
+                            TextField(
+                                value = searchQuery,
+                                onValueChange = { viewModel.setSearchQuery(it) },
+                                placeholder = { Text(stringResource(R.string.notes_search_hint)) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = TextFieldDefaults.colors(
+                                    focusedContainerColor = Color.Transparent,
+                                    unfocusedContainerColor = Color.Transparent,
+                                    focusedIndicatorColor = Color.Transparent,
+                                    unfocusedIndicatorColor = Color.Transparent
+                                )
+                            )
+                        } else {
+                            Text(stringResource(R.string.notes_title), fontWeight = FontWeight.Bold)
+                        }
+                    },
                     navigationIcon = {
-                        IconButton(onClick = onBackToMenu) {
+                        IconButton(onClick = { if (isSearching) { isSearching = false; viewModel.setSearchQuery("") } else onBackToMenu() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                         }
                     },
                     actions = {
-                        IconButton(onClick = { showRecycleBin = true }) {
-                            Icon(Icons.Default.DeleteSweep, contentDescription = stringResource(R.string.notes_recycle_bin))
-                        }
-                        IconButton(onClick = { showSettings = true }) {
-                            Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.menu_settings))
+                        if (!isSearching) {
+                            IconButton(onClick = { isSearching = true }) {
+                                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.cd_search))
+                            }
+                            IconButton(onClick = { showRecycleBin = true }) {
+                                Icon(Icons.Default.DeleteSweep, contentDescription = stringResource(R.string.notes_recycle_bin))
+                            }
+                            IconButton(onClick = { showSettings = true }) {
+                                Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.menu_settings))
+                            }
                         }
                     }
                 )
@@ -98,16 +129,21 @@ fun NoteView(onBackToMenu: () -> Unit, viewModel: NoteViewModel = viewModel()) {
                 Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
                     Text(stringResource(R.string.notes_empty), color = MaterialTheme.colorScheme.outline)
                 }
+            } else if (filteredNotes.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
+                    Text(stringResource(R.string.notes_search_no_results, searchQuery), color = MaterialTheme.colorScheme.outline)
+                }
             } else {
                 LazyColumn(
                     modifier = Modifier.padding(innerPadding).fillMaxSize().padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(activeNotes) { note ->
+                    items(filteredNotes) { note ->
                         NoteCard(
                             note = note,
                             onClick = { noteToEdit = note },
-                            onDelete = { viewModel.moveToRecycleBin(note) }
+                            onDelete = { viewModel.moveToRecycleBin(note) },
+                            onTogglePin = { viewModel.togglePin(note) }
                         )
                     }
                 }
@@ -117,13 +153,21 @@ fun NoteView(onBackToMenu: () -> Unit, viewModel: NoteViewModel = viewModel()) {
 }
 
 @Composable
-fun NoteCard(note: Note, onClick: () -> Unit, onDelete: () -> Unit) {
+fun NoteCard(note: Note, onClick: () -> Unit, onDelete: () -> Unit, onTogglePin: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable { onClick() },
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (note.isPinned) {
+                    Icon(
+                        Icons.Default.PushPin,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp).padding(end = 4.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
                 Text(
                     text = note.title.ifBlank { "Untitled" },
                     style = MaterialTheme.typography.titleMedium,
@@ -131,6 +175,13 @@ fun NoteCard(note: Note, onClick: () -> Unit, onDelete: () -> Unit) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                IconButton(onClick = onTogglePin, modifier = Modifier.size(24.dp)) {
+                    Icon(
+                        if (note.isPinned) Icons.Default.PushPin else Icons.Outlined.PushPin,
+                        contentDescription = stringResource(if (note.isPinned) R.string.cd_unpin_note else R.string.cd_pin_note),
+                        tint = if (note.isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                    )
+                }
                 IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
                     Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.action_delete), tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f))
                 }
@@ -157,7 +208,7 @@ fun NoteCard(note: Note, onClick: () -> Unit, onDelete: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NoteEditor(note: Note, onDismiss: () -> Unit, onSave: (String, String) -> Unit) {
+fun NoteEditor(note: Note, onDismiss: () -> Unit, onTogglePin: () -> Unit, onSave: (String, String) -> Unit) {
     var title by remember { mutableStateOf(note.title) }
     var contentValue by remember {
         mutableStateOf(TextFieldValue(note.content, selection = TextRange(note.content.length)))
@@ -173,6 +224,16 @@ fun NoteEditor(note: Note, onDismiss: () -> Unit, onSave: (String, String) -> Un
                     }
                 },
                 actions = {
+                    // Pinning only applies to an already-saved note (an unsaved new note has no row to update).
+                    if (note.id != 0L) {
+                        IconButton(onClick = onTogglePin) {
+                            Icon(
+                                if (note.isPinned) Icons.Default.PushPin else Icons.Outlined.PushPin,
+                                contentDescription = stringResource(if (note.isPinned) R.string.cd_unpin_note else R.string.cd_pin_note),
+                                tint = if (note.isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                            )
+                        }
+                    }
                     TextButton(onClick = { onSave(title, contentValue.text) }) {
                         Text(stringResource(R.string.action_save), fontWeight = FontWeight.Bold)
                     }
