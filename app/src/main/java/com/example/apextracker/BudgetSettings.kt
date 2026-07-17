@@ -220,7 +220,7 @@ fun CategoryItem(category: Category, onEdit: () -> Unit) {
                     val limit = category.effectiveMonthlyLimit()
                     Text(
                         text = if (limit != null) {
-                            stringResource(R.string.budget_limit_summary, formatCurrency(limit))
+                            stringResource(R.string.budget_limit_summary, formatCurrency(limit, LocalCurrencyCode.current))
                         } else {
                             stringResource(R.string.budget_limit_none)
                         },

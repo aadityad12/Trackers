@@ -71,8 +71,8 @@ private fun CategoryLimitRow(status: CategoryLimitStatus) {
             Text(
                 text = stringResource(
                     R.string.budget_limit_spent_of,
-                    formatCurrency(status.spent),
-                    formatCurrency(status.limit)
+                    formatCurrency(status.spent, LocalCurrencyCode.current),
+                    formatCurrency(status.limit, LocalCurrencyCode.current)
                 ),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -91,9 +91,9 @@ private fun CategoryLimitRow(status: CategoryLimitStatus) {
         Text(
             text = if (status.isOver) {
                 // remaining is negative once over; the string already says "over".
-                stringResource(R.string.budget_limit_over_by, formatCurrency(abs(status.remaining)))
+                stringResource(R.string.budget_limit_over_by, formatCurrency(abs(status.remaining), LocalCurrencyCode.current))
             } else {
-                stringResource(R.string.budget_limit_remaining, formatCurrency(status.remaining))
+                stringResource(R.string.budget_limit_remaining, formatCurrency(status.remaining, LocalCurrencyCode.current))
             },
             style = MaterialTheme.typography.labelSmall,
             color = if (status.isOver) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline
