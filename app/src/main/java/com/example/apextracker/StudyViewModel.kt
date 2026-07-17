@@ -33,6 +33,11 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
 
+    // The subject the stopwatch is currently attributing time to. "" is the "No subject" bucket
+    // and the startup default, so a user who never picks a subject behaves exactly as pre-#78.
+    private val _currentSubject = MutableStateFlow("")
+    val currentSubject: StateFlow<String> = _currentSubject.asStateFlow()
+
     private var timerJob: Job? = null
     private var lastResetDate: LocalDate = LocalDate.now()
     
@@ -57,6 +62,7 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
             val today = LocalDate.now()
             val persisted = timerStateStore.loadRunning()
             if (persisted != null && persisted.date == today) {
+                _currentSubject.value = persisted.subject
                 baseSeconds = persisted.baseSeconds
                 lastStartTimeMillis = persisted.startedAtMillis
                 lastResetDate = today
@@ -67,10 +73,11 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
             }
             if (persisted != null) {
                 val finalSeconds = finalizeSecondsAtEndOfDay(persisted, ZoneId.systemDefault())
-                saveSessionForDate(persisted.date, finalSeconds, forcePush = true)
+                saveSessionForDate(persisted.date, persisted.subject, finalSeconds, forcePush = true)
                 timerStateStore.clear()
             }
-            val savedSeconds = studySessionDao.getSessionByDate(today)?.durationSeconds ?: 0L
+            // The displayed total is the current subject's total for today ("" at startup).
+            val savedSeconds = studySessionDao.getSession(today, _currentSubject.value)?.durationSeconds ?: 0L
             _timeSeconds.value = savedSeconds
             baseSeconds = savedSeconds
         }
@@ -97,7 +104,7 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
 
         // Force the cloud push: it's the last chance to write that date's document
         val finalTotal = if (_isRunning.value) calculateCurrentTotalSeconds() else _timeSeconds.value
-        saveSessionForDate(lastResetDate, finalTotal, forcePush = true)
+        saveSessionForDate(lastResetDate, _currentSubject.value, finalTotal, forcePush = true)
 
         // Reset for new day
         _timeSeconds.value = 0L
@@ -107,7 +114,7 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
         }
         lastResetDate = now
         if (_isRunning.value) {
-            timerStateStore.saveRunning(lastStartTimeMillis, baseSeconds, lastResetDate)
+            timerStateStore.saveRunning(lastStartTimeMillis, baseSeconds, lastResetDate, _currentSubject.value)
         }
     }
 
@@ -132,8 +139,31 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
         lastStartTimeMillis = System.currentTimeMillis()
         baseSeconds = _timeSeconds.value
         _isRunning.value = true
-        timerStateStore.saveRunning(lastStartTimeMillis, baseSeconds, lastResetDate)
+        timerStateStore.saveRunning(lastStartTimeMillis, baseSeconds, lastResetDate, _currentSubject.value)
         launchTicker()
+    }
+
+    /**
+     * Switches the subject the stopwatch attributes time to. If the timer is running it's paused
+     * (banking the elapsed time under the *old* subject) and resumed under the new one, so switching
+     * mid-study never misattributes seconds. The displayed total swaps to the new subject's own
+     * accumulated total for today — the stopwatch shows "this subject today", not the daily grand
+     * total. A no-op when the normalised subject is unchanged.
+     */
+    fun selectSubject(subject: String) {
+        val normalized = normalizeSubject(subject)
+        if (normalized == _currentSubject.value) return
+
+        val wasRunning = _isRunning.value
+        if (wasRunning) pauseTimer()
+        _currentSubject.value = normalized
+        viewModelScope.launch {
+            rolloverIfNeeded()
+            val saved = studySessionDao.getSession(lastResetDate, normalized)?.durationSeconds ?: 0L
+            _timeSeconds.value = saved
+            baseSeconds = saved
+            if (wasRunning) startTimer()
+        }
     }
 
     private fun launchTicker() {
@@ -142,9 +172,10 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
                 rolloverIfNeeded()
                 val current = calculateCurrentTotalSeconds()
                 _timeSeconds.value = current
-                // Attribute to the tracked day, not LocalDate.now(): rolloverIfNeeded just
-                // synchronized lastResetDate, so this can never write into the wrong row.
-                saveSessionForDate(lastResetDate, current)
+                // Attribute to the tracked day and current subject, not LocalDate.now():
+                // rolloverIfNeeded just synchronized lastResetDate, and selectSubject pauses the
+                // ticker before switching, so this can never write into the wrong row.
+                saveSessionForDate(lastResetDate, _currentSubject.value, current)
                 delay(1000)
             }
         }
@@ -160,9 +191,10 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
         _isRunning.value = false
         timerJob?.cancel()
         timerStateStore.clear()
-        saveSessionForDate(lastResetDate, total, forcePush = true)
+        saveSessionForDate(lastResetDate, _currentSubject.value, total, forcePush = true)
     }
 
+    /** Resets today's total for the currently selected subject only; other subjects are untouched. */
     fun resetTimerManual() {
         rolloverIfNeeded()
         _isRunning.value = false
@@ -170,12 +202,12 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
         timerStateStore.clear()
         _timeSeconds.value = 0L
         baseSeconds = 0L
-        saveSessionForDate(lastResetDate, 0L, forcePush = true)
+        saveSessionForDate(lastResetDate, _currentSubject.value, 0L, forcePush = true)
     }
 
-    private fun saveSessionForDate(date: LocalDate, duration: Long, forcePush: Boolean = false) {
+    private fun saveSessionForDate(date: LocalDate, subject: String, duration: Long, forcePush: Boolean = false) {
         viewModelScope.launch {
-            val session = StudySession(date = date, durationSeconds = duration)
+            val session = StudySession(date = date, subject = subject, durationSeconds = duration)
             studySessionDao.insertSession(session)
             // Room saves every second while running; the cloud push is throttled to a
             // 60s heartbeat, with significant events (pause/reset/rollover) forced.

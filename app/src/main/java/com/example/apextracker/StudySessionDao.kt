@@ -6,8 +6,8 @@ import java.time.LocalDate
 
 @Dao
 interface StudySessionDao {
-    @Query("SELECT * FROM study_sessions WHERE date = :date")
-    suspend fun getSessionByDate(date: LocalDate): StudySession?
+    @Query("SELECT * FROM study_sessions WHERE date = :date AND subject = :subject")
+    suspend fun getSession(date: LocalDate, subject: String): StudySession?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSession(session: StudySession)
