@@ -24,6 +24,10 @@
     <string name="menu_appearance">Appearance</string>
     <string name="menu_color_accent">Color Accent</string>
     <string name="menu_dark_mode">Dark Mode</string>
+    <string name="menu_currency">Currency</string>
+    <string name="menu_currency_label">Display currency</string>
+    <!-- Currency picker row, e.g. "USD ($)". Both placeholders are ISO 4217 data from the platform. -->
+    <string name="menu_currency_option">%1$s (%2$s)</string>
     <string name="sign_in_google">Sign in with Google</string>
     <string name="user_fallback">User</string>
     <string name="module_overview">Overview</string>

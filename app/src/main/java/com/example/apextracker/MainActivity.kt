@@ -71,6 +71,7 @@ import com.example.apextracker.ui.theme.MagmaPrimary
 import com.example.apextracker.ui.theme.OceanPrimary
 import com.example.apextracker.ui.theme.RoyalPrimary
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -111,7 +112,13 @@ class MainActivity : ComponentActivity() {
             
             var currentTheme by rememberSaveable { mutableStateOf(ApexTheme.EMERALD) }
             var isDarkMode by rememberSaveable { mutableStateOf(true) }
-            
+
+            // Currency lives in DataStore rather than rememberSaveable — unlike theme, it must
+            // survive a restart for signed-out users too (Issue #76).
+            val currencySettings = remember { CurrencySettings(this) }
+            val storedCurrency by currencySettings.currencyCode.collectAsState(initial = null)
+            val scope = rememberCoroutineScope()
+
             // Sync settings when they change if logged in
             val firebaseManager = remember { FirebaseManager(this) }
             var previousUser by remember { mutableStateOf(firebaseManager.currentUser) }
@@ -143,9 +150,11 @@ class MainActivity : ComponentActivity() {
                 previousUser = user
             }
 
-            LaunchedEffect(currentTheme, isDarkMode, user) {
-                if (user != null) {
-                    firebaseManager.syncSettings(currentTheme.name, isDarkMode)
+            // Gate on storedCurrency != null: pushing before DataStore has read back would send the
+            // locale default and clobber the real stored value on every cold start.
+            LaunchedEffect(currentTheme, isDarkMode, storedCurrency, user) {
+                if (user != null && storedCurrency != null) {
+                    firebaseManager.syncSettings(currentTheme.name, isDarkMode, storedCurrency)
                 }
             }
 
@@ -160,20 +169,30 @@ class MainActivity : ComponentActivity() {
                             (it["isDarkMode"] as? Boolean)?.let { dark ->
                                 isDarkMode = dark
                             }
+                            // Another client wrote this; validate before persisting so a bad code
+                            // can't poison local prefs. Writing an identical value back is a no-op
+                            // for DataStore, so this can't ping-pong with the push effect above.
+                            parseCurrencySafe(it["currency"] as? String)?.let { currency ->
+                                currencySettings.setCurrencyCode(currency.currencyCode)
+                            }
                         }
                     }
                 }
             }
-            
+
             ApexTrackerTheme(theme = currentTheme, darkTheme = isDarkMode) {
-                AppNavigation(
-                    currentTheme = currentTheme,
-                    isDarkMode = isDarkMode,
-                    onThemeChange = { currentTheme = it },
-                    onDarkModeChange = { isDarkMode = it },
-                    requestedRoute = pendingRoute,
-                    onRequestedRouteConsumed = { pendingRoute = null }
-                )
+                CompositionLocalProvider(LocalCurrencyCode provides (storedCurrency ?: defaultCurrencyCode())) {
+                    AppNavigation(
+                        currentTheme = currentTheme,
+                        isDarkMode = isDarkMode,
+                        onThemeChange = { currentTheme = it },
+                        onDarkModeChange = { isDarkMode = it },
+                        currencyCode = storedCurrency ?: defaultCurrencyCode(),
+                        onCurrencyChange = { scope.launch { currencySettings.setCurrencyCode(it) } },
+                        requestedRoute = pendingRoute,
+                        onRequestedRouteConsumed = { pendingRoute = null }
+                    )
+                }
             }
         }
     }
@@ -185,6 +204,8 @@ fun AppNavigation(
     isDarkMode: Boolean,
     onThemeChange: (ApexTheme) -> Unit,
     onDarkModeChange: (Boolean) -> Unit,
+    currencyCode: String,
+    onCurrencyChange: (String) -> Unit,
     requestedRoute: String? = null,
     onRequestedRouteConsumed: () -> Unit = {}
 ) {
@@ -232,6 +253,8 @@ fun AppNavigation(
                     isDarkMode = isDarkMode,
                     onThemeChange = onThemeChange,
                     onDarkModeChange = onDarkModeChange,
+                    currencyCode = currencyCode,
+                    onCurrencyChange = onCurrencyChange,
                     onModuleSelected = { moduleRoute ->
                         navController.navigate(moduleRoute)
                     }
@@ -333,10 +356,12 @@ data class AppModule(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainMenu(
-    currentTheme: ApexTheme, 
+    currentTheme: ApexTheme,
     isDarkMode: Boolean,
-    onThemeChange: (ApexTheme) -> Unit, 
+    onThemeChange: (ApexTheme) -> Unit,
     onDarkModeChange: (Boolean) -> Unit,
+    currencyCode: String,
+    onCurrencyChange: (String) -> Unit,
     onModuleSelected: (String) -> Unit,
     authViewModel: AuthViewModel = viewModel()
 ) {
@@ -636,6 +661,52 @@ fun MainMenu(
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Text(
+                    stringResource(R.string.menu_currency),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                CurrencyDropdown(currencyCode = currencyCode, onCurrencySelected = onCurrencyChange)
+
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CurrencyDropdown(currencyCode: String, onCurrencySelected: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    // Recomputed only when the setting changes; the device's own currency is appended when the
+    // curated list omits it, so the current value always has a row to be selected in.
+    val codes = remember(currencyCode) { (currencyPickerCodes() + currencyCode).distinct() }
+
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+        OutlinedTextField(
+            value = stringResource(R.string.menu_currency_option, currencyCode, currencySymbol(currencyCode)),
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(stringResource(R.string.menu_currency_label)) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier.menuAnchor().fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            codes.forEach { code ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.menu_currency_option, code, currencySymbol(code))) },
+                    onClick = {
+                        onCurrencySelected(code)
+                        expanded = false
+                    }
+                )
             }
         }
     }
