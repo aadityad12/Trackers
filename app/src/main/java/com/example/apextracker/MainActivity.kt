@@ -261,7 +261,10 @@ fun AppNavigation(
                 )
             }
             composable("overview") {
-                OverviewView(onBackToMenu = { navController.popBackStack() })
+                OverviewView(
+                    onBackToMenu = { navController.popBackStack() },
+                    onNavigate = { route -> navController.navigate(route) }
+                )
             }
             composable("budget_tracker") {
                 BudgetTrackerApp(onBackToMenu = { navController.popBackStack() })
