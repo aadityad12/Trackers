@@ -29,6 +29,41 @@ class FirebaseDocParsingTest {
     }
 
     @Test
+    fun `category doc round-trips a monthly limit`() {
+        val parsed = parseCategoryDoc(
+            mapOf("cloudId" to "cat-1", "name" to "Groceries", "colorHex" to "#FF0000", "monthlyLimit" to 400.0)
+        )
+        assertEquals(400.0, parsed.monthlyLimit!!, 0.0001)
+    }
+
+    @Test
+    fun `category doc without a monthly limit parses as uncapped`() {
+        // Docs written before per-category limits existed have no such field.
+        val parsed = parseCategoryDoc(
+            mapOf("cloudId" to "cat-1", "name" to "Groceries", "colorHex" to "#FF0000")
+        )
+        assertNull(parsed.monthlyLimit)
+    }
+
+    @Test
+    fun `category doc with an explicitly null monthly limit parses as uncapped`() {
+        // Clearing a cap pushes null rather than omitting the field.
+        val parsed = parseCategoryDoc(
+            mapOf("cloudId" to "cat-1", "name" to "Groceries", "colorHex" to "#FF0000", "monthlyLimit" to null)
+        )
+        assertNull(parsed.monthlyLimit)
+    }
+
+    @Test
+    fun `category monthly limit accepts a Long from Firestore`() {
+        // Firestore hands back whole numbers as Long, not Double.
+        val parsed = parseCategoryDoc(
+            mapOf("cloudId" to "cat-1", "name" to "Groceries", "colorHex" to "#FF0000", "monthlyLimit" to 400L)
+        )
+        assertEquals(400.0, parsed.monthlyLimit!!, 0.0001)
+    }
+
+    @Test
     fun `category doc with missing name throws`() {
         assertThrows(IllegalStateException::class.java) {
             parseCategoryDoc(mapOf("cloudId" to "cat-1", "colorHex" to "#FF0000"))

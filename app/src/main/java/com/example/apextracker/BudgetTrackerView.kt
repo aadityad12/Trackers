@@ -235,6 +235,16 @@ fun BudgetOverview(
                 SummaryCardModern(totalExpenditure, monthItems, categories, pendingSubs)
             }
 
+            // Sits above trends: a cap the user set is more actionable than history.
+            // Gated here as well as inside the card so the spacer doesn't leave a gap
+            // for users who have never set a limit.
+            if (categories.any { it.effectiveMonthlyLimit() != null }) {
+                item {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    BudgetLimitsCard(items = items, categories = categories, month = monthToDisplay)
+                }
+            }
+
             item {
                 Spacer(modifier = Modifier.height(12.dp))
                 BudgetTrendsCard(items = items, selectedMonth = monthToDisplay, onMonthSelected = onMonthChange)

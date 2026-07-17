@@ -64,6 +64,14 @@
     <string name="budget_new_category">New Category</string>
     <string name="budget_edit_category">Edit Category</string>
     <string name="budget_select_color">Select Color:</string>
+    <string name="budget_category_limits_title">CATEGORY LIMITS</string>
+    <string name="budget_limit_spent_of">%1$s of %2$s</string>
+    <string name="budget_limit_remaining">%1$s left</string>
+    <string name="budget_limit_over_by">%1$s over</string>
+    <string name="budget_limit_none">No limit</string>
+    <string name="budget_limit_label">Monthly limit (optional)</string>
+    <string name="budget_limit_hint">Leave blank for no limit</string>
+    <string name="budget_limit_summary">%1$s / month</string>
     <string name="budget_add_subscription">Add New Subscription</string>
     <string name="budget_new_subscription">New Subscription</string>
     <string name="budget_edit_subscription">Edit Subscription</string>
