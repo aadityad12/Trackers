@@ -34,6 +34,32 @@ object ReminderScheduler {
         }
     }
 
+    /**
+     * The moment this reminder's alarm should actually fire, or null if it shouldn't fire at all.
+     *
+     * The offset means "notify me N minutes before the task". When the task is nearer than N
+     * minutes, [computeTriggerTime] lands in the past — and firing nothing is the worst possible
+     * reading of that, since the task itself is still coming up. It also isn't a corner case: the
+     * offset defaults to 30 minutes, so "set a reminder for 10 minutes from now" would silently
+     * never notify. So clamp to [now] (notify immediately) instead, and only give up once the
+     * task's own due time has passed (Issue #80).
+     *
+     * All-day reminders take no offset — [computeTriggerTime] is already their exact notification
+     * time — so a past trigger there genuinely means the moment has been and gone: nothing to
+     * clamp to, return null.
+     */
+    fun resolveTriggerTime(
+        reminder: Reminder,
+        allDayNotificationTime: LocalTime,
+        specificTimeOffsetMinutes: Int,
+        now: LocalDateTime
+    ): LocalDateTime? {
+        val trigger = computeTriggerTime(reminder, allDayNotificationTime, specificTimeOffsetMinutes)
+        if (trigger.isAfter(now)) return trigger
+        val dueTime = LocalDateTime.of(reminder.date, reminder.time ?: return null)
+        return if (dueTime.isAfter(now)) now else null
+    }
+
     /** True when exact alarms are available (always below API 31, permission-gated from 31 on). */
     fun canScheduleExactAlarms(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true

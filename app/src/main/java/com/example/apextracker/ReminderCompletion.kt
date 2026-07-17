@@ -1,6 +1,7 @@
 package com.example.apextracker
 
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.flow.first
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -11,7 +12,9 @@ private const val TAG = "ReminderCompletion"
 /**
  * Schedules (or cancels, if completed/disabled/past-due) the exact alarm for a reminder.
  * Shared by ReminderViewModel and the notification Done/Snooze actions (Issue #41) so both
- * paths agree on when a reminder should actually alarm.
+ * paths agree on when a reminder should actually alarm. [ReminderScheduler.resolveTriggerTime]
+ * owns the "when, if ever" decision — including clamping a reminder due sooner than the
+ * notification offset to fire now rather than silently never (Issue #80).
  */
 suspend fun scheduleReminderIfNeeded(context: Context, reminder: Reminder) {
     val settings = ReminderSettings(context)
@@ -21,10 +24,13 @@ suspend fun scheduleReminderIfNeeded(context: Context, reminder: Reminder) {
     }
     val allDayTime = settings.allDayNotificationTime.first()
     val offsetMinutes = settings.specificTimeOffsetMinutes.first()
-    val triggerTime = ReminderScheduler.computeTriggerTime(reminder, allDayTime, offsetMinutes)
-    if (triggerTime.isAfter(LocalDateTime.now())) {
+    val triggerTime = ReminderScheduler.resolveTriggerTime(reminder, allDayTime, offsetMinutes, LocalDateTime.now())
+    if (triggerTime != null) {
         ReminderScheduler.schedule(context, reminder, ReminderScheduler.toEpochMillis(triggerTime))
     } else {
+        // Logged because the alternative is diagnosing a "notifications are broken" report
+        // through `adb shell dumpsys alarm` — which is exactly what Issue #80 cost.
+        Log.i(TAG, "Not scheduling reminder ${reminder.id}: its notification time has already passed")
         ReminderScheduler.cancel(context, reminder.id)
     }
 }
