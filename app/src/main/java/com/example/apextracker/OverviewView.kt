@@ -99,7 +99,7 @@ fun OverviewView(
                                     .padding(vertical = 8.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                StatCard(stringResource(R.string.overview_stat_spent), formatCurrency(data.totalSpent), Icons.Default.AccountBalanceWallet, MaterialTheme.colorScheme.primaryContainer, Modifier.weight(1f))
+                                StatCard(stringResource(R.string.overview_stat_spent), formatCurrency(data.totalSpent, LocalCurrencyCode.current), Icons.Default.AccountBalanceWallet, MaterialTheme.colorScheme.primaryContainer, Modifier.weight(1f))
                                 StatCard(stringResource(R.string.overview_stat_study), formatDurationCompact(data.studyTimeMinutes * 60000), Icons.Default.Timer, MaterialTheme.colorScheme.secondaryContainer, Modifier.weight(1f))
                                 StatCard(stringResource(R.string.overview_stat_screen), formatDurationCompact(data.screenTimeMinutes * 60000), Icons.Default.Monitor, MaterialTheme.colorScheme.tertiaryContainer, Modifier.weight(1f))
                             }

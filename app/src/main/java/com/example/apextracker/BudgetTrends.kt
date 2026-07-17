@@ -16,11 +16,8 @@ import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import java.text.NumberFormat
 import java.time.YearMonth
 import java.time.format.TextStyle
-import java.util.Locale
-import kotlin.math.roundToInt
 
 private const val MONTHS_BACK = 6
 private val CHART_HEIGHT = 140.dp
@@ -37,9 +34,6 @@ fun monthlyTotals(items: List<BudgetItem>, monthsBack: Int, today: YearMonth): L
         month to (sums[month] ?: 0.0)
     }
 }
-
-private fun compactCurrency(amount: Double): String =
-    "$" + NumberFormat.getIntegerInstance(Locale.US).format(amount.roundToInt())
 
 @Composable
 fun BudgetTrendsCard(items: List<BudgetItem>, selectedMonth: YearMonth, onMonthSelected: (YearMonth) -> Unit) {
@@ -72,9 +66,10 @@ fun BudgetTrendsCard(items: List<BudgetItem>, selectedMonth: YearMonth, onMonthS
                         verticalArrangement = Arrangement.SpaceBetween,
                         horizontalAlignment = Alignment.End
                     ) {
-                        Text(compactCurrency(maxTotal), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                        Text(compactCurrency(maxTotal / 2), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                        Text(compactCurrency(0.0), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                        val currencyCode = LocalCurrencyCode.current
+                        Text(formatCurrencyCompact(maxTotal, currencyCode), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                        Text(formatCurrencyCompact(maxTotal / 2, currencyCode), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                        Text(formatCurrencyCompact(0.0, currencyCode), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     val primaryColor = MaterialTheme.colorScheme.primary
