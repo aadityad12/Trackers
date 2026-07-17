@@ -60,11 +60,14 @@ class ReminderWorker(
             putExtra(ReminderScheduler.EXTRA_REMINDER_NAME, name)
             putExtra(ReminderScheduler.EXTRA_REMINDER_DESCRIPTION, description)
         }
+        // ONE_SHOT so a rapid double-tap on Done can't deliver the broadcast twice. This is only
+        // the outer guard — completeReminder() claims the completion atomically in the DB, which
+        // is what actually holds when the in-app checkbox races the notification (Issue #63).
         val completePendingIntent = PendingIntent.getBroadcast(
             applicationContext,
             id.toInt(),
             completeIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val snoozeIntent = Intent(applicationContext, ReminderActionReceiver::class.java).apply {

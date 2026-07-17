@@ -31,33 +31,40 @@ suspend fun scheduleReminderIfNeeded(context: Context, reminder: Reminder) {
 
 /**
  * Completes a reminder — the same result whether the user checks it off in-app or taps "Done"
- * on the notification (works with the app process dead): for a recurring reminder, generates
- * the next occurrence (respecting end conditions, anchored to the original day-of-month) and
- * marks this one done; for a one-off reminder, just marks it done. Both paths push to cloud.
- * No-ops if the reminder is already completed (stale notification action, double-tap, etc).
+ * on the notification (works with the app process dead): marks it done and, for a recurring
+ * reminder, generates the next occurrence (respecting end conditions, anchored to the original
+ * day-of-month). Both paths push to cloud. No-ops if the reminder is already gone or completed
+ * (stale notification action, double-tap, etc).
  */
 suspend fun completeReminder(context: Context, db: AppDatabase, firebaseManager: FirebaseManager, reminderId: Long) {
     val reminderDao = db.reminderDao()
     val fresh = reminderDao.getReminderById(reminderId) ?: return
     if (fresh.isCompleted) return
 
+    val completed = fresh.copy(
+        isCompleted = true,
+        cloudId = fresh.cloudId.ifEmpty { UUID.randomUUID().toString() },
+        modifiedAt = System.currentTimeMillis()
+    )
+    // Claim the completion atomically before doing anything else. Two callers can reach here
+    // concurrently — the notification's Done worker and the in-app checkbox, in different
+    // processes — and both would see isCompleted = false above; ReminderViewModel's in-memory
+    // guard only covers its own toggles. Whoever loses the compare-and-set stops here, so a
+    // recurring reminder can never insert two next occurrences (Issue #63).
+    if (reminderDao.markCompletedIfActive(completed.id, completed.cloudId, completed.modifiedAt) == 0) return
+
+    ReminderScheduler.cancel(context, completed.id)
+    safeCloudCall(TAG, "complete reminder") {
+        firebaseManager.pushReminder(completed)
+    }
+
     if (fresh.recurrence != null) {
-        handleRecurringCompletion(context, db, firebaseManager, fresh)
-    } else {
-        val updated = fresh.copy(
-            isCompleted = true,
-            cloudId = fresh.cloudId.ifEmpty { UUID.randomUUID().toString() },
-            modifiedAt = System.currentTimeMillis()
-        )
-        reminderDao.updateReminder(updated)
-        ReminderScheduler.cancel(context, updated.id)
-        safeCloudCall(TAG, "complete reminder") {
-            firebaseManager.pushReminder(updated)
-        }
+        insertNextOccurrence(context, db, firebaseManager, fresh)
     }
 }
 
-private suspend fun handleRecurringCompletion(context: Context, db: AppDatabase, firebaseManager: FirebaseManager, reminder: Reminder) {
+/** Inserts the next instance of a recurring reminder whose current instance was just completed. */
+private suspend fun insertNextOccurrence(context: Context, db: AppDatabase, firebaseManager: FirebaseManager, reminder: Reminder) {
     val reminderDao = db.reminderDao()
     // Anchor monthly/yearly chains to the original day-of-month before advancing,
     // so short-month clamping (Jan 31 → Feb 28) doesn't drift permanently.
@@ -96,16 +103,5 @@ private suspend fun handleRecurringCompletion(context: Context, db: AppDatabase,
         safeCloudCall(TAG, "push next recurring reminder") {
             firebaseManager.pushReminder(nextReminder)
         }
-    }
-
-    val completed = reminder.copy(
-        isCompleted = true,
-        cloudId = reminder.cloudId.ifEmpty { UUID.randomUUID().toString() },
-        modifiedAt = System.currentTimeMillis()
-    )
-    reminderDao.updateReminder(completed)
-    ReminderScheduler.cancel(context, reminder.id)
-    safeCloudCall(TAG, "push completed recurring reminder") {
-        firebaseManager.pushReminder(completed)
     }
 }

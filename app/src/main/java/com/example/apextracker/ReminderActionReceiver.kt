@@ -6,9 +6,12 @@ import android.content.Intent
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import androidx.work.Data
+import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import java.time.LocalDate
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /** Handles the "Done" and "Snooze 10 min" notification actions from [ReminderWorker]. */
 class ReminderActionReceiver : BroadcastReceiver() {
@@ -22,8 +25,6 @@ class ReminderActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         Log.d(TAG, "onReceive action=${intent.action}")
         val reminderId = intent.getLongExtra(ReminderScheduler.EXTRA_REMINDER_ID, 0)
-        val reminderName = intent.getStringExtra(ReminderScheduler.EXTRA_REMINDER_NAME) ?: "Reminder"
-        val reminderDescription = intent.getStringExtra(ReminderScheduler.EXTRA_REMINDER_DESCRIPTION)
 
         // Dismiss the notification immediately regardless of what the action does next.
         NotificationManagerCompat.from(context).cancel(reminderId.toInt())
@@ -38,15 +39,44 @@ class ReminderActionReceiver : BroadcastReceiver() {
                 val workRequest = OneTimeWorkRequestBuilder<ReminderCompleteWorker>()
                     .setInputData(inputData)
                     .build()
-                WorkManager.getInstance(context.applicationContext).enqueue(workRequest)
+                // Unique per reminder so a repeated Done tap can't run two workers at once.
+                // KEEP: the in-flight worker is already completing this exact id, and
+                // completeReminder() is a no-op the second time anyway.
+                WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
+                    "complete_reminder_$reminderId",
+                    ExistingWorkPolicy.KEEP,
+                    workRequest
+                )
             }
             ACTION_SNOOZE -> {
                 // Ephemeral — no DB write. If the device reboots mid-snooze, ReminderBootReceiver
                 // re-arms from the reminder's real due time (not the snooze), so the notification
                 // could fire early after a reboot. Accepted tradeoff per Issue #41.
-                val stub = Reminder(id = reminderId, name = reminderName, description = reminderDescription, date = LocalDate.now())
-                val triggerAtMillis = System.currentTimeMillis() + SNOOZE_MINUTES * 60_000
-                ReminderScheduler.schedule(context, stub, triggerAtMillis)
+                snooze(context.applicationContext, reminderId)
+            }
+        }
+    }
+
+    /**
+     * Re-arms this reminder's alarm [SNOOZE_MINUTES] out, using the row's current state rather
+     * than the notification's (possibly stale) extras. The notification can outlive the reminder
+     * — completed or deleted in-app while still on screen — and arming an alarm off the extras
+     * would fire a phantom notification for something the user already dealt with (Issue #64).
+     */
+    private fun snooze(context: Context, reminderId: Long) {
+        val pendingResult = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val reminder = AppDatabase.getDatabase(context).reminderDao().getReminderById(reminderId)
+                if (reminder == null || reminder.isCompleted) {
+                    Log.d(TAG, "Ignoring snooze for reminder $reminderId — already completed or deleted")
+                    return@launch
+                }
+                ReminderScheduler.schedule(context, reminder, System.currentTimeMillis() + SNOOZE_MINUTES * 60_000)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to snooze reminder $reminderId", e)
+            } finally {
+                pendingResult.finish()
             }
         }
     }
