@@ -10,7 +10,12 @@
     <string name="action_done">Done</string>
     <string name="action_undo">Undo</string>
     <string name="action_reset">Reset</string>
+    <string name="action_create">Create</string>
+    <string name="action_set">Set</string>
+    <string name="action_change">Change</string>
     <string name="deleted_quoted">Deleted \"%1$s\"</string>
+    <string name="sign_in_failed">Sign-in failed: %1$s</string>
+    <string name="sign_in_failed_unexpected_credential">Sign-in failed: unexpected credential type (%1$s)</string>
 
     <!-- Main menu / settings sheet -->
     <string name="app_title_caps">APEX TRACKER</string>
@@ -63,12 +68,22 @@
     <string name="budget_new_subscription">New Subscription</string>
     <string name="budget_edit_subscription">Edit Subscription</string>
     <string name="budget_renews_prefix">Renews: %1$s</string>
+    <string name="budget_next_renewal">Next Renewal: %1$s</string>
     <string name="budget_breakdown_title">Breakdown for %1$s</string>
     <string name="budget_total">Total</string>
     <string name="budget_export_csv">Export CSV</string>
     <string name="budget_export_scope_title">Export Budget CSV</string>
     <string name="budget_export_current_month">Current Month</string>
     <string name="budget_export_all_time">All Time</string>
+    <string name="budget_settings_title">Budget Settings</string>
+    <string name="budget_manage_categories">Manage Categories</string>
+    <string name="budget_manage_subscriptions">Manage Subscriptions</string>
+    <!-- Display name of the synthetic id=-1 category that subscription-derived items fall into.
+         Every call site must use this one key — it used to be "Subscription" in one place and
+         "Subscriptions" in three others (Issue #65). Note BudgetCsvExport.kt deliberately keeps
+         its own untranslated literal; see the comment there. -->
+    <string name="budget_category_subscriptions">Subscriptions</string>
+    <string name="budget_pending_category">Pending: %1$s</string>
     <string name="label_title">Title</string>
     <string name="label_amount">Amount</string>
     <string name="label_name">Name</string>
@@ -85,6 +100,8 @@
     <string name="study_no_history">No history yet</string>
     <string name="study_focusing">FOCUSING</string>
     <string name="study_ready">READY</string>
+    <string name="study_pause_session">PAUSE SESSION</string>
+    <string name="study_start_studying">START STUDYING</string>
 
     <!-- Screen time -->
     <string name="screen_time_title">Screen Time</string>
@@ -100,6 +117,8 @@
     <string name="screen_permission_title">Permission Required</string>
     <string name="screen_permission_text">Apex Tracker needs \'Usage Access\' permission to track your screen time. This information is only stored on your device.</string>
     <string name="screen_grant_permission">Grant Permission</string>
+    <string name="screen_app_excluded">Excluded</string>
+    <string name="screen_app_tracking">Tracking</string>
 
     <!-- Reminders -->
     <string name="reminders_title">TASK LIST</string>
@@ -120,6 +139,7 @@
     <string name="reminders_new_title">New Reminder</string>
     <string name="reminders_edit_title">Edit Reminder</string>
     <string name="reminders_set_all_day">Set as All Day</string>
+    <string name="reminders_all_day">All Day</string>
     <string name="reminders_recurrence_prefix">Recurrence: %1$s</string>
     <string name="reminders_recurrence_none">None</string>
     <string name="reminders_remove_recurrence">Remove Recurrence</string>
@@ -158,6 +178,12 @@
     <string name="notes_retention_168h">168h</string>
     <string name="notes_deleted_after">Notes will be permanently deleted after %1$d hours.</string>
     <string name="notes_modified_prefix">Modified: %1$s</string>
+    <string name="notes_untitled">Untitled</string>
+    <string name="notes_new_title">New Note</string>
+    <string name="notes_edit_title">Edit Note</string>
+    <string name="notes_tool_bullet">Bullet</string>
+    <string name="notes_tool_indent">Indent</string>
+    <string name="notes_tool_outdent">Outdent</string>
 
     <!-- Content descriptions (accessibility / TalkBack) -->
     <string name="cd_back">Back</string>
