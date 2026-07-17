@@ -107,13 +107,19 @@
     <!-- Study -->
     <string name="study_title">STUDY SESSION</string>
     <string name="study_reset_confirm_title">Reset Timer?</string>
-    <string name="study_reset_confirm_text">Reset today\'s timer to 0:00? This can\'t be undone.</string>
+    <string name="study_reset_confirm_text">Reset today\'s time for this subject to 0:00? This can\'t be undone.</string>
     <string name="study_recent_history">Recent History</string>
     <string name="study_no_history">No history yet</string>
     <string name="study_focusing">FOCUSING</string>
     <string name="study_ready">READY</string>
     <string name="study_pause_session">PAUSE SESSION</string>
     <string name="study_start_studying">START STUDYING</string>
+    <string name="study_no_subject">No subject</string>
+    <string name="study_subject_label">SUBJECT</string>
+    <string name="study_choose_subject">Choose subject</string>
+    <string name="study_new_subject_hint">New subject</string>
+    <string name="study_add_subject">Add</string>
+    <string name="cd_choose_subject">Choose study subject</string>
 
     <!-- Screen time -->
     <string name="screen_time_title">Screen Time</string>

@@ -3,7 +3,6 @@ package com.example.apextracker
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -11,8 +10,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -31,6 +32,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -40,13 +43,14 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewModel()) {
     val timeSeconds by viewModel.timeSeconds.collectAsState()
     val isRunning by viewModel.isRunning.collectAsState()
+    val currentSubject by viewModel.currentSubject.collectAsState()
     val allSessions by viewModel.getAllSessions().collectAsState(initial = emptyList())
-    
+
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner) {
@@ -61,10 +65,11 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
         }
     }
 
-    val pastSessions = remember(allSessions) {
+    val pastDays = remember(allSessions) {
         val today = LocalDate.now()
-        allSessions.filter { it.date.isBefore(today) }.sortedByDescending { it.date }
+        groupSessionsByDate(allSessions.filter { it.date.isBefore(today) })
     }
+    val knownSubjects = remember(allSessions) { knownSubjects(allSessions) }
 
     var showResetConfirm by remember { mutableStateOf(false) }
     if (showResetConfirm) {
@@ -91,11 +96,24 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
         )
     }
 
+    var showSubjectPicker by remember { mutableStateOf(false) }
+    if (showSubjectPicker) {
+        SubjectPickerDialog(
+            current = currentSubject,
+            knownSubjects = knownSubjects,
+            onDismiss = { showSubjectPicker = false },
+            onSelect = {
+                viewModel.selectSubject(it)
+                showSubjectPicker = false
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { 
-                    Text(stringResource(R.string.study_title), 
+                title = {
+                    Text(stringResource(R.string.study_title),
                         style = MaterialTheme.typography.titleSmall
                     )
                 },
@@ -128,9 +146,16 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
                     .fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                StudyTimerDisplay(timeSeconds, isRunning)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    StudyTimerDisplay(timeSeconds, isRunning)
+                    Spacer(modifier = Modifier.height(20.dp))
+                    SubjectSelectorChip(
+                        subject = currentSubject,
+                        onClick = { showSubjectPicker = true }
+                    )
+                }
             }
-            
+
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -151,10 +176,10 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
                     )
                     Icon(Icons.Default.History, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 }
-                
+
                 Spacer(modifier = Modifier.height(16.dp))
-                
-                if (pastSessions.isEmpty()) {
+
+                if (pastDays.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(stringResource(R.string.study_no_history), color = MaterialTheme.colorScheme.outline)
                     }
@@ -163,13 +188,13 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(pastSessions) { session ->
-                            SessionItemCompact(session)
+                        items(pastDays) { day ->
+                            DayStudyItem(day)
                         }
                     }
                 }
             }
-            
+
             // Bottom Action Button
             Surface(
                 modifier = Modifier
@@ -210,6 +235,94 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
     }
 }
 
+/** The pill under the timer showing (and tapping to change) the subject time is attributed to. */
+@Composable
+fun SubjectSelectorChip(subject: String, onClick: () -> Unit) {
+    val chipDescription = stringResource(R.string.cd_choose_subject)
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        modifier = Modifier.semantics { contentDescription = chipDescription }
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = stringResource(R.string.study_subject_label),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    letterSpacing = 2.sp
+                )
+                Text(
+                    text = subject.ifBlank { stringResource(R.string.study_no_subject) },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+fun SubjectPickerDialog(
+    current: String,
+    knownSubjects: List<String>,
+    onDismiss: () -> Unit,
+    onSelect: (String) -> Unit
+) {
+    var newSubject by remember { mutableStateOf("") }
+    // "" (No subject) always offered first, then every previously used subject.
+    val options = remember(knownSubjects) { listOf("") + knownSubjects }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.study_choose_subject)) },
+        text = {
+            Column {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    options.forEach { option ->
+                        FilterChip(
+                            selected = option == current,
+                            onClick = { onSelect(option) },
+                            label = { Text(option.ifBlank { stringResource(R.string.study_no_subject) }) }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = newSubject,
+                        onValueChange = { newSubject = it },
+                        label = { Text(stringResource(R.string.study_new_subject_hint)) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        keyboardActions = KeyboardActions(
+                            onDone = { if (newSubject.isNotBlank()) onSelect(newSubject) }
+                        )
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(
+                        onClick = { if (newSubject.isNotBlank()) onSelect(newSubject) },
+                        enabled = newSubject.isNotBlank()
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = stringResource(R.string.study_add_subject))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
+}
+
 @Composable
 fun StudyTimerDisplay(seconds: Long, isRunning: Boolean) {
     val infiniteTransition = rememberInfiniteTransition(label = "timer")
@@ -243,7 +356,7 @@ fun StudyTimerDisplay(seconds: Long, isRunning: Boolean) {
                 style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
             )
         }
-        
+
         Canvas(modifier = Modifier.size(240.dp).rotate(if (isRunning) -rotation * 0.5f else 0f)) {
             drawCircle(
                 color = primaryColor.copy(alpha = 0.05f),
@@ -271,35 +384,66 @@ fun StudyTimerDisplay(seconds: Long, isRunning: Boolean) {
     }
 }
 
+/** One day's card: the date + grand total, with a per-subject breakdown beneath it. */
 @Composable
-fun SessionItemCompact(session: StudySession) {
+fun DayStudyItem(day: DayStudy) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = day.date.format(DateTimeFormatter.ofPattern("MMM dd")),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = day.date.format(DateTimeFormatter.ofPattern("EEEE")),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
                 Text(
-                    text = session.date.format(DateTimeFormatter.ofPattern("MMM dd")),
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    text = session.date.format(DateTimeFormatter.ofPattern("EEEE")),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline
+                    text = formatDurationCompact(day.totalSeconds * 1000),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
-            Text(
-                text = formatDurationCompact(session.durationSeconds * 1000),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.primary
-            )
+
+            // Only surface the breakdown when there's something to differentiate — a single
+            // uncategorised bucket adds no information over the total already shown above.
+            val showBreakdown = day.subjects.size > 1 ||
+                (day.subjects.size == 1 && day.subjects.first().subject.isNotBlank())
+            if (showBreakdown) {
+                Spacer(modifier = Modifier.height(12.dp))
+                day.subjects.forEach { subjectTotal ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = subjectTotal.subject.ifBlank { stringResource(R.string.study_no_subject) },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = formatDurationCompact(subjectTotal.seconds * 1000),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
         }
     }
 }
