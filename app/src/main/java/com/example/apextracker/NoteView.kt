@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
@@ -213,6 +214,8 @@ fun NoteEditor(note: Note, onDismiss: () -> Unit, onTogglePin: () -> Unit, onSav
     var contentValue by remember {
         mutableStateOf(TextFieldValue(note.content, selection = TextRange(note.content.length)))
     }
+    val context = LocalContext.current
+    val untitledLabel = stringResource(R.string.notes_untitled)
 
     Scaffold(
         topBar = {
@@ -224,6 +227,10 @@ fun NoteEditor(note: Note, onDismiss: () -> Unit, onTogglePin: () -> Unit, onSav
                     }
                 },
                 actions = {
+                    // Shares the current in-editor title/content, so unsaved edits are included.
+                    IconButton(onClick = { shareNote(context, title, contentValue.text, untitledLabel) }) {
+                        Icon(Icons.Default.Share, contentDescription = stringResource(R.string.cd_share_note))
+                    }
                     // Pinning only applies to an already-saved note (an unsaved new note has no row to update).
                     if (note.id != 0L) {
                         IconButton(onClick = onTogglePin) {

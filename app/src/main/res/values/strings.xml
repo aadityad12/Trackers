@@ -218,4 +218,5 @@
     <string name="cd_delete_selected">Delete selected</string>
     <string name="cd_recurring">Recurring</string>
     <string name="cd_exclude_apps">Exclude Apps</string>
+    <string name="cd_share_note">Share note</string>
 </resources>
