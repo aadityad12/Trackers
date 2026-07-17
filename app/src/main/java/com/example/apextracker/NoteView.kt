@@ -169,7 +169,7 @@ fun NoteCard(note: Note, onClick: () -> Unit, onDelete: () -> Unit, onTogglePin:
                     )
                 }
                 Text(
-                    text = note.title.ifBlank { "Untitled" },
+                    text = note.title.ifBlank { stringResource(R.string.notes_untitled) },
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
@@ -217,7 +217,7 @@ fun NoteEditor(note: Note, onDismiss: () -> Unit, onTogglePin: () -> Unit, onSav
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (note.id == 0L) "New Note" else "Edit Note") },
+                title = { Text(stringResource(if (note.id == 0L) R.string.notes_new_title else R.string.notes_edit_title)) },
                 navigationIcon = {
                     IconButton(onClick = onDismiss) {
                         Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_cancel))
@@ -276,7 +276,7 @@ fun NoteEditor(note: Note, onDismiss: () -> Unit, onTogglePin: () -> Unit, onSav
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                InputToolButton(icon = Icons.AutoMirrored.Filled.List, label = "Bullet") {
+                InputToolButton(icon = Icons.AutoMirrored.Filled.List, label = stringResource(R.string.notes_tool_bullet)) {
                     contentValue = modifyCurrentLine(contentValue) { line ->
                         val match = bulletRegex.find(line)
                         if (match != null && match.value == bulletSequence[0]) {
@@ -288,7 +288,7 @@ fun NoteEditor(note: Note, onDismiss: () -> Unit, onTogglePin: () -> Unit, onSav
                         }
                     }
                 }
-                InputToolButton(icon = Icons.AutoMirrored.Filled.FormatIndentIncrease, label = "Indent") {
+                InputToolButton(icon = Icons.AutoMirrored.Filled.FormatIndentIncrease, label = stringResource(R.string.notes_tool_indent)) {
                     contentValue = modifyCurrentLine(contentValue) { line ->
                         val match = bulletRegex.find(line)
                         if (match != null) {
@@ -302,7 +302,7 @@ fun NoteEditor(note: Note, onDismiss: () -> Unit, onTogglePin: () -> Unit, onSav
                         }
                     }
                 }
-                InputToolButton(icon = Icons.AutoMirrored.Filled.FormatIndentDecrease, label = "Outdent") {
+                InputToolButton(icon = Icons.AutoMirrored.Filled.FormatIndentDecrease, label = stringResource(R.string.notes_tool_outdent)) {
                     contentValue = modifyCurrentLine(contentValue) { line ->
                         val match = bulletRegex.find(line)
                         if (match != null) {
@@ -433,7 +433,7 @@ fun RecycleBinView(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Text(note.title.ifBlank { "Untitled" }, fontWeight = FontWeight.Bold)
+                            Text(note.title.ifBlank { stringResource(R.string.notes_untitled) }, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.height(8.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Button(

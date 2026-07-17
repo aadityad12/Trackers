@@ -12,7 +12,17 @@ internal fun csvEscape(field: String): String {
     return if (needsQuoting) "\"" + field.replace("\"", "\"\"") + "\"" else field
 }
 
-/** Same category-name resolution the Budget UI uses: -1L is the synthetic "Subscriptions" bucket, else a lookup, else blank. */
+/**
+ * Same category-name resolution the Budget UI uses: -1L is the synthetic "Subscriptions" bucket,
+ * else a lookup, else blank.
+ *
+ * The -1L label stays an untranslated literal here rather than moving to
+ * `R.string.budget_category_subscriptions` with the UI call sites (Issue #65), for two reasons:
+ * CSV is machine-readable output where a stable column value beats a localized one, and taking a
+ * Context would cost this function its purity — it's unit-tested in `BudgetCsvExportTest` with no
+ * framework. If the export ever should follow the UI's locale, pass the resolved name in as a
+ * parameter rather than reaching for a Context in here.
+ */
 internal fun resolveCategoryName(categoryId: Long?, categories: List<Category>): String = when (categoryId) {
     -1L -> "Subscriptions"
     null -> ""

@@ -63,10 +63,10 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 handleSignIn(result)
             } catch (e: GetCredentialException) {
                 e.printStackTrace()
-                _signInError.value = "Sign-in failed: ${e.message}"
+                _signInError.value = getApplication<Application>().getString(R.string.sign_in_failed, e.message ?: "")
             } catch (e: Exception) {
                 e.printStackTrace()
-                _signInError.value = "Sign-in failed: ${e.message}"
+                _signInError.value = getApplication<Application>().getString(R.string.sign_in_failed, e.message ?: "")
             }
         }
     }
@@ -83,7 +83,8 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             auth.signInWithCredential(firebaseCredential).await()
         } else {
             Log.w("AuthViewModel", "Unexpected credential type returned: ${credential::class.java.name}")
-            _signInError.value = "Sign-in failed: unexpected credential type (${credential::class.java.simpleName})"
+            _signInError.value = getApplication<Application>()
+                .getString(R.string.sign_in_failed_unexpected_credential, credential::class.java.simpleName)
         }
     }
 

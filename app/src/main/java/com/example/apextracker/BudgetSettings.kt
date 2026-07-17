@@ -54,9 +54,9 @@ fun BudgetSettingsDialog(
                 }
                 Text(
                     text = when (activeSubScreen) {
-                        "categories" -> "Manage Categories"
-                        "subscriptions" -> "Manage Subscriptions"
-                        else -> "Budget Settings"
+                        "categories" -> stringResource(R.string.budget_manage_categories)
+                        "subscriptions" -> stringResource(R.string.budget_manage_subscriptions)
+                        else -> stringResource(R.string.budget_settings_title)
                     }
                 )
             }
@@ -77,8 +77,8 @@ fun BudgetSettingsDialog(
                     }
                     else -> {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            BudgetSettingsItem("Manage Categories") { activeSubScreen = "categories" }
-                            BudgetSettingsItem("Manage Subscriptions") { activeSubScreen = "subscriptions" }
+                            BudgetSettingsItem(stringResource(R.string.budget_manage_categories)) { activeSubScreen = "categories" }
+                            BudgetSettingsItem(stringResource(R.string.budget_manage_subscriptions)) { activeSubScreen = "subscriptions" }
                             BudgetSettingsItem(stringResource(R.string.budget_export_csv)) { showExportDialog = true }
                         }
                     }
@@ -292,7 +292,7 @@ fun CategoryDialog(
         },
         confirmButton = {
             Button(onClick = { if (name.isNotBlank()) onConfirm(name, selectedColor, parseMonthlyLimitInput(limit)); onDismiss() }) {
-                Text(if (initialName.isEmpty()) "Create" else "Save")
+                Text(stringResource(if (initialName.isEmpty()) R.string.action_create else R.string.action_save))
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } }
@@ -428,7 +428,7 @@ fun SubscriptionDialog(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(stringResource(R.string.label_name)) }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = amount, onValueChange = { if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d{0,2}$"))) amount = it }, label = { Text(stringResource(R.string.label_amount)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
-                TextButton(onClick = { datePickerDialog.show() }, modifier = Modifier.fillMaxWidth()) { Text("Next Renewal: ${date.format(DateTimeFormatter.ISO_LOCAL_DATE)}") }
+                TextButton(onClick = { datePickerDialog.show() }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.budget_next_renewal, date.format(DateTimeFormatter.ISO_LOCAL_DATE))) }
                 OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text(stringResource(R.string.label_notes_optional)) }, modifier = Modifier.fillMaxWidth())
             }
         },

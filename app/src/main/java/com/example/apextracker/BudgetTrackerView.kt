@@ -260,7 +260,7 @@ fun BudgetOverview(
                 
                 items(pendingSubs.sortedBy { it.renewalDate }) { sub ->
                     val colorHex = String.format("#%06X", (0xFFFFFF and subColor.value.toInt()))
-                    val category = Category(id = -1L, name = "Subscription", colorHex = colorHex)
+                    val category = Category(id = -1L, name = stringResource(R.string.budget_category_subscriptions), colorHex = colorHex)
                     BudgetListItem(
                         BudgetItem(title = sub.name, amount = sub.amount, date = sub.renewalDate, categoryId = -1L), 
                         category, 
@@ -272,7 +272,7 @@ fun BudgetOverview(
                 items(sortedItems) { item ->
                     val category = if (item.categoryId == -1L) {
                         val colorHex = String.format("#%06X", (0xFFFFFF and subColor.value.toInt()))
-                        Category(id = -1L, name = "Subscriptions", colorHex = colorHex)
+                        Category(id = -1L, name = stringResource(R.string.budget_category_subscriptions), colorHex = colorHex)
                     } else {
                         categories.find { it.id == item.categoryId }
                     }
@@ -389,7 +389,7 @@ fun ExpensePieChartModern(
     
     itemsByCategory.forEach { (catId, catItems) ->
         val category = if (catId == -1L) {
-            Category(id = -1L, name = "Subscriptions", colorHex = colorHex)
+            Category(id = -1L, name = stringResource(R.string.budget_category_subscriptions), colorHex = colorHex)
         } else {
             categories.find { it.id == catId }
         }
