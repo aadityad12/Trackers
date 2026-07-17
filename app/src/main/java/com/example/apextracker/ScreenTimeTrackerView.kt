@@ -284,7 +284,7 @@ fun AppToggleItem(app: AppUsageInfo, onToggle: (AppUsageInfo) -> Unit) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(app.appName, fontWeight = FontWeight.Medium)
                 Text(
-                    text = if (app.isExcluded) "Excluded" else "Tracking",
+                    text = stringResource(if (app.isExcluded) R.string.screen_app_excluded else R.string.screen_app_tracking),
                     style = MaterialTheme.typography.labelSmall,
                     color = if (app.isExcluded) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                 )

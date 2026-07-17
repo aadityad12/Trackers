@@ -76,7 +76,7 @@ fun BudgetListItem(
                 }
                 if (category != null) {
                     Text(
-                        text = if (isPending) "Pending: ${category.name}" else category.name,
+                        text = if (isPending) stringResource(R.string.budget_pending_category, category.name) else category.name,
                         style = MaterialTheme.typography.labelSmall,
                         color = displayColor,
                         fontWeight = FontWeight.Bold
@@ -186,7 +186,7 @@ fun BudgetItemDialog(
 fun CategoryDropdown(categories: List<Category>, selectedCategory: Category?, expanded: Boolean, onExpandedChange: (Boolean) -> Unit, onCategorySelected: (Category?) -> Unit) {
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = onExpandedChange) {
         OutlinedTextField(
-            value = selectedCategory?.name ?: "No Category", 
+            value = selectedCategory?.name ?: stringResource(R.string.budget_no_category), 
             onValueChange = {}, 
             readOnly = true, 
             label = { Text(stringResource(R.string.label_category)) }, 

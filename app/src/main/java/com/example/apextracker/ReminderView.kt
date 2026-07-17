@@ -425,7 +425,7 @@ fun ReminderEditDialog(
                         },
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text(time?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "All Day")
+                        Text(time?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: stringResource(R.string.reminders_all_day))
                     }
                 }
                 
@@ -444,7 +444,7 @@ fun ReminderEditDialog(
                 ) {
                     Text(stringResource(R.string.reminders_recurrence_prefix, recurrence?.frequency?.name ?: stringResource(R.string.reminders_recurrence_none)), style = MaterialTheme.typography.bodyMedium)
                     TextButton(onClick = { showRecurrencePicker = true }) {
-                        Text(if (recurrence == null) "Set" else "Change")
+                        Text(stringResource(if (recurrence == null) R.string.action_set else R.string.action_change))
                     }
                 }
                 if (recurrence != null) {

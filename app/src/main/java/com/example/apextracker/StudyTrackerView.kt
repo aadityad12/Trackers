@@ -200,7 +200,7 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = if (isRunning) "PAUSE SESSION" else "START STUDYING",
+                        text = stringResource(if (isRunning) R.string.study_pause_session else R.string.study_start_studying),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Black
                     )
