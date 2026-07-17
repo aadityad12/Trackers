@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
+   Auto Backup rules for API 26-30. Devices on API 31+ use data_extraction_rules.xml
+   instead and ignore this file entirely, so the exclusions below are duplicated there
+   — keep the two in sync.
    See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+
+   Rationale for each exclusion is documented in data_extraction_rules.xml (Issue #62).
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="database" path="budget_database" />
+    <exclude domain="database" path="budget_database-wal" />
+    <exclude domain="database" path="budget_database-shm" />
+    <exclude domain="sharedpref" path="device_identity.xml" />
 </full-backup-content>

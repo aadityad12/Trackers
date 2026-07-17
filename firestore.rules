@@ -1,0 +1,32 @@
+rules_version = '2';
+
+// Firestore security rules for ApexTracker (Issue #61).
+//
+// These rules are the ONLY thing enforcing per-user data isolation. FirebaseManager.kt
+// builds every path from `auth.currentUser?.uid` on the client, but client-side path
+// construction is not authorization — anyone can call the Firestore REST API with their
+// own token and any uid they like. Sign-in is open registration
+// (setFilterByAuthorizedAccounts(false) in AuthViewModel), so every Google account is a
+// valid authenticated client; without these rules, any user could read any other user's
+// budget, notes, and reminders.
+//
+// DEPLOYING IS A SEPARATE STEP — committing this file changes nothing on its own:
+//     firebase use <project-id>
+//     firebase deploy --only firestore:rules
+// Verify what is actually live in the Firebase console (Firestore → Rules), which is the
+// real source of truth, not this file.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Everything the app writes lives under users/{uid} — the settings doc itself plus
+    // the budget / categories / subscriptions / notes / reminders / study_sessions /
+    // excluded_apps / devices subcollections (devices/{deviceId}/screen_time nests
+    // deeper, hence the recursive wildcard).
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Default deny. Any new top-level collection must opt in explicitly above.
+  }
+}
