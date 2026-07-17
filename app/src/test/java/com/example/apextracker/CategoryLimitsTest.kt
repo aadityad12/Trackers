@@ -46,6 +46,36 @@ class CategoryLimitsTest {
         assertEquals(400.0, category(1, limit = 400.0).effectiveMonthlyLimit()!!, 0.0001)
     }
 
+    // ── parseMonthlyLimitInput ───────────────────────────────────────────────
+
+    @Test
+    fun `blank input means no cap`() {
+        assertNull(parseMonthlyLimitInput(""))
+        assertNull(parseMonthlyLimitInput("   "))
+    }
+
+    @Test
+    fun `zero input means no cap`() {
+        assertNull(parseMonthlyLimitInput("0"))
+        assertNull(parseMonthlyLimitInput("0.00"))
+    }
+
+    @Test
+    fun `unparseable input means no cap`() {
+        assertNull(parseMonthlyLimitInput("abc"))
+        assertNull(parseMonthlyLimitInput("."))
+    }
+
+    @Test
+    fun `parses a decimal amount`() {
+        assertEquals(400.5, parseMonthlyLimitInput("400.50")!!, 0.0001)
+    }
+
+    @Test
+    fun `tolerates surrounding whitespace`() {
+        assertEquals(400.0, parseMonthlyLimitInput("  400 ")!!, 0.0001)
+    }
+
     // ── categoryLimitStatuses ────────────────────────────────────────────────
 
     @Test

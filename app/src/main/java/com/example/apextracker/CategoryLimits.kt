@@ -1,6 +1,7 @@
 package com.example.apextracker
 
 import java.time.YearMonth
+import java.util.Locale
 
 /**
  * Spend-vs-cap state for one category in one month. Only built for categories that
@@ -27,6 +28,27 @@ data class CategoryLimitStatus(
  */
 fun Category.effectiveMonthlyLimit(): Double? =
     monthlyLimit?.takeIf { it > 0.0 && it.isFinite() }
+
+/**
+ * Turns the category dialog's free-text cap field into a stored [Category.monthlyLimit].
+ *
+ * Blank means "no cap", and so does 0 or an unparseable value — the field is optional, and
+ * the same normalization as [effectiveMonthlyLimit] applies so a cap that would be ignored
+ * at render time is never persisted in the first place.
+ */
+fun parseMonthlyLimitInput(raw: String): Double? =
+    raw.trim().toDoubleOrNull()?.takeIf { it > 0.0 && it.isFinite() }
+
+/**
+ * Renders a stored cap back into the dialog's text field.
+ *
+ * Deliberately not formatCurrency(): that produces "$400.00", which the field's numeric
+ * input filter would reject on the next keystroke. Whole amounts drop the decimals so
+ * editing a $400 cap doesn't start you at "400.0".
+ */
+fun formatLimitForInput(limit: Double): String =
+    if (limit % 1.0 == 0.0) limit.toLong().toString()
+    else String.format(Locale.US, "%.2f", limit)
 
 /**
  * Spend-vs-cap for every capped category, for [month]'s items only.
