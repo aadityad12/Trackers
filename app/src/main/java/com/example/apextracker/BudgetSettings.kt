@@ -67,7 +67,7 @@ fun BudgetSettingsDialog(
                     "categories" -> {
                         CategoriesView(
                             categories = categories,
-                            onAdd = { name, color -> viewModel.addCategory(name, color) },
+                            onAdd = { name, color, limit -> viewModel.addCategory(name, color, limit) },
                             onUpdate = { viewModel.updateCategory(it) },
                             onDelete = { viewModel.deleteCategory(it) }
                         )
@@ -151,7 +151,7 @@ fun BudgetSettingsItem(label: String, onClick: () -> Unit) {
 @Composable
 fun CategoriesView(
     categories: List<Category>,
-    onAdd: (String, String) -> Unit,
+    onAdd: (String, String, Double?) -> Unit,
     onUpdate: (Category) -> Unit,
     onDelete: (Category) -> Unit
 ) {
@@ -177,7 +177,7 @@ fun CategoriesView(
         CategoryDialog(
             title = stringResource(R.string.budget_new_category),
             onDismiss = { showAddDialog = false },
-            onConfirm = { name, color -> onAdd(name, color) }
+            onConfirm = { name, color, limit -> onAdd(name, color, limit) }
         )
     }
 
@@ -186,9 +186,10 @@ fun CategoriesView(
             title = stringResource(R.string.budget_edit_category),
             initialName = categoryToEdit!!.name,
             initialColor = categoryToEdit!!.colorHex,
+            initialLimit = categoryToEdit!!.monthlyLimit,
             onDismiss = { categoryToEdit = null },
-            onConfirm = { name, color ->
-                onUpdate(categoryToEdit!!.copy(name = name, colorHex = color))
+            onConfirm = { name, color, limit ->
+                onUpdate(categoryToEdit!!.copy(name = name, colorHex = color, monthlyLimit = limit))
                 categoryToEdit = null
             },
             onDelete = {
@@ -214,7 +215,19 @@ fun CategoryItem(category: Category, onEdit: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                 Box(modifier = Modifier.size(20.dp).background(parseColorSafe(category.colorHex), CircleShape))
                 Spacer(modifier = Modifier.width(12.dp))
-                Text(category.name, style = MaterialTheme.typography.bodyMedium)
+                Column {
+                    Text(category.name, style = MaterialTheme.typography.bodyMedium)
+                    val limit = category.effectiveMonthlyLimit()
+                    Text(
+                        text = if (limit != null) {
+                            stringResource(R.string.budget_limit_summary, formatCurrency(limit))
+                        } else {
+                            stringResource(R.string.budget_limit_none)
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
             }
             Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.cd_edit), modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
         }
@@ -226,11 +239,15 @@ fun CategoryDialog(
     title: String,
     initialName: String = "",
     initialColor: String? = null,
+    initialLimit: Double? = null,
     onDismiss: () -> Unit,
-    onConfirm: (String, String) -> Unit,
+    onConfirm: (String, String, Double?) -> Unit,
     onDelete: (() -> Unit)? = null
 ) {
     var name by remember { mutableStateOf(initialName) }
+    // Rendered bare (not via formatCurrency) because this is an editable numeric field —
+    // a "$400.00" string wouldn't survive a round-trip back through the input filter.
+    var limit by remember { mutableStateOf(initialLimit?.let { formatLimitForInput(it) } ?: "") }
     val colors = listOf(
         "#ac725e", "#d06b64", "#f83a22", "#fa573c", "#ff7537", "#ffad46",
         "#42d692", "#16a765", "#7bd148", "#b3dc6c", "#fbe983", "#fad165",
@@ -259,12 +276,22 @@ fun CategoryDialog(
                     label = { Text(stringResource(R.string.label_category_name)) },
                     modifier = Modifier.fillMaxWidth()
                 )
+                OutlinedTextField(
+                    value = limit,
+                    // Same numeric filter as the budget item amount field.
+                    onValueChange = { if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d{0,2}$"))) limit = it },
+                    label = { Text(stringResource(R.string.budget_limit_label)) },
+                    supportingText = { Text(stringResource(R.string.budget_limit_hint)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Text(stringResource(R.string.budget_select_color))
                 ColorGrid(colors, selectedColor) { selectedColor = it }
             }
         },
         confirmButton = {
-            Button(onClick = { if (name.isNotBlank()) onConfirm(name, selectedColor); onDismiss() }) {
+            Button(onClick = { if (name.isNotBlank()) onConfirm(name, selectedColor, parseMonthlyLimitInput(limit)); onDismiss() }) {
                 Text(stringResource(if (initialName.isEmpty()) R.string.action_create else R.string.action_save))
             }
         },

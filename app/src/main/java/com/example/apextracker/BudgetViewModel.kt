@@ -140,11 +140,12 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun addCategory(name: String, colorHex: String) {
+    fun addCategory(name: String, colorHex: String, monthlyLimit: Double?) {
         viewModelScope.launch {
             val category = Category(
                 name = name,
                 colorHex = colorHex,
+                monthlyLimit = monthlyLimit,
                 cloudId = UUID.randomUUID().toString(),
                 modifiedAt = System.currentTimeMillis()
             )

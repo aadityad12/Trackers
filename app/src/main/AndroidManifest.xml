@@ -4,11 +4,29 @@
 
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
-        tools:ignore="QueryAllPackagesPermission" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
+      Screen Time lists apps the user can actually open, so it only needs to see packages that
+      have a launcher activity — which is exactly what this <queries> element grants. It replaces
+      QUERY_ALL_PACKAGES (Issue #72), which exposed *every* installed package: measured on a test
+      device, 647 packages visible vs the 189 that have a launcher. An installed-app list is
+      sensitive on its own (it can reveal health, dating, religious or political app use) and Play
+      scrutinizes the permission, so the narrower declaration is both a privacy and a review win.
+
+      Note this only filters on API 30+. minSdk is 26, and below API 30 package visibility does not
+      exist — getInstalledApplications() returns everything regardless — so the launcher/system
+      filter in ScreenTimeViewModel.loadInstalledApps() is what bounds the list there. Do not
+      delete that filter assuming this element covers it.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
 
     <application
         android:allowBackup="true"

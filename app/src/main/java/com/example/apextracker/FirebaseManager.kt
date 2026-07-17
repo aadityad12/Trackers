@@ -79,6 +79,9 @@ private fun Map<String, Any?>.optLong(key: String): Long = (this[key] as? Number
 private fun Map<String, Any?>.requireDouble(key: String): Double =
     (this[key] as? Number)?.toDouble() ?: error("missing or non-numeric '$key'")
 
+/** Absent, null, or non-numeric all mean "not set" — used for optional caps. */
+private fun Map<String, Any?>.optDouble(key: String): Double? = (this[key] as? Number)?.toDouble()
+
 internal data class ParsedBudgetItem(val item: BudgetItem, val categoryCloudId: String?)
 
 // ── Legacy budget doc migration ───────────────────────────────────────────────
@@ -151,6 +154,9 @@ internal fun classifyLegacyBudgetDoc(
 internal fun parseCategoryDoc(data: Map<String, Any?>): Category = Category(
     name = data.requireString("name"),
     colorHex = data.requireString("colorHex"),
+    // Optional, not required: docs written before per-category limits existed have no
+    // such field, and a cleared cap is pushed as an explicit null. Both mean uncapped.
+    monthlyLimit = data.optDouble("monthlyLimit"),
     cloudId = data.requireCloudId(),
     modifiedAt = data.optLong("modifiedAt")
 )
@@ -319,6 +325,9 @@ class FirebaseManager(private val context: Context) {
                     "cloudId" to category.cloudId,
                     "name" to category.name,
                     "colorHex" to category.colorHex,
+                    // Always present in the map, so a cleared cap writes an explicit null
+                    // instead of merge() leaving the old value behind.
+                    "monthlyLimit" to category.monthlyLimit,
                     "modifiedAt" to category.modifiedAt
                 ),
                 SetOptions.merge()
@@ -564,7 +573,12 @@ class FirebaseManager(private val context: Context) {
                 db.categoryDao().insertCategory(parsed)
             } else if (parsed.modifiedAt > local.modifiedAt) {
                 db.categoryDao().updateCategory(
-                    local.copy(name = parsed.name, colorHex = parsed.colorHex, modifiedAt = parsed.modifiedAt)
+                    local.copy(
+                        name = parsed.name,
+                        colorHex = parsed.colorHex,
+                        monthlyLimit = parsed.monthlyLimit,
+                        modifiedAt = parsed.modifiedAt
+                    )
                 )
             }
         } catch (e: Exception) {

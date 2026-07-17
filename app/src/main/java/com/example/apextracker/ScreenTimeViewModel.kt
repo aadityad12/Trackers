@@ -106,6 +106,10 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
     private fun loadInstalledApps() {
         viewModelScope.launch(Dispatchers.IO) {
             val pm = getApplication<Application>().packageManager
+            // On API 30+ the <queries> LAUNCHER element in the manifest already limits what this
+            // returns to launchable packages (Issue #72 — it replaced QUERY_ALL_PACKAGES). Below
+            // API 30 package visibility doesn't exist and this returns every installed package,
+            // so this filter is still what bounds the list on API 26-29. Keep it.
             val apps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
                 .filter { app ->
                     val isSystemApp = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0
