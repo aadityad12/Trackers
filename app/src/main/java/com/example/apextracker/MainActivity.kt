@@ -66,6 +66,10 @@ import androidx.navigation.compose.rememberNavController
 import coil.compose.AsyncImage
 import com.example.apextracker.ui.theme.ApexTheme
 import com.example.apextracker.ui.theme.ApexTrackerTheme
+import com.example.apextracker.ui.theme.EmeraldMuted
+import com.example.apextracker.ui.theme.MagmaPrimary
+import com.example.apextracker.ui.theme.OceanPrimary
+import com.example.apextracker.ui.theme.RoyalPrimary
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
@@ -592,11 +596,13 @@ fun MainMenu(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     ApexTheme.entries.forEach { theme ->
+                        // The same tokens Theme.kt feeds into each scheme's `primary`, so the
+                        // swatch can't drift from the theme it previews (Issue #66).
                         val themeColor = when(theme) {
-                            ApexTheme.EMERALD -> Color(0xFF50C878)
-                            ApexTheme.OCEAN -> Color(0xFF00B2FF)
-                            ApexTheme.MAGMA -> Color(0xFFFF5722)
-                            ApexTheme.ROYAL -> Color(0xFF9C27B0)
+                            ApexTheme.EMERALD -> EmeraldMuted
+                            ApexTheme.OCEAN -> OceanPrimary
+                            ApexTheme.MAGMA -> MagmaPrimary
+                            ApexTheme.ROYAL -> RoyalPrimary
                         }
                         
                         Box(

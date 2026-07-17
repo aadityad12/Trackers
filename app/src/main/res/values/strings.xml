@@ -103,6 +103,8 @@
 
     <!-- Reminders -->
     <string name="reminders_title">TASK LIST</string>
+    <string name="reminders_notif_done">Done</string>
+    <string name="reminders_notif_snooze">Snooze 10 min</string>
     <string name="reminders_selected_count">%1$d SELECTED</string>
     <string name="reminders_active">ACTIVE</string>
     <string name="reminders_completed">COMPLETED</string>

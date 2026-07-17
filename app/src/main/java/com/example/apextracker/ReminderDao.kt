@@ -17,6 +17,14 @@ interface ReminderDao {
     @Update
     suspend fun updateReminder(reminder: Reminder)
 
+    /**
+     * Flips an active reminder to completed, returning the number of rows changed — 0 means it
+     * was already completed. The `isCompleted = 0` predicate makes this a compare-and-set in a
+     * single statement, so of two concurrent completions only one can win (see [completeReminder]).
+     */
+    @Query("UPDATE reminders SET isCompleted = 1, cloudId = :cloudId, modifiedAt = :modifiedAt WHERE id = :id AND isCompleted = 0")
+    suspend fun markCompletedIfActive(id: Long, cloudId: String, modifiedAt: Long): Int
+
     @Delete
     suspend fun deleteReminder(reminder: Reminder)
 

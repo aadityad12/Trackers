@@ -1,19 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
+   Backup/transfer rules for API 31+ (see backup_rules.xml for API 26-30).
    See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+
+   Empty rules mean "back everything up", so these exclusions are load-bearing (Issue #62):
+
+   - budget_database (+ its -wal/-shm sidecars) is the Room DB — budget amounts, note
+     contents, reminder text. It has no field-level encryption at rest, and an OS-level
+     backup would bypass any in-app lock (the roadmap's biometric lock for Budget/Notes
+     would be defeated by it). Firebase sync, not Android backup, is this app's story for
+     getting data onto a new device.
+   - device_identity holds the per-install UUID that keys this device's screen-time docs
+     at users/{uid}/devices/{deviceId}. Restoring it onto a second device would make both
+     devices write to the same doc and clobber each other's screen time.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="database" path="budget_database" />
+        <exclude domain="database" path="budget_database-wal" />
+        <exclude domain="database" path="budget_database-shm" />
+        <exclude domain="sharedpref" path="device_identity.xml" />
     </cloud-backup>
-    <!--
+    <!-- Declared explicitly: an absent <device-transfer> silently falls back to the
+         <cloud-backup> rules above, which is right today, but that coupling is not
+         obvious to the next reader. -->
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="database" path="budget_database" />
+        <exclude domain="database" path="budget_database-wal" />
+        <exclude domain="database" path="budget_database-shm" />
+        <exclude domain="sharedpref" path="device_identity.xml" />
     </device-transfer>
-    -->
 </data-extraction-rules>

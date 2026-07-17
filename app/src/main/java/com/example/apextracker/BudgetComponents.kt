@@ -18,7 +18,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -79,7 +78,7 @@ fun BudgetListItem(
                     Text(
                         text = if (isPending) "Pending: ${category.name}" else category.name,
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (category.id == -1L) Color(0xFFB8860B) else displayColor,
+                        color = displayColor,
                         fontWeight = FontWeight.Bold
                     )
                 }
