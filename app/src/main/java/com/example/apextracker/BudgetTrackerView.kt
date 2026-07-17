@@ -345,7 +345,7 @@ fun SummaryCardModern(
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                     )
                     Text(
-                        text = formatCurrency(total),
+                        text = formatCurrency(total, LocalCurrencyCode.current),
                         style = MaterialTheme.typography.displaySmall,
                         fontWeight = FontWeight.Black,
                         color = MaterialTheme.colorScheme.onPrimaryContainer

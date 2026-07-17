@@ -247,15 +247,17 @@ class FirebaseManager(private val context: Context) {
 
     // ── Settings ──────────────────────────────────────────────────────────────
 
-    suspend fun syncSettings(theme: String, isDarkMode: Boolean) {
+    /** [currency] is null only before the local DataStore read completes; the field is left alone then. */
+    suspend fun syncSettings(theme: String, isDarkMode: Boolean, currency: String? = null) {
         val uid = userId ?: return
         firestore.collection("users").document(uid)
             .set(
-                mapOf(
-                    "theme" to theme,
-                    "isDarkMode" to isDarkMode,
-                    "lastSynced" to System.currentTimeMillis()
-                ),
+                buildMap {
+                    put("theme", theme)
+                    put("isDarkMode", isDarkMode)
+                    currency?.let { put("currency", it) }
+                    put("lastSynced", System.currentTimeMillis())
+                },
                 SetOptions.merge()
             ).await()
     }

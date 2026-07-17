@@ -220,7 +220,7 @@ fun CategoryItem(category: Category, onEdit: () -> Unit) {
                     val limit = category.effectiveMonthlyLimit()
                     Text(
                         text = if (limit != null) {
-                            stringResource(R.string.budget_limit_summary, formatCurrency(limit))
+                            stringResource(R.string.budget_limit_summary, formatCurrency(limit, LocalCurrencyCode.current))
                         } else {
                             stringResource(R.string.budget_limit_none)
                         },
@@ -386,7 +386,7 @@ fun SubscriptionItem(subscription: Subscription, onClick: () -> Unit) {
                 Text(subscription.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
                 Text(stringResource(R.string.budget_renews_prefix, subscription.renewalDate.format(DateTimeFormatter.ofPattern("MMM dd"))), style = MaterialTheme.typography.bodySmall)
             }
-            Text(formatCurrency(subscription.amount), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+            Text(formatCurrency(subscription.amount, LocalCurrencyCode.current), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
         }
     }
 }
