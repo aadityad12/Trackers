@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -39,6 +40,9 @@ fun BudgetSettingsDialog(
     var activeSubScreen by remember { mutableStateOf<String?>(null) }
     var showExportDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val securitySettings = remember { SecuritySettings(context) }
+    val budgetLocked by securitySettings.budgetLockEnabled.collectAsState(initial = false)
+    val scope = rememberCoroutineScope()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -80,6 +84,12 @@ fun BudgetSettingsDialog(
                             BudgetSettingsItem(stringResource(R.string.budget_manage_categories)) { activeSubScreen = "categories" }
                             BudgetSettingsItem(stringResource(R.string.budget_manage_subscriptions)) { activeSubScreen = "subscriptions" }
                             BudgetSettingsItem(stringResource(R.string.budget_export_csv)) { showExportDialog = true }
+                            HorizontalDivider()
+                            ModuleLockSetting(
+                                checked = budgetLocked,
+                                titleRes = R.string.security_lock_budget_title,
+                                onCheckedChange = { scope.launch { securitySettings.setBudgetLock(it) } }
+                            )
                         }
                     }
                 }

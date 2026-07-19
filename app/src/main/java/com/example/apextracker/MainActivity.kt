@@ -6,7 +6,7 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -73,7 +73,10 @@ import com.example.apextracker.ui.theme.RoyalPrimary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-class MainActivity : ComponentActivity() {
+// FragmentActivity (not ComponentActivity) because androidx.biometric's BiometricPrompt requires
+// one to host its prompt (Issue #45). FragmentActivity is itself a ComponentActivity, so setContent,
+// viewModel(), and registerForActivityResult all keep working unchanged.
+class MainActivity : FragmentActivity() {
     companion object {
         /** Intent extra naming a navigation route to open (e.g. from a notification tap). */
         const val EXTRA_NAVIGATE_TO = "navigate_to"
@@ -93,6 +96,15 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         pendingRoute = intent.getStringExtra(EXTRA_NAVIGATE_TO)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Re-lock every module when the app leaves the foreground, so returning re-prompts (the
+        // unlocked-until-backgrounded policy, Issue #45). onStop also covers the system biometric
+        // prompt bringing its own UI forward, but markUnlocked() runs on its success callback
+        // afterwards, so a genuine unlock still sticks for the session.
+        UnlockSession.lockAll()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -212,6 +224,13 @@ fun AppNavigation(
     val navController = rememberNavController()
     var showSplash by remember { mutableStateOf(true) }
 
+    // Per-module lock flags (Issue #45). initial = null so the gate fails closed until DataStore
+    // has read the real value — see LockGate.
+    val appContext = LocalContext.current
+    val securitySettings = remember { SecuritySettings(appContext) }
+    val budgetLockEnabled by securitySettings.budgetLockEnabled.collectAsState(initial = null)
+    val notesLockEnabled by securitySettings.notesLockEnabled.collectAsState(initial = null)
+
     if (showSplash) {
         SplashScreen(onFinished = { showSplash = false })
     } else {
@@ -267,7 +286,15 @@ fun AppNavigation(
                 )
             }
             composable("budget_tracker") {
-                BudgetTrackerApp(onBackToMenu = { navController.popBackStack() })
+                LockGate(
+                    route = "budget_tracker",
+                    lockEnabled = budgetLockEnabled,
+                    promptTitle = stringResource(R.string.security_prompt_title, stringResource(R.string.module_budget)),
+                    promptSubtitle = stringResource(R.string.security_lock_subtitle),
+                    onCancelled = { navController.popBackStack() }
+                ) {
+                    BudgetTrackerApp(onBackToMenu = { navController.popBackStack() })
+                }
             }
             composable("study_tracker") {
                 StudyTrackerView(onBackToMenu = { navController.popBackStack() })
@@ -279,7 +306,15 @@ fun AppNavigation(
                 ReminderView(onBackToMenu = { navController.popBackStack() })
             }
             composable("notes") {
-                NoteView(onBackToMenu = { navController.popBackStack() })
+                LockGate(
+                    route = "notes",
+                    lockEnabled = notesLockEnabled,
+                    promptTitle = stringResource(R.string.security_prompt_title, stringResource(R.string.module_notes)),
+                    promptSubtitle = stringResource(R.string.security_lock_subtitle),
+                    onCancelled = { navController.popBackStack() }
+                ) {
+                    NoteView(onBackToMenu = { navController.popBackStack() })
+                }
             }
         }
     }

@@ -21,9 +21,11 @@ googleServices = "4.5.0"
 credentials = "1.6.0"
 googleid = "1.2.0"
 coil = "2.7.0"
+biometric = "1.1.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
