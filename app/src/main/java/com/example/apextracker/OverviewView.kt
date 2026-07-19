@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,6 +29,9 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun OverviewView(
     onBackToMenu: () -> Unit,
+    // Navigates to a module route (budget_tracker/study_tracker/screen_time/reminders). Plain
+    // navigate (not popBackStack), so system back returns here to the Overview.
+    onNavigate: (String) -> Unit = {},
     viewModel: OverviewViewModel = viewModel(),
     // Reminder toggles route through ReminderViewModel so completing here behaves exactly like
     // the Reminders screen: alarm cancel/reschedule, recurrence advancement, and cloud push.
@@ -99,16 +103,30 @@ fun OverviewView(
                                     .padding(vertical = 8.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                StatCard(stringResource(R.string.overview_stat_spent), formatCurrency(data.totalSpent, LocalCurrencyCode.current), Icons.Default.AccountBalanceWallet, MaterialTheme.colorScheme.primaryContainer, Modifier.weight(1f))
-                                StatCard(stringResource(R.string.overview_stat_study), formatDurationCompact(data.studyTimeMinutes * 60000), Icons.Default.Timer, MaterialTheme.colorScheme.secondaryContainer, Modifier.weight(1f))
-                                StatCard(stringResource(R.string.overview_stat_screen), formatDurationCompact(data.screenTimeMinutes * 60000), Icons.Default.Monitor, MaterialTheme.colorScheme.tertiaryContainer, Modifier.weight(1f))
+                                StatCard(stringResource(R.string.overview_stat_spent), formatCurrency(data.totalSpent, LocalCurrencyCode.current), Icons.Default.AccountBalanceWallet, MaterialTheme.colorScheme.primaryContainer, Modifier.weight(1f), onClick = { onNavigate("budget_tracker") })
+                                StatCard(stringResource(R.string.overview_stat_study), formatDurationCompact(data.studyTimeMinutes * 60000), Icons.Default.Timer, MaterialTheme.colorScheme.secondaryContainer, Modifier.weight(1f), onClick = { onNavigate("study_tracker") })
+                                StatCard(stringResource(R.string.overview_stat_screen), formatDurationCompact(data.screenTimeMinutes * 60000), Icons.Default.Monitor, MaterialTheme.colorScheme.tertiaryContainer, Modifier.weight(1f), onClick = { onNavigate("screen_time") })
                             }
                         }
 
-                        // Reminders Section
+                        // Reminders Section — the header doubles as a "see all" jump to the Reminders screen.
                         item {
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(stringResource(R.string.overview_tasks), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onNavigate("reminders") }
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(stringResource(R.string.overview_tasks), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                                Icon(
+                                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                    contentDescription = stringResource(R.string.cd_overview_see_all_tasks),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
                         
                         if (data.missedReminders.isNotEmpty()) {
@@ -186,9 +204,9 @@ fun CompactDateNavigator(selectedDate: LocalDate, onDateSelected: (LocalDate) ->
 }
 
 @Composable
-fun StatCard(label: String, value: String, icon: ImageVector, containerColor: Color, modifier: Modifier = Modifier) {
+fun StatCard(label: String, value: String, icon: ImageVector, containerColor: Color, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
     Surface(
-        modifier = modifier.height(110.dp),
+        modifier = if (onClick != null) modifier.height(110.dp).clickable(onClick = onClick) else modifier.height(110.dp),
         shape = RoundedCornerShape(20.dp),
         color = containerColor.copy(alpha = 0.8f)
     ) {
@@ -196,7 +214,13 @@ fun StatCard(label: String, value: String, icon: ImageVector, containerColor: Co
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                // Chevron hints the card is tappable; decorative, so no contentDescription.
+                if (onClick != null) {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f))
+                }
+            }
             Column {
                 Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onPrimaryContainer)
                 Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f))
