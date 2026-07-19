@@ -27,6 +27,24 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+/**
+ * The synthetic `id = -1L` "Subscriptions" bucket that subscription-derived budget items fall
+ * into. It has no `categories` row — it's rebuilt on the fly wherever such items render, so its
+ * colour has to be produced, not looked up. Deriving it from the theme primary (not a literal)
+ * keeps it tracking the active [ApexTheme] palette and light/dark mode.
+ *
+ * This exists because the colour used to drift: the transactions list and pie chart built it from
+ * the accent while the calendar day-breakdown hardcoded gold (#82), the same class of bug #67 fixed
+ * for the label. One helper, called from every site, is the only thing that keeps them in sync.
+ * ([BudgetCsvExport.resolveCategoryName] also knows about -1L but deliberately stays pure/Context-
+ * free — see the note there.)
+ */
+@Composable
+fun subscriptionsCategory(): Category {
+    val colorHex = String.format("#%06X", (0xFFFFFF and MaterialTheme.colorScheme.primary.value.toInt()))
+    return Category(id = -1L, name = stringResource(R.string.budget_category_subscriptions), colorHex = colorHex)
+}
+
 @Composable
 fun BudgetListItem(
     item: BudgetItem,

@@ -157,7 +157,7 @@ fun DayBreakdownDialog(date: LocalDate, items: List<BudgetItem>, categories: Lis
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items.forEach { item ->
                     val category = if (item.categoryId == -1L) {
-                        Category(id = -1L, name = stringResource(R.string.budget_category_subscriptions), colorHex = "#FFD700")
+                        subscriptionsCategory()
                     } else {
                         categories.find { it.id == item.categoryId }
                     }
