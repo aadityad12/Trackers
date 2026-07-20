@@ -26,6 +26,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 
 internal val bulletSequence = listOf("• ", "  ◦ ", "    ▪ ")
@@ -471,6 +472,10 @@ fun RecycleBinView(
 fun NoteSettingsDialog(viewModel: NoteViewModel, onDismiss: () -> Unit) {
     val retentionHours by viewModel.recycleBinRetentionHours.collectAsState(initial = 72)
     var sliderValue by remember { mutableFloatStateOf(retentionHours.toFloat()) }
+    val context = LocalContext.current
+    val securitySettings = remember { SecuritySettings(context) }
+    val notesLocked by securitySettings.notesLockEnabled.collectAsState(initial = false)
+    val scope = rememberCoroutineScope()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -495,6 +500,14 @@ fun NoteSettingsDialog(viewModel: NoteViewModel, onDismiss: () -> Unit) {
                     Text(stringResource(R.string.notes_retention_72h), style = MaterialTheme.typography.labelSmall)
                     Text(stringResource(R.string.notes_retention_168h), style = MaterialTheme.typography.labelSmall)
                 }
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(16.dp))
+                ModuleLockSetting(
+                    checked = notesLocked,
+                    titleRes = R.string.security_lock_notes_title,
+                    onCheckedChange = { scope.launch { securitySettings.setNotesLock(it) } }
+                )
             }
         },
         confirmButton = {

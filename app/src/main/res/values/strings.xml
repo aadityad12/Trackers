@@ -230,4 +230,14 @@
     <string name="cd_exclude_apps">Exclude Apps</string>
     <string name="cd_overview_see_all_tasks">See all tasks</string>
     <string name="cd_share_note">Share note</string>
+
+    <!-- Biometric lock (Issue #45) -->
+    <string name="security_lock_budget_title">Require unlock to open Budget</string>
+    <string name="security_lock_notes_title">Require unlock to open Notes</string>
+    <string name="security_lock_subtitle">Uses your device biometric or PIN. A convenience shield, not encryption — anyone who can unlock your device can change this.</string>
+    <string name="security_lock_unavailable">Set up a screen lock (PIN, pattern, or biometric) in system settings to use this.</string>
+    <string name="security_confirm_title">Confirm it\'s you</string>
+    <string name="security_prompt_title">Unlock %1$s</string>
+    <string name="security_locked_message">Unlock to view this section</string>
+    <string name="security_unlock_button">Unlock</string>
 </resources>
