@@ -210,9 +210,23 @@ internal fun parseReminderDoc(data: Map<String, Any?>, gson: Gson): Reminder = R
 
 internal fun parseStudySessionDoc(data: Map<String, Any?>): StudySession = StudySession(
     date = LocalDate.parse(data.requireString("date")),
+    // Legacy docs (pre-#78) carry no 'subject' field — those are the old daily aggregates, which
+    // are exactly the "" ("No subject") bucket, so absent maps to "".
+    subject = data.optString("subject") ?: "",
     durationSeconds = (data["durationSeconds"] as? Number)?.toLong()
         ?: error("missing or non-numeric 'durationSeconds'")
 )
+
+/**
+ * Deterministic Firestore document id for a per-subject study row. The "" bucket keeps the bare
+ * date as its id so pre-#78 aggregate docs stay in place and simply become that date's
+ * uncategorised row. Named subjects append `|subject`; a leading date digit guarantees the id can
+ * never match Firestore's reserved `__.*__` pattern, and `/` (the only id-illegal char) is replaced
+ * with `_` (accepted, negligible-collision tradeoff).
+ */
+internal fun studySessionDocId(date: LocalDate, subject: String): String =
+    if (subject.isBlank()) date.toString()
+    else "${date}|${subject.replace('/', '_')}"
 
 class FirebaseManager(private val context: Context) {
     companion object {
@@ -471,10 +485,11 @@ class FirebaseManager(private val context: Context) {
         val uid = userId ?: return
         val dateStr = session.date.toString()
         firestore.collection("users").document(uid)
-            .collection("study_sessions").document(dateStr)
+            .collection("study_sessions").document(studySessionDocId(session.date, session.subject))
             .set(
                 mapOf(
                     "date" to dateStr,
+                    "subject" to session.subject,
                     "durationSeconds" to session.durationSeconds
                 ),
                 SetOptions.merge()
@@ -974,8 +989,8 @@ class FirebaseManager(private val context: Context) {
     private suspend fun applyStudySessionDoc(db: AppDatabase, docId: String, data: Map<String, Any?>) {
         try {
             val parsed = parseStudySessionDoc(data)
-            // Only insert if local doesn't have this date; local timer is source of truth
-            if (db.studySessionDao().getSessionByDate(parsed.date) == null) {
+            // Only insert if local doesn't have this (date, subject); local timer is source of truth
+            if (db.studySessionDao().getSession(parsed.date, parsed.subject) == null) {
                 db.studySessionDao().insertSession(parsed)
             }
         } catch (e: Exception) {

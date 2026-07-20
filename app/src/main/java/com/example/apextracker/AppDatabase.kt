@@ -27,7 +27,29 @@ val MIGRATION_12_13 = object : Migration(12, 13) {
     }
 }
 
-@Database(entities = [BudgetItem::class, Category::class, Subscription::class, StudySession::class, ScreenTimeSession::class, ExcludedApp::class, Reminder::class, Note::class], version = 13, exportSchema = true)
+// Issue #78: study_sessions gains a per-subject dimension, which changes the primary key
+// from (date) to (date, subject). SQLite can't ALTER a primary key in place, so this is the
+// standard create-new / copy / drop / rename dance. Every pre-existing daily total is copied
+// into the empty-string ("No subject") bucket for its date, so no study data is lost — the old
+// aggregate simply becomes that day's uncategorized row. No SQL DEFAULT on `subject`: the entity
+// declares only a Kotlin default (= ""), which Room does not emit as a column default, so adding
+// one here would make TableInfo mismatch at runtime. The INSERT supplies '' explicitly instead.
+val MIGRATION_13_14 = object : Migration(13, 14) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE `study_sessions_new` (`date` TEXT NOT NULL, `subject` TEXT NOT NULL, " +
+                "`durationSeconds` INTEGER NOT NULL, PRIMARY KEY(`date`, `subject`))"
+        )
+        db.execSQL(
+            "INSERT INTO `study_sessions_new` (`date`, `subject`, `durationSeconds`) " +
+                "SELECT `date`, '', `durationSeconds` FROM `study_sessions`"
+        )
+        db.execSQL("DROP TABLE `study_sessions`")
+        db.execSQL("ALTER TABLE `study_sessions_new` RENAME TO `study_sessions`")
+    }
+}
+
+@Database(entities = [BudgetItem::class, Category::class, Subscription::class, StudySession::class, ScreenTimeSession::class, ExcludedApp::class, Reminder::class, Note::class], version = 14, exportSchema = true)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun budgetDao(): BudgetDao
@@ -50,7 +72,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "budget_database"
                 )
-                .addMigrations(MIGRATION_11_12, MIGRATION_12_13)
+                .addMigrations(MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance

@@ -278,8 +278,16 @@ class FirebaseDocParsingTest {
 
     @Test
     fun `study session doc round-trips`() {
-        val parsed = parseStudySessionDoc(mapOf("date" to "2026-07-09", "durationSeconds" to 3600L))
+        val parsed = parseStudySessionDoc(mapOf("date" to "2026-07-09", "subject" to "Math", "durationSeconds" to 3600L))
         assertEquals(LocalDate.of(2026, 7, 9), parsed.date)
+        assertEquals("Math", parsed.subject)
+        assertEquals(3600L, parsed.durationSeconds)
+    }
+
+    @Test
+    fun `legacy study session doc without subject parses as no-subject bucket`() {
+        val parsed = parseStudySessionDoc(mapOf("date" to "2026-07-09", "durationSeconds" to 3600L))
+        assertEquals("", parsed.subject)
         assertEquals(3600L, parsed.durationSeconds)
     }
 
@@ -288,5 +296,16 @@ class FirebaseDocParsingTest {
         assertThrows(IllegalStateException::class.java) {
             parseStudySessionDoc(mapOf("date" to "2026-07-09"))
         }
+    }
+
+    @Test
+    fun `study session doc id keeps bare date for no-subject bucket`() {
+        assertEquals("2026-07-09", studySessionDocId(LocalDate.of(2026, 7, 9), ""))
+    }
+
+    @Test
+    fun `study session doc id appends subject and sanitizes slashes`() {
+        assertEquals("2026-07-09|Math", studySessionDocId(LocalDate.of(2026, 7, 9), "Math"))
+        assertEquals("2026-07-09|CS_Algorithms", studySessionDocId(LocalDate.of(2026, 7, 9), "CS/Algorithms"))
     }
 }

@@ -48,7 +48,7 @@ class OverviewViewModel(application: Application) : AndroidViewModel(application
             }
 
             val spent = budgetItems.filter { it.date == date }.sumOf { it.amount }
-            val study = (studySessions.find { it.date == date }?.durationSeconds ?: 0L) / 60
+            val study = studySessions.filter { it.date == date }.sumOf { it.durationSeconds } / 60
             val screen = (screenSessions.find { it.date == date }?.durationMillis ?: 0L) / 60000
 
             DayOverview(

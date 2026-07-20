@@ -7,7 +7,8 @@ import java.time.ZoneId
 data class PersistedTimerState(
     val startedAtMillis: Long,
     val baseSeconds: Long,
-    val date: LocalDate
+    val date: LocalDate,
+    val subject: String = ""
 )
 
 /**
@@ -29,12 +30,13 @@ fun finalizeSecondsAtEndOfDay(state: PersistedTimerState, zone: ZoneId): Long {
 class StudyTimerStateStore(context: Context) {
     private val prefs = context.getSharedPreferences("study_timer_state", Context.MODE_PRIVATE)
 
-    fun saveRunning(startedAtMillis: Long, baseSeconds: Long, date: LocalDate) {
+    fun saveRunning(startedAtMillis: Long, baseSeconds: Long, date: LocalDate, subject: String) {
         prefs.edit()
             .putBoolean("is_running", true)
             .putLong("started_at", startedAtMillis)
             .putLong("base_seconds", baseSeconds)
             .putString("date", date.toString())
+            .putString("subject", subject)
             .apply()
     }
 
@@ -49,7 +51,8 @@ class StudyTimerStateStore(context: Context) {
         return PersistedTimerState(
             startedAtMillis = prefs.getLong("started_at", 0L),
             baseSeconds = prefs.getLong("base_seconds", 0L),
-            date = date
+            date = date,
+            subject = prefs.getString("subject", "") ?: ""
         )
     }
 }
