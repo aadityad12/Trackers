@@ -51,6 +51,7 @@
     <string name="overview_stat_spent">Spent</string>
     <string name="overview_stat_study">Study</string>
     <string name="overview_stat_screen">Screen</string>
+    <string name="overview_no_time">No time</string>
 
     <!-- Budget -->
     <string name="budget_title">BUDGET FLOW</string>

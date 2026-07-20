@@ -264,7 +264,7 @@ fun ReminderSummaryCard(reminder: Reminder, status: String, onToggle: (Reminder)
                     Icon(Icons.Default.AccessTime, contentDescription = null, modifier = Modifier.size(12.dp), tint = statusColor)
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = reminder.time?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "No time",
+                        text = reminder.time?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: stringResource(R.string.overview_no_time),
                         style = MaterialTheme.typography.labelSmall,
                         color = statusColor
                     )
