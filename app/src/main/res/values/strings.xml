@@ -120,6 +120,10 @@
     <string name="screen_device_breakdown">Device Breakdown</string>
     <string name="screen_todays_apps">Today\'s Apps</string>
     <string name="screen_daily_history">Daily History</string>
+    <string name="screen_trends_title">LAST 7 DAYS</string>
+    <string name="screen_trends_empty">No screen time recorded yet</string>
+    <string name="screen_show_all">Show all (%1$d)</string>
+    <string name="screen_show_less">Show less</string>
     <string name="screen_no_usage">No app usage detected</string>
     <string name="screen_no_history">No history recorded yet</string>
     <string name="screen_total_apex_time">Total Apex Time</string>

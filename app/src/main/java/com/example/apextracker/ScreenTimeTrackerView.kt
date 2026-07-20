@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +39,7 @@ fun ScreenTimeTrackerView(onBackToMenu: () -> Unit, viewModel: ScreenTimeViewMod
     val aggregatedUsage by viewModel.aggregatedUsage.collectAsState()
     
     var showSettings by remember { mutableStateOf(false) }
+    var showAllApps by rememberSaveable { mutableStateOf(false) }
 
     LifecycleEffect(onEvent = { viewModel.checkPermission() })
 
@@ -102,6 +104,10 @@ fun ScreenTimeTrackerView(onBackToMenu: () -> Unit, viewModel: ScreenTimeViewMod
                         )
                     }
 
+                    // apps is already sorted by usage descending in the ViewModel. Show the top 5
+                    // by default with a "Show all (N)" toggle revealing every non-excluded app that
+                    // logged usage today. Rendering more rows is purely presentational — it reads
+                    // precomputed state and never re-triggers usage calculation.
                     val activeApps = apps.filter { it.usageTimeMillis > 0 && !it.isExcluded }
                     if (activeApps.isEmpty()) {
                         item {
@@ -110,8 +116,19 @@ fun ScreenTimeTrackerView(onBackToMenu: () -> Unit, viewModel: ScreenTimeViewMod
                             }
                         }
                     } else {
-                        items(activeApps.take(5)) { app ->
+                        val visibleApps = if (showAllApps) activeApps else activeApps.take(5)
+                        items(visibleApps, key = { it.packageName }) { app ->
                             AppUsageItem(app)
+                        }
+                        if (activeApps.size > 5) {
+                            item {
+                                TextButton(onClick = { showAllApps = !showAllApps }) {
+                                    Text(
+                                        if (showAllApps) stringResource(R.string.screen_show_less)
+                                        else stringResource(R.string.screen_show_all, activeApps.size)
+                                    )
+                                }
+                            }
                         }
                     }
 
@@ -120,6 +137,10 @@ fun ScreenTimeTrackerView(onBackToMenu: () -> Unit, viewModel: ScreenTimeViewMod
                             stringResource(R.string.screen_daily_history),
                             style = MaterialTheme.typography.titleMedium
                         )
+                    }
+
+                    item {
+                        ScreenTimeTrendsCard(allSessions)
                     }
 
                     val history = allSessions.filter { it.date.isBefore(LocalDate.now()) }
