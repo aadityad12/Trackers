@@ -1,6 +1,5 @@
 package com.example.apextracker
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,9 +8,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.*
@@ -21,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -34,10 +31,11 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun DashboardView(
     onBackToMenu: () -> Unit,
+    onManageGoals: () -> Unit,
     viewModel: DashboardViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
-    var showAddGoal by remember { mutableStateOf(false) }
+    var selectedDay by remember { mutableStateOf<LocalDate?>(null) }
 
     Scaffold(
         topBar = {
@@ -49,8 +47,8 @@ fun DashboardView(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showAddGoal = true }) {
-                        Icon(Icons.Default.Add, contentDescription = stringResource(R.string.dashboard_add_goal))
+                    IconButton(onClick = onManageGoals) {
+                        Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.dashboard_manage_goals))
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
@@ -68,21 +66,17 @@ fun DashboardView(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item { StreakRow(state.perfectStreak) }
-            item { TodayCard(state.todayGoals, onToggle = viewModel::toggleTodayGoal) }
-            item { HeatmapSection(state.weeks, state.today) }
-            if (state.activeGoals.isNotEmpty()) {
-                item { GoalsManageSection(state.activeGoals, onDelete = viewModel::deleteGoal) }
-            }
+            item { TodayCard(state.todayGoals, onToggle = viewModel::toggleTodayGoal, onManageGoals = onManageGoals) }
+            item { HeatmapSection(state.weeks, state.today, onDayClick = { selectedDay = it }) }
         }
     }
 
-    if (showAddGoal) {
-        AddGoalDialog(
-            onDismiss = { showAddGoal = false },
-            onAdd = { name, type, metric, comparator, threshold, subject ->
-                viewModel.addGoal(name, type, metric, comparator, threshold, subject)
-                showAddGoal = false
-            }
+    selectedDay?.let { day ->
+        DayDetailSheet(
+            date = day,
+            state = state,
+            onToggle = { goal -> viewModel.toggleGoalForDate(goal, day) },
+            onDismiss = { selectedDay = null }
         )
     }
 }
@@ -107,7 +101,7 @@ private fun StreakRow(streak: Int) {
 }
 
 @Composable
-private fun TodayCard(todayGoals: List<GoalStatus>, onToggle: (Goal) -> Unit) {
+private fun TodayCard(todayGoals: List<GoalStatus>, onToggle: (Goal) -> Unit, onManageGoals: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
@@ -117,18 +111,22 @@ private fun TodayCard(todayGoals: List<GoalStatus>, onToggle: (Goal) -> Unit) {
             Text(stringResource(R.string.dashboard_today), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, letterSpacing = 1.5.sp)
             Spacer(Modifier.height(8.dp))
             if (todayGoals.isEmpty()) {
-                Text(stringResource(R.string.dashboard_no_goals), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+                Text(
+                    stringResource(R.string.dashboard_no_goals),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.clickable { onManageGoals() }
+                )
             } else {
-                todayGoals.forEach { status ->
-                    TodayGoalRow(status, onToggle)
-                }
+                todayGoals.forEach { status -> GoalStatusRow(status, onToggle) }
             }
         }
     }
 }
 
+/** One goal's row with an interactive checkbox (MANUAL) or a read-only computed status (AUTO). */
 @Composable
-private fun TodayGoalRow(status: GoalStatus, onToggle: (Goal) -> Unit) {
+private fun GoalStatusRow(status: GoalStatus, onToggle: (Goal) -> Unit) {
     val goal = status.goal
     val isManual = goal.type == GoalType.MANUAL
     Row(
@@ -174,9 +172,8 @@ private val WEEKDAY_LETTERS = listOf("S", "M", "T", "W", "T", "F", "S")
 private val GUTTER_WIDTH = 30.dp
 
 @Composable
-private fun HeatmapSection(weeks: List<List<DayCell?>>, today: LocalDate) {
+private fun HeatmapSection(weeks: List<List<DayCell?>>, today: LocalDate, onDayClick: (LocalDate) -> Unit) {
     Column(Modifier.fillMaxWidth()) {
-        // Weekday header — gutter spacer then seven day letters.
         Row(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
             Spacer(Modifier.width(GUTTER_WIDTH))
             WEEKDAY_LETTERS.forEach { letter ->
@@ -200,7 +197,7 @@ private fun HeatmapSection(weeks: List<List<DayCell?>>, today: LocalDate) {
                     }
                 }
                 week.forEach { cell ->
-                    HeatCell(cell, today, Modifier.weight(1f))
+                    HeatCell(cell, today, Modifier.weight(1f), onDayClick)
                 }
             }
         }
@@ -211,7 +208,7 @@ private fun HeatmapSection(weeks: List<List<DayCell?>>, today: LocalDate) {
 }
 
 @Composable
-private fun HeatCell(cell: DayCell?, today: LocalDate, modifier: Modifier) {
+private fun HeatCell(cell: DayCell?, today: LocalDate, modifier: Modifier, onDayClick: (LocalDate) -> Unit) {
     Box(
         modifier = modifier
             .aspectRatio(1f)
@@ -228,6 +225,7 @@ private fun HeatCell(cell: DayCell?, today: LocalDate, modifier: Modifier) {
                         if (isToday) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp))
                         else Modifier
                     )
+                    .clickable { onDayClick(cell.date) }
             )
         }
     }
@@ -252,26 +250,28 @@ private fun HeatmapLegend() {
     }
 }
 
+/** Tap-a-day sheet: that day's goal breakdown, with MANUAL goals editable (backfill). */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun GoalsManageSection(goals: List<Goal>, onDelete: (Goal) -> Unit) {
-    Column(Modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.dashboard_manage_goals), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, letterSpacing = 1.5.sp)
-        Spacer(Modifier.height(8.dp))
-        goals.forEach { goal ->
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(goal.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-                    val rule = goalRuleText(goal)
-                    if (rule.isNotEmpty()) {
-                        Text(rule, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                    }
-                }
-                IconButton(onClick = { onDelete(goal) }) {
-                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.dashboard_delete_goal), tint = MaterialTheme.colorScheme.outline)
-                }
+private fun DayDetailSheet(
+    date: LocalDate,
+    state: DashboardUiState,
+    onToggle: (Goal) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val statuses = state.dayGoalStatuses(date)
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
+            Text(
+                date.format(DateTimeFormatter.ofPattern("EEEE, MMM d")),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(12.dp))
+            if (statuses.isEmpty()) {
+                Text(stringResource(R.string.dashboard_day_no_goals), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+            } else {
+                statuses.forEach { status -> GoalStatusRow(status, onToggle) }
             }
         }
     }
@@ -289,104 +289,4 @@ private fun cellColor(bucket: Int): Color {
         3 -> cs.primary.copy(alpha = 0.78f)
         else -> cs.primary                           // 4 = perfect day
     }
-}
-
-/** Human-readable rule for an AUTO goal (empty for MANUAL). */
-@Composable
-private fun goalRuleText(goal: Goal): String {
-    if (goal.type != GoalType.AUTO) return ""
-    val t = goal.threshold ?: return ""
-    val tStr = if (t % 1.0 == 0.0) t.toLong().toString() else t.toString()
-    val subjectSuffix = goal.subject?.let { stringResource(R.string.goal_rule_subject_suffix, it) } ?: ""
-    val under = goal.comparator == GoalComparator.UNDER
-    return when (goal.metric) {
-        GoalMetric.SCREEN_TIME ->
-            if (under) stringResource(R.string.goal_rule_screen_under, tStr) else stringResource(R.string.goal_rule_screen_over, tStr)
-        GoalMetric.STUDY ->
-            if (under) stringResource(R.string.goal_rule_study_under, tStr, subjectSuffix) else stringResource(R.string.goal_rule_study_over, tStr, subjectSuffix)
-        GoalMetric.SPEND -> {
-            val amount = formatCurrency(t, LocalCurrencyCode.current)
-            if (under) stringResource(R.string.goal_rule_spend_under, amount) else stringResource(R.string.goal_rule_spend_over, amount)
-        }
-        else -> ""
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AddGoalDialog(
-    onDismiss: () -> Unit,
-    onAdd: (name: String, type: String, metric: String?, comparator: String?, threshold: Double?, subject: String?) -> Unit
-) {
-    var name by remember { mutableStateOf("") }
-    var type by remember { mutableStateOf(GoalType.MANUAL) }
-    var metric by remember { mutableStateOf(GoalMetric.SCREEN_TIME) }
-    var comparator by remember { mutableStateOf(GoalComparator.UNDER) }
-    var thresholdText by remember { mutableStateOf("") }
-    var subject by remember { mutableStateOf("") }
-
-    val threshold = thresholdText.trim().toDoubleOrNull()?.takeIf { it > 0.0 && it.isFinite() }
-    val isAuto = type == GoalType.AUTO
-    val canSave = name.isNotBlank() && (!isAuto || threshold != null)
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.goal_new_title)) },
-        confirmButton = {
-            TextButton(
-                enabled = canSave,
-                onClick = {
-                    if (isAuto) {
-                        onAdd(name, GoalType.AUTO, metric, comparator, threshold, if (metric == GoalMetric.STUDY) subject else null)
-                    } else {
-                        onAdd(name, GoalType.MANUAL, null, null, null, null)
-                    }
-                }
-            ) { Text(stringResource(R.string.goal_save)) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.goal_cancel)) } },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(stringResource(R.string.goal_name_label)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = !isAuto, onClick = { type = GoalType.MANUAL }, label = { Text(stringResource(R.string.goal_type_manual)) })
-                    FilterChip(selected = isAuto, onClick = { type = GoalType.AUTO }, label = { Text(stringResource(R.string.goal_type_auto)) })
-                }
-                if (isAuto) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = metric == GoalMetric.SCREEN_TIME, onClick = { metric = GoalMetric.SCREEN_TIME }, label = { Text(stringResource(R.string.goal_metric_screen)) })
-                        FilterChip(selected = metric == GoalMetric.STUDY, onClick = { metric = GoalMetric.STUDY }, label = { Text(stringResource(R.string.goal_metric_study)) })
-                        FilterChip(selected = metric == GoalMetric.SPEND, onClick = { metric = GoalMetric.SPEND }, label = { Text(stringResource(R.string.goal_metric_spend)) })
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = comparator == GoalComparator.UNDER, onClick = { comparator = GoalComparator.UNDER }, label = { Text(stringResource(R.string.goal_dir_under)) })
-                        FilterChip(selected = comparator == GoalComparator.OVER, onClick = { comparator = GoalComparator.OVER }, label = { Text(stringResource(R.string.goal_dir_over)) })
-                    }
-                    OutlinedTextField(
-                        value = thresholdText,
-                        onValueChange = { thresholdText = it },
-                        label = { Text(stringResource(if (metric == GoalMetric.SPEND) R.string.goal_threshold_amount else R.string.goal_threshold_hours)) },
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    if (metric == GoalMetric.STUDY) {
-                        OutlinedTextField(
-                            value = subject,
-                            onValueChange = { subject = it },
-                            label = { Text(stringResource(R.string.goal_subject_label)) },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-            }
-        }
-    )
 }

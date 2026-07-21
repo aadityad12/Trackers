@@ -287,7 +287,13 @@ fun AppNavigation(
                 )
             }
             composable("dashboard") {
-                DashboardView(onBackToMenu = { navController.popBackStack() })
+                DashboardView(
+                    onBackToMenu = { navController.popBackStack() },
+                    onManageGoals = { navController.navigate("goals") }
+                )
+            }
+            composable("goals") {
+                GoalsView(onBack = { navController.popBackStack() })
             }
             composable("budget_tracker") {
                 LockGate(

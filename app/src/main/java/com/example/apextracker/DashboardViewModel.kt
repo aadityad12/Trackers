@@ -31,11 +31,33 @@ data class DashboardUiState(
     val activeGoals: List<Goal>,
     val perfectStreak: Int,
     val today: LocalDate,
-    val loaded: Boolean
+    val loaded: Boolean,
+    // Raw inputs so any day's breakdown (the tap-a-day sheet) can be computed reactively off the
+    // same state via dayGoalStatuses(), instead of re-querying Room.
+    val allGoals: List<Goal> = emptyList(),
+    val completions: List<GoalCompletion> = emptyList(),
+    val studyByDate: Map<LocalDate, Map<String, Long>> = emptyMap(),
+    val screenByDate: Map<LocalDate, Long> = emptyMap(),
+    val spendByDate: Map<LocalDate, Double> = emptyMap()
 ) {
     companion object {
         val EMPTY = DashboardUiState(emptyList(), emptyList(), emptyList(), 0, LocalDate.now(), loaded = false)
     }
+}
+
+/** The tracker metrics for [date], pulled from a state snapshot's pre-indexed per-day maps. */
+fun DashboardUiState.metricsFor(date: LocalDate): DayMetrics = DayMetrics(
+    studyBySubject = studyByDate[date] ?: emptyMap(),
+    screenMillis = screenByDate[date] ?: 0L,
+    spend = spendByDate[date] ?: 0.0
+)
+
+/** Live status of every goal active on [date] — powers the day-detail sheet (today or any past day). */
+fun DashboardUiState.dayGoalStatuses(date: LocalDate): List<GoalStatus> {
+    val metrics = metricsFor(date)
+    return activeGoalsOn(date, allGoals)
+        .sortedWith(compareBy({ it.sortOrder }, { it.id }))
+        .map { GoalStatus(it, isGoalSatisfied(it, date, completions, metrics)) }
 }
 
 class DashboardViewModel(application: Application) : AndroidViewModel(application) {
@@ -111,20 +133,32 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             activeGoals = active,
             perfectStreak = streak,
             today = today,
-            loaded = true
+            loaded = true,
+            allGoals = goals,
+            completions = completions,
+            studyByDate = studyByDate,
+            screenByDate = screenByDate,
+            spendByDate = spendByDate
         )
     }
 
     /** Toggle today's completion for a MANUAL goal (AUTO goals are computed, never toggled). */
-    fun toggleTodayGoal(goal: Goal) {
+    fun toggleTodayGoal(goal: Goal) = toggleGoalForDate(goal, LocalDate.now())
+
+    /**
+     * Toggle a MANUAL goal's completion for an arbitrary [date] — the tap-a-day backfill path.
+     * No-ops for AUTO goals, cloudId-less goals, or dates the goal wasn't active on.
+     */
+    fun toggleGoalForDate(goal: Goal, date: LocalDate) {
         if (goal.type != GoalType.MANUAL || goal.cloudId.isEmpty()) return
+        if (goal.startDate.isAfter(date)) return
+        if (goal.archivedDate != null && !date.isBefore(goal.archivedDate)) return
         viewModelScope.launch {
-            val today = LocalDate.now()
-            val existing = completionDao.getByGoalAndDate(goal.cloudId, today)
+            val existing = completionDao.getByGoalAndDate(goal.cloudId, date)
             completionDao.upsert(
                 GoalCompletion(
                     goalCloudId = goal.cloudId,
-                    date = today,
+                    date = date,
                     done = !(existing?.done ?: false),
                     modifiedAt = System.currentTimeMillis()
                 )
@@ -157,6 +191,46 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                     modifiedAt = System.currentTimeMillis()
                 )
             )
+        }
+    }
+
+    /** Edit an existing goal's definition. Preserves id/startDate/cloudId; bumps modifiedAt. */
+    fun updateGoal(
+        goal: Goal,
+        name: String,
+        type: String,
+        metric: String?,
+        comparator: String?,
+        threshold: Double?,
+        subject: String?
+    ) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            goalDao.updateGoal(
+                goal.copy(
+                    name = trimmed,
+                    type = type,
+                    metric = metric,
+                    comparator = comparator,
+                    threshold = threshold,
+                    subject = subject?.trim()?.takeIf { it.isNotEmpty() },
+                    modifiedAt = System.currentTimeMillis()
+                )
+            )
+        }
+    }
+
+    /** Stop a goal counting from today onward, preserving its history (see [activeGoalsOn]). */
+    fun archiveGoal(goal: Goal) {
+        viewModelScope.launch {
+            goalDao.updateGoal(goal.copy(archivedDate = LocalDate.now(), modifiedAt = System.currentTimeMillis()))
+        }
+    }
+
+    fun unarchiveGoal(goal: Goal) {
+        viewModelScope.launch {
+            goalDao.updateGoal(goal.copy(archivedDate = null, modifiedAt = System.currentTimeMillis()))
         }
     }
 
