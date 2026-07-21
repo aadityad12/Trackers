@@ -41,6 +41,11 @@ android {
     buildFeatures {
         compose = true
     }
+    // Expose the exported Room schema JSONs to instrumented tests so MigrationTestHelper
+    // can create a database at an old version and drive the migration under test.
+    sourceSets {
+        getByName("androidTest").assets.srcDir("$projectDir/schemas")
+    }
 }
 
 // Room exports schema JSONs here (checked in) so future migrations can be
@@ -91,6 +96,7 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.room.testing)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
