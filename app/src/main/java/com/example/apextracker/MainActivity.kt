@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.LightMode
@@ -285,6 +286,9 @@ fun AppNavigation(
                     onNavigate = { route -> navController.navigate(route) }
                 )
             }
+            composable("dashboard") {
+                DashboardView(onBackToMenu = { navController.popBackStack() })
+            }
             composable("budget_tracker") {
                 LockGate(
                     route = "budget_tracker",
@@ -406,6 +410,7 @@ fun MainMenu(
     val modules = remember {
         listOf(
             AppModule(R.string.module_overview, R.string.module_overview_desc, Icons.Default.GridView, "overview", true),
+            AppModule(R.string.module_dashboard, R.string.module_dashboard_desc, Icons.Default.Dashboard, "dashboard"),
             AppModule(R.string.module_budget, R.string.module_budget_desc, Icons.Default.AccountBalanceWallet, "budget_tracker"),
             AppModule(R.string.module_study, R.string.module_study_desc, Icons.Default.Timer, "study_tracker"),
             AppModule(R.string.module_screen, R.string.module_screen_desc, Icons.Default.Monitor, "screen_time"),

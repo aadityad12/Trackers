@@ -42,6 +42,8 @@
     <string name="module_tasks_desc">Reminders</string>
     <string name="module_notes">Notes</string>
     <string name="module_notes_desc">Ideas</string>
+    <string name="module_dashboard">Dashboard</string>
+    <string name="module_dashboard_desc">Daily goals</string>
 
     <!-- Overview -->
     <string name="overview_title">DAILY INSIGHTS</string>
@@ -241,4 +243,43 @@
     <string name="security_prompt_title">Unlock %1$s</string>
     <string name="security_locked_message">Unlock to view this section</string>
     <string name="security_unlock_button">Unlock</string>
+
+    <!-- Dashboard (goal-tracking heatmap) -->
+    <string name="dashboard_title">DASHBOARD</string>
+    <string name="dashboard_streak_none">No streak yet — clear all of today\'s goals</string>
+    <string name="dashboard_streak">%1$d-day perfect streak</string>
+    <string name="dashboard_today">TODAY</string>
+    <string name="dashboard_no_goals">No goals yet. Tap + to add one.</string>
+    <string name="dashboard_manage_goals">GOALS</string>
+    <string name="dashboard_auto_met">Met</string>
+    <string name="dashboard_auto_unmet">Not yet</string>
+    <string name="dashboard_legend_less">Less</string>
+    <string name="dashboard_legend_more">More</string>
+    <string name="dashboard_add_goal">Add goal</string>
+    <string name="dashboard_delete_goal">Delete goal</string>
+    <string name="dashboard_empty_history">Add goals and check them off — your days will fill in here.</string>
+
+    <!-- Goal editor -->
+    <string name="goal_new_title">New goal</string>
+    <string name="goal_name_label">Goal name</string>
+    <string name="goal_type_manual">Check off myself</string>
+    <string name="goal_type_auto">Track automatically</string>
+    <string name="goal_metric_screen">Screen time</string>
+    <string name="goal_metric_study">Study time</string>
+    <string name="goal_metric_spend">Spending</string>
+    <string name="goal_dir_under">Under</string>
+    <string name="goal_dir_over">Over</string>
+    <string name="goal_threshold_hours">Hours</string>
+    <string name="goal_threshold_amount">Amount</string>
+    <string name="goal_subject_label">Subject (optional — blank = all)</string>
+    <string name="goal_save">Add</string>
+    <string name="goal_cancel">Cancel</string>
+    <string name="goal_rule_screen_under">Screen time under %1$sh</string>
+    <string name="goal_rule_screen_over">Screen time over %1$sh</string>
+    <string name="goal_rule_study_under">Study under %1$sh%2$s</string>
+    <string name="goal_rule_study_over">Study over %1$sh%2$s</string>
+    <string name="goal_rule_spend_under">Spend under %1$s</string>
+    <string name="goal_rule_spend_over">Spend over %1$s</string>
+    <string name="goal_rule_subject_suffix"> · %1$s</string>
+    <string name="cd_dashboard_day">%1$s: %2$s</string>
 </resources>
