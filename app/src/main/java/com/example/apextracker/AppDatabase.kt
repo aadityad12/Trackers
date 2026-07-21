@@ -49,7 +49,27 @@ val MIGRATION_13_14 = object : Migration(13, 14) {
     }
 }
 
-@Database(entities = [BudgetItem::class, Category::class, Subscription::class, StudySession::class, ScreenTimeSession::class, ExcludedApp::class, Reminder::class, Note::class], version = 14, exportSchema = true)
+// Issue #45-follow-up (Dashboard): two purely additive tables — `goals` (habit-style daily goals
+// feeding the contribution heatmap) and `goal_completions` (per-day manual check-offs). No data
+// copy, so this mirrors MIGRATION_11_12/12_13 rather than the PK-change dance in MIGRATION_13_14.
+// The exact DDL matches Room's exported app/schemas/…/15.json (create-me-from-there on any change).
+val MIGRATION_14_15 = object : Migration(14, 15) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `goals` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`name` TEXT NOT NULL, `type` TEXT NOT NULL, `metric` TEXT, `comparator` TEXT, " +
+                "`threshold` REAL, `subject` TEXT, `startDate` TEXT NOT NULL, `archivedDate` TEXT, " +
+                "`sortOrder` INTEGER NOT NULL, `cloudId` TEXT NOT NULL, `modifiedAt` INTEGER NOT NULL)"
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `goal_completions` (`goalCloudId` TEXT NOT NULL, " +
+                "`date` TEXT NOT NULL, `done` INTEGER NOT NULL, `modifiedAt` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`goalCloudId`, `date`))"
+        )
+    }
+}
+
+@Database(entities = [BudgetItem::class, Category::class, Subscription::class, StudySession::class, ScreenTimeSession::class, ExcludedApp::class, Reminder::class, Note::class, Goal::class, GoalCompletion::class], version = 15, exportSchema = true)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun budgetDao(): BudgetDao
@@ -60,6 +80,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun excludedAppDao(): ExcludedAppDao
     abstract fun reminderDao(): ReminderDao
     abstract fun noteDao(): NoteDao
+    abstract fun goalDao(): GoalDao
+    abstract fun goalCompletionDao(): GoalCompletionDao
 
     companion object {
         @Volatile
@@ -72,7 +94,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "budget_database"
                 )
-                .addMigrations(MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
+                .addMigrations(MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance
