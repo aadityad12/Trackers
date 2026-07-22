@@ -308,4 +308,70 @@ class FirebaseDocParsingTest {
         assertEquals("2026-07-09|Math", studySessionDocId(LocalDate.of(2026, 7, 9), "Math"))
         assertEquals("2026-07-09|CS_Algorithms", studySessionDocId(LocalDate.of(2026, 7, 9), "CS/Algorithms"))
     }
+
+    // ── Goals ────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `manual goal doc parses with auto fields absent`() {
+        val parsed = parseGoalDoc(
+            mapOf(
+                "cloudId" to "g1", "name" to "Workout", "type" to "MANUAL",
+                "startDate" to "2026-07-01", "sortOrder" to 2L, "modifiedAt" to 555L
+            )
+        )
+        assertEquals("g1", parsed.cloudId)
+        assertEquals("MANUAL", parsed.type)
+        assertNull(parsed.metric)
+        assertNull(parsed.threshold)
+        assertNull(parsed.archivedDate)
+        assertEquals(2, parsed.sortOrder)
+        assertEquals(LocalDate.of(2026, 7, 1), parsed.startDate)
+    }
+
+    @Test
+    fun `auto goal doc parses metric direction threshold and archived date`() {
+        val parsed = parseGoalDoc(
+            mapOf(
+                "cloudId" to "g2", "name" to "Screen", "type" to "AUTO",
+                "metric" to "SCREEN_TIME", "comparator" to "UNDER", "threshold" to 6.0,
+                "subject" to "Work", "startDate" to "2026-07-01", "archivedDate" to "2026-07-10",
+                "modifiedAt" to 999L
+            )
+        )
+        assertEquals("SCREEN_TIME", parsed.metric)
+        assertEquals("UNDER", parsed.comparator)
+        assertEquals(6.0, parsed.threshold!!, 0.0001)
+        assertEquals("Work", parsed.subject)
+        assertEquals(LocalDate.of(2026, 7, 10), parsed.archivedDate)
+    }
+
+    @Test
+    fun `goal doc without name throws`() {
+        assertThrows(IllegalStateException::class.java) {
+            parseGoalDoc(mapOf("cloudId" to "g1", "type" to "MANUAL", "startDate" to "2026-07-01"))
+        }
+    }
+
+    @Test
+    fun `goal doc with blank cloudId throws`() {
+        assertThrows(IllegalStateException::class.java) {
+            parseGoalDoc(mapOf("cloudId" to "", "name" to "X", "type" to "MANUAL", "startDate" to "2026-07-01"))
+        }
+    }
+
+    @Test
+    fun `goal completion doc parses`() {
+        val parsed = parseGoalCompletionDoc(
+            mapOf("goalCloudId" to "g1", "date" to "2026-07-21", "done" to true, "modifiedAt" to 123L)
+        )
+        assertEquals("g1", parsed.goalCloudId)
+        assertEquals(LocalDate.of(2026, 7, 21), parsed.date)
+        assertEquals(true, parsed.done)
+        assertEquals(123L, parsed.modifiedAt)
+    }
+
+    @Test
+    fun `goal completion doc id is goalCloudId piped with date`() {
+        assertEquals("g1|2026-07-21", goalCompletionDocId("g1", LocalDate.of(2026, 7, 21)))
+    }
 }

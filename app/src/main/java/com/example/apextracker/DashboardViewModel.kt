@@ -68,6 +68,8 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val studyDao = db.studySessionDao()
     private val screenDao = db.screenTimeSessionDao()
     private val budgetDao = db.budgetDao()
+    // Fire-and-forget cloud sync (Room is source of truth); mirrors the other ViewModels.
+    private val firebaseManager = FirebaseManager(application)
 
     val uiState: StateFlow<DashboardUiState> = combine(
         goalDao.getAllGoals(),
@@ -155,15 +157,14 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         if (goal.archivedDate != null && !date.isBefore(goal.archivedDate)) return
         viewModelScope.launch {
             val existing = completionDao.getByGoalAndDate(goal.cloudId, date)
-            completionDao.upsert(
-                GoalCompletion(
-                    goalCloudId = goal.cloudId,
-                    date = date,
-                    done = !(existing?.done ?: false),
-                    modifiedAt = System.currentTimeMillis()
-                )
+            val completion = GoalCompletion(
+                goalCloudId = goal.cloudId,
+                date = date,
+                done = !(existing?.done ?: false),
+                modifiedAt = System.currentTimeMillis()
             )
-            // Cloud push is wired in Phase 5 (FirebaseManager goal-completion sync).
+            completionDao.upsert(completion)
+            safeCloudCall(TAG, "pushGoalCompletion") { firebaseManager.pushGoalCompletion(completion) }
         }
     }
 
@@ -178,19 +179,19 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         viewModelScope.launch {
-            goalDao.insertGoal(
-                Goal(
-                    name = trimmed,
-                    type = type,
-                    metric = metric,
-                    comparator = comparator,
-                    threshold = threshold,
-                    subject = subject?.trim()?.takeIf { it.isNotEmpty() },
-                    startDate = LocalDate.now(),
-                    cloudId = UUID.randomUUID().toString(),
-                    modifiedAt = System.currentTimeMillis()
-                )
+            val goal = Goal(
+                name = trimmed,
+                type = type,
+                metric = metric,
+                comparator = comparator,
+                threshold = threshold,
+                subject = subject?.trim()?.takeIf { it.isNotEmpty() },
+                startDate = LocalDate.now(),
+                cloudId = UUID.randomUUID().toString(),
+                modifiedAt = System.currentTimeMillis()
             )
+            goalDao.insertGoal(goal)
+            safeCloudCall(TAG, "pushGoal") { firebaseManager.pushGoal(goal) }
         }
     }
 
@@ -207,30 +208,34 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         viewModelScope.launch {
-            goalDao.updateGoal(
-                goal.copy(
-                    name = trimmed,
-                    type = type,
-                    metric = metric,
-                    comparator = comparator,
-                    threshold = threshold,
-                    subject = subject?.trim()?.takeIf { it.isNotEmpty() },
-                    modifiedAt = System.currentTimeMillis()
-                )
+            val updated = goal.copy(
+                name = trimmed,
+                type = type,
+                metric = metric,
+                comparator = comparator,
+                threshold = threshold,
+                subject = subject?.trim()?.takeIf { it.isNotEmpty() },
+                modifiedAt = System.currentTimeMillis()
             )
+            goalDao.updateGoal(updated)
+            safeCloudCall(TAG, "pushGoal") { firebaseManager.pushGoal(updated) }
         }
     }
 
     /** Stop a goal counting from today onward, preserving its history (see [activeGoalsOn]). */
     fun archiveGoal(goal: Goal) {
         viewModelScope.launch {
-            goalDao.updateGoal(goal.copy(archivedDate = LocalDate.now(), modifiedAt = System.currentTimeMillis()))
+            val updated = goal.copy(archivedDate = LocalDate.now(), modifiedAt = System.currentTimeMillis())
+            goalDao.updateGoal(updated)
+            safeCloudCall(TAG, "pushGoal") { firebaseManager.pushGoal(updated) }
         }
     }
 
     fun unarchiveGoal(goal: Goal) {
         viewModelScope.launch {
-            goalDao.updateGoal(goal.copy(archivedDate = null, modifiedAt = System.currentTimeMillis()))
+            val updated = goal.copy(archivedDate = null, modifiedAt = System.currentTimeMillis())
+            goalDao.updateGoal(updated)
+            safeCloudCall(TAG, "pushGoal") { firebaseManager.pushGoal(updated) }
         }
     }
 
@@ -239,7 +244,12 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             goalDao.deleteGoal(goal)
             // Drop its check-off history too so a re-created cloudId can't inherit stale rows.
             if (goal.cloudId.isNotEmpty()) {
-                completionDao.getByGoal(goal.cloudId).forEach { completionDao.delete(it) }
+                val completions = completionDao.getByGoal(goal.cloudId)
+                completions.forEach { completionDao.delete(it) }
+                safeCloudCall(TAG, "deleteGoal") {
+                    firebaseManager.deleteGoal(goal.cloudId)
+                    completions.forEach { firebaseManager.deleteGoalCompletion(it.goalCloudId, it.date) }
+                }
             }
         }
     }
@@ -248,6 +258,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         date.minusDays((date.dayOfWeek.value % 7).toLong()) // ISO MON=1..SUN=7; SUN%7=0
 
     companion object {
+        private const val TAG = "DashboardViewModel"
         private const val MIN_WEEKS = 13 // ~a quarter, so a new user still sees a real graph
         private const val MAX_WEEKS = 53 // ~a year cap
     }

@@ -28,6 +28,8 @@ object SyncCoordinator {
         scope.launch { firebaseManager.collectReminderChanges(db) }
         scope.launch { firebaseManager.collectStudySessionChanges(db) }
         scope.launch { firebaseManager.collectExcludedAppChanges(db) }
+        scope.launch { firebaseManager.collectGoalChanges(db) }
+        scope.launch { firebaseManager.collectGoalCompletionChanges(db) }
         Log.d(TAG, "Listeners started")
     }
 
