@@ -7,10 +7,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,8 +32,10 @@ import java.time.format.DateTimeFormatter
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardView(
-    onBackToMenu: () -> Unit,
     onManageGoals: () -> Unit,
+    onOpenSettings: () -> Unit,
+    signedIn: Boolean,
+    isSyncing: Boolean,
     viewModel: DashboardViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -42,13 +46,22 @@ fun DashboardView(
             CenterAlignedTopAppBar(
                 title = { Text(stringResource(R.string.dashboard_title), style = MaterialTheme.typography.titleSmall) },
                 navigationIcon = {
-                    IconButton(onClick = onBackToMenu) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
-                    }
+                    ApexLogo(modifier = Modifier.padding(start = 16.dp).size(22.dp))
                 },
                 actions = {
+                    if (signedIn) {
+                        Icon(
+                            imageVector = if (isSyncing) Icons.Default.CloudSync else Icons.Default.CloudDone,
+                            contentDescription = stringResource(R.string.cd_sync_status),
+                            tint = if (isSyncing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(end = 4.dp).size(20.dp)
+                        )
+                    }
                     IconButton(onClick = onManageGoals) {
                         Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.dashboard_manage_goals))
+                    }
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.menu_settings))
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
