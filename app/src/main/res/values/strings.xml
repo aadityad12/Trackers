@@ -44,6 +44,7 @@
     <string name="module_notes_desc">Ideas</string>
     <string name="module_dashboard">Dashboard</string>
     <string name="module_dashboard_desc">Daily goals</string>
+    <string name="nav_more">More</string>
 
     <!-- Overview -->
     <string name="overview_title">DAILY INSIGHTS</string>
