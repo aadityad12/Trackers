@@ -228,6 +228,37 @@ internal fun studySessionDocId(date: LocalDate, subject: String): String =
     if (subject.isBlank()) date.toString()
     else "${date}|${subject.replace('/', '_')}"
 
+internal fun parseGoalDoc(data: Map<String, Any?>): Goal = Goal(
+    name = data.requireString("name"),
+    type = data.requireString("type"),
+    // AUTO-only fields; absent on MANUAL goals and on any partially-written doc.
+    metric = data.optString("metric"),
+    comparator = data.optString("comparator"),
+    threshold = data.optDouble("threshold"),
+    subject = data.optString("subject"),
+    startDate = LocalDate.parse(data.requireString("startDate")),
+    // Null = active. pushGoal always writes the key (even null) so a restore clears it.
+    archivedDate = data.optString("archivedDate")?.let { LocalDate.parse(it) },
+    sortOrder = (data["sortOrder"] as? Number)?.toInt() ?: 0,
+    cloudId = data.requireCloudId(),
+    modifiedAt = data.optLong("modifiedAt")
+)
+
+internal fun parseGoalCompletionDoc(data: Map<String, Any?>): GoalCompletion = GoalCompletion(
+    goalCloudId = data.requireString("goalCloudId"),
+    date = LocalDate.parse(data.requireString("date")),
+    done = data["done"] as? Boolean ?: false,
+    modifiedAt = data.optLong("modifiedAt")
+)
+
+/**
+ * Firestore doc id for a manual completion: "{goalCloudId}|{date}". goalCloudId is a UUID (only
+ * hex + hyphens, all id-legal, and its leading digit can't match the reserved `__.*__` pattern),
+ * so the composite id is always valid and deterministic — one doc per goal per day, upserted.
+ */
+internal fun goalCompletionDocId(goalCloudId: String, date: LocalDate): String =
+    "$goalCloudId|$date"
+
 class FirebaseManager(private val context: Context) {
     companion object {
         private const val TAG = "FirebaseManager"
@@ -504,6 +535,200 @@ class FirebaseManager(private val context: Context) {
             .documents.mapNotNull { d -> d.data?.let { d.id to it } }
     }
 
+    // ── Goals ─────────────────────────────────────────────────────────────────
+
+    suspend fun pushGoal(goal: Goal) {
+        val uid = userId ?: return
+        if (goal.cloudId.isEmpty()) return
+        firestore.collection("users").document(uid)
+            .collection("goals").document(goal.cloudId)
+            .set(
+                mapOf(
+                    "cloudId" to goal.cloudId,
+                    "name" to goal.name,
+                    "type" to goal.type,
+                    "metric" to goal.metric,
+                    "comparator" to goal.comparator,
+                    "threshold" to goal.threshold,
+                    "subject" to goal.subject,
+                    "startDate" to goal.startDate.toString(),
+                    // Always written (even null) so restoring an archived goal clears the field
+                    // rather than leaving a stale date behind SetOptions.merge() — same as category caps.
+                    "archivedDate" to goal.archivedDate?.toString(),
+                    "sortOrder" to goal.sortOrder,
+                    "modifiedAt" to goal.modifiedAt
+                ),
+                SetOptions.merge()
+            ).await()
+    }
+
+    suspend fun deleteGoal(cloudId: String) {
+        val uid = userId ?: return
+        if (cloudId.isEmpty()) return
+        firestore.collection("users").document(uid)
+            .collection("goals").document(cloudId)
+            .delete().await()
+    }
+
+    private suspend fun pullAllGoals(): List<Pair<String, Map<String, Any>>> {
+        val uid = userId ?: return emptyList()
+        return firestore.collection("users").document(uid)
+            .collection("goals")
+            .get().await()
+            .documents.mapNotNull { d -> d.data?.let { d.id to it } }
+    }
+
+    private suspend fun applyGoalDoc(db: AppDatabase, docId: String, data: Map<String, Any?>) {
+        try {
+            val parsed = parseGoalDoc(data)
+            val local = db.goalDao().getGoalByCloudId(parsed.cloudId)
+            if (local == null) {
+                db.goalDao().insertGoal(parsed)
+            } else if (parsed.modifiedAt > local.modifiedAt) {
+                db.goalDao().updateGoal(
+                    local.copy(
+                        name = parsed.name, type = parsed.type, metric = parsed.metric,
+                        comparator = parsed.comparator, threshold = parsed.threshold,
+                        subject = parsed.subject, startDate = parsed.startDate,
+                        archivedDate = parsed.archivedDate, sortOrder = parsed.sortOrder,
+                        modifiedAt = parsed.modifiedAt
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Skipping malformed goal doc $docId", e)
+        }
+    }
+
+    private suspend fun removeGoalByCloudId(db: AppDatabase, cloudId: String) {
+        val local = db.goalDao().getGoalByCloudId(cloudId) ?: return
+        db.goalDao().deleteGoal(local)
+        // Its check-offs go too, mirroring DashboardViewModel.deleteGoal.
+        db.goalCompletionDao().getByGoal(cloudId).forEach { db.goalCompletionDao().delete(it) }
+    }
+
+    private fun goalChangesFlow(): Flow<List<DocumentChange>> = callbackFlow {
+        val uid = userId ?: return@callbackFlow awaitClose { }
+        val listener = firestore.collection("users").document(uid)
+            .collection("goals")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) { Log.w(TAG, "Goal listener error", error); return@addSnapshotListener }
+                if (snapshot == null || snapshot.metadata.hasPendingWrites()) return@addSnapshotListener
+                trySend(snapshot.documentChanges)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun collectGoalChanges(db: AppDatabase) {
+        goalChangesFlow().collect { changes ->
+            for (change in changes) {
+                val docId = change.document.id
+                when (change.type) {
+                    DocumentChange.Type.ADDED, DocumentChange.Type.MODIFIED -> applyGoalDoc(db, docId, change.document.data)
+                    DocumentChange.Type.REMOVED -> removeGoalByCloudId(db, docId)
+                }
+            }
+        }
+    }
+
+    private suspend fun syncGoals(db: AppDatabase) {
+        for ((docId, data) in pullAllGoals()) {
+            applyGoalDoc(db, docId, data)
+        }
+        // Assign cloudIds where missing, then push every local goal (covers rows created offline).
+        for (goal in db.goalDao().getAllGoalsOneShot()) {
+            val toPush = if (goal.cloudId.isEmpty()) {
+                goal.copy(cloudId = UUID.randomUUID().toString(), modifiedAt = System.currentTimeMillis())
+                    .also { db.goalDao().updateGoal(it) }
+            } else goal
+            pushGoal(toPush)
+        }
+    }
+
+    // ── Goal Completions ──────────────────────────────────────────────────────
+
+    suspend fun pushGoalCompletion(completion: GoalCompletion) {
+        val uid = userId ?: return
+        if (completion.goalCloudId.isEmpty()) return
+        firestore.collection("users").document(uid)
+            .collection("goal_completions").document(goalCompletionDocId(completion.goalCloudId, completion.date))
+            .set(
+                mapOf(
+                    "goalCloudId" to completion.goalCloudId,
+                    "date" to completion.date.toString(),
+                    "done" to completion.done,
+                    "modifiedAt" to completion.modifiedAt
+                ),
+                SetOptions.merge()
+            ).await()
+    }
+
+    suspend fun deleteGoalCompletion(goalCloudId: String, date: LocalDate) {
+        val uid = userId ?: return
+        if (goalCloudId.isEmpty()) return
+        firestore.collection("users").document(uid)
+            .collection("goal_completions").document(goalCompletionDocId(goalCloudId, date))
+            .delete().await()
+    }
+
+    private suspend fun pullAllGoalCompletions(): List<Pair<String, Map<String, Any>>> {
+        val uid = userId ?: return emptyList()
+        return firestore.collection("users").document(uid)
+            .collection("goal_completions")
+            .get().await()
+            .documents.mapNotNull { d -> d.data?.let { d.id to it } }
+    }
+
+    private suspend fun applyGoalCompletionDoc(db: AppDatabase, docId: String, data: Map<String, Any?>) {
+        try {
+            val parsed = parseGoalCompletionDoc(data)
+            val local = db.goalCompletionDao().getByGoalAndDate(parsed.goalCloudId, parsed.date)
+            if (local == null || parsed.modifiedAt > local.modifiedAt) {
+                db.goalCompletionDao().upsert(parsed)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Skipping malformed goal completion doc $docId", e)
+        }
+    }
+
+    private suspend fun removeGoalCompletionByDoc(db: AppDatabase, data: Map<String, Any?>) {
+        val goalCloudId = data["goalCloudId"] as? String ?: return
+        val date = (data["date"] as? String)?.let { try { LocalDate.parse(it) } catch (e: Exception) { null } } ?: return
+        db.goalCompletionDao().getByGoalAndDate(goalCloudId, date)?.let { db.goalCompletionDao().delete(it) }
+    }
+
+    private fun goalCompletionChangesFlow(): Flow<List<DocumentChange>> = callbackFlow {
+        val uid = userId ?: return@callbackFlow awaitClose { }
+        val listener = firestore.collection("users").document(uid)
+            .collection("goal_completions")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) { Log.w(TAG, "Goal completion listener error", error); return@addSnapshotListener }
+                if (snapshot == null || snapshot.metadata.hasPendingWrites()) return@addSnapshotListener
+                trySend(snapshot.documentChanges)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun collectGoalCompletionChanges(db: AppDatabase) {
+        goalCompletionChangesFlow().collect { changes ->
+            for (change in changes) {
+                when (change.type) {
+                    DocumentChange.Type.ADDED, DocumentChange.Type.MODIFIED -> applyGoalCompletionDoc(db, change.document.id, change.document.data)
+                    DocumentChange.Type.REMOVED -> removeGoalCompletionByDoc(db, change.document.data)
+                }
+            }
+        }
+    }
+
+    private suspend fun syncGoalCompletions(db: AppDatabase) {
+        for ((docId, data) in pullAllGoalCompletions()) {
+            applyGoalCompletionDoc(db, docId, data)
+        }
+        for (completion in db.goalCompletionDao().getAllCompletionsOneShot()) {
+            pushGoalCompletion(completion)
+        }
+    }
+
     // ── Screen Time ───────────────────────────────────────────────────────────
 
     suspend fun uploadScreenTimeSession(session: ScreenTimeSession) {
@@ -570,6 +795,8 @@ class FirebaseManager(private val context: Context) {
         syncStep("reminders") { syncReminders(db) }
         syncStep("study sessions") { syncStudySessions(db) }
         syncStep("excluded apps") { syncExcludedApps(db) }
+        syncStep("goals") { syncGoals(db) }
+        syncStep("goal completions") { syncGoalCompletions(db) }
     }
 
     private suspend fun syncStep(name: String, block: suspend () -> Unit) {
