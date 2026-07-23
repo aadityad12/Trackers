@@ -55,6 +55,7 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showCalendar by rememberSaveable { mutableStateOf(false) }
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val overallLimit by viewModel.overallMonthlyLimit.collectAsState(initial = null)
     var isSearching by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -154,7 +155,8 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
                     selectedMonth = selectedMonth,
                     onMonthChange = { selectedMonth = it },
                     onEdit = { itemToEdit = it },
-                    searchQuery = searchQuery
+                    searchQuery = searchQuery,
+                    overallLimit = overallLimit
                 )
             }
         }
@@ -237,7 +239,8 @@ fun BudgetOverview(
     selectedMonth: YearMonth,
     onMonthChange: (YearMonth) -> Unit,
     onEdit: (BudgetItem) -> Unit,
-    searchQuery: String = ""
+    searchQuery: String = "",
+    overallLimit: Double? = null
 ) {
     val availableMonths = items.map { YearMonth.from(it.date) }.distinct().sortedDescending()
     val monthToDisplay = if (availableMonths.contains(selectedMonth)) selectedMonth 
@@ -276,10 +279,15 @@ fun BudgetOverview(
             // Sits above trends: a cap the user set is more actionable than history.
             // Gated here as well as inside the card so the spacer doesn't leave a gap
             // for users who have never set a limit.
-            if (categories.any { it.effectiveMonthlyLimit() != null }) {
+            if (categories.any { it.effectiveMonthlyLimit() != null } || overallLimit != null) {
                 item {
                     Spacer(modifier = Modifier.height(12.dp))
-                    BudgetLimitsCard(items = items, categories = categories, month = monthToDisplay)
+                    BudgetLimitsCard(
+                        items = items,
+                        categories = categories,
+                        month = monthToDisplay,
+                        overallLimit = overallLimit
+                    )
                 }
             }
 

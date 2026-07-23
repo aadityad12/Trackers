@@ -36,6 +36,14 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
         _searchQuery.value = query
     }
 
+    // Overall monthly spending ceiling (Issue #125) — a DataStore pref, not a DB row; see BudgetPrefs.
+    private val budgetPrefs = BudgetPrefs(application)
+    val overallMonthlyLimit: Flow<Double?> = budgetPrefs.overallMonthlyLimit
+
+    fun setOverallMonthlyLimit(limit: Double?) {
+        viewModelScope.launch { budgetPrefs.setOverallMonthlyLimit(limit) }
+    }
+
     val allCategories: Flow<List<Category>> = categoryDao.getAllCategories()
     val allSubscriptions: Flow<List<Subscription>> = subscriptionDao.getAllSubscriptions()
 
