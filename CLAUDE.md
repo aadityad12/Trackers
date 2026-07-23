@@ -226,7 +226,7 @@ New home surface: a GitHub-contribution-style heatmap scoring each day by the fr
 - Fixed Google Sign-In actually completing on real devices: `AuthViewModel.handleSignIn()` only matched `credential is GoogleIdTokenCredential`, but Credential Manager's `GetGoogleIdOption` returns the token wrapped in a `CustomCredential` (type `TYPE_GOOGLE_ID_TOKEN_CREDENTIAL`) that must be unwrapped via `GoogleIdTokenCredential.createFrom(credential.data)` — Google's documented pattern. The old check never matched, so sign-in silently no-op'd: Credential Manager returned a response, `auth.signInWithCredential()` was never called, no error shown, no Firebase auth state persisted. Confirmed via live device testing (adb logs + inspecting the app's private storage for auth persistence files) before and after the fix. Verified working end-to-end on a physical Samsung device post-fix.
 - Filed the remaining Known Issues above as GitHub issues [#3](https://github.com/aadityad12/Trackers/issues/3)–[#10](https://github.com/aadityad12/Trackers/issues/10), numbered in recommended fix order.
 
-## 2026-07-23 Bug / accessibility / docs pass (issues #97, #105–#120)
+## 2026-07-23 Bug / accessibility / docs / feature pass (issues #97, #105–#128)
 
 Each fix is one commit on `fix/issues-2026-07-23`, built + unit-tested and driven on the
 **Android emulator** (`Medium_Phone` AVD, adb — CLAUDE.md's older "no device available" notes are
@@ -256,6 +256,29 @@ obsolete; see the `android-emulator-available` memory).
 - **Bonus crash fix** — revoking Usage Access on a running app made `queryEvents` throw
   `SecurityException` and killed the process on the next 30s poll; `calculateAppSpecificUsage()`
   now catches it and reports no usage.
+
+Features added in the same pass:
+
+- **Search on Reminders and Budget (#123)** — the Notes pattern (#40) extended: a `_searchQuery`
+  StateFlow per ViewModel plus a top-bar field. Matching lives in pure `ListSearch.kt`
+  (`filterReminders`, `filterBudgetItems` — the latter also matches the item's *category name*).
+  Only the Budget **transactions list** narrows; the totals/pie/limits/trend keep describing the
+  whole month.
+- **Manual past study sessions (#122)** — `StudyViewModel.logManualSession(date, subject, seconds)`
+  reuses the timer's own `saveSessionForDate`, so the `(date, subject)` PK, cloud push, and
+  "0 clears the row" semantics come for free. **Today is deliberately not editable** — the running
+  timer owns today's row. UI: `ManualSessionDialog`, opened from + in the history header or by
+  tapping a past subject row.
+- **Overall monthly budget (#125)** — `BudgetPrefs` (new DataStore, **local-only**, not synced)
+  holds a single ceiling; pure `overallLimitStatus()` sits beside `categoryLimitStatuses()` and the
+  card (now titled SPENDING LIMITS) renders an "All spending" row above the category rows via a
+  shared `LimitRow`.
+- **Heatmap year windowing (#128)** — the Dashboard no longer scrolls. `DashboardScoring.kt` gained
+  pure `heatmapRange`/`heatmapYears`/`heatmapWeeks`, the grid moved out of the ViewModel
+  (`DashboardUiState.dayCell(date)` computes one cell on demand), and `DashboardView` is a Column
+  whose heatmap takes the remaining height and sizes cells with `BoxWithConstraints`. **Keep month
+  labels on a fixed-height row** — letting them set the row height inflates twelve rows and pushes
+  the year off screen.
 
 ## Developer's own TODO list (from notes.txt, still current)
 - Budget: "Extract from receipt" (OCR/receipt-parsing) — not started.
