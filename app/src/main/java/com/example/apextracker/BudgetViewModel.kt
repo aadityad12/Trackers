@@ -50,7 +50,9 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
 
                     while (currentRenewal.isBefore(today) || currentRenewal.isEqual(today)) {
                         val item = BudgetItem(
-                            title = "[Subscription] ${updatedSub.name}",
+                            // Just the name: the "[Subscription]" label is composed at render
+                            // time from strings.xml so it localizes (Issue #119).
+                            title = updatedSub.name,
                             amount = updatedSub.amount,
                             description = updatedSub.notes,
                             date = currentRenewal,

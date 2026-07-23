@@ -141,7 +141,7 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
         if (itemToEdit != null) {
             BudgetItemDialog(
                 title = stringResource(R.string.budget_edit_item_title),
-                initialTitle = itemToEdit!!.title,
+                initialTitle = budgetItemBaseTitle(itemToEdit!!.title),
                 initialAmount = itemToEdit!!.amount.toString(),
                 initialDescription = itemToEdit!!.description ?: "",
                 initialDate = itemToEdit!!.date,
@@ -383,6 +383,10 @@ fun ExpensePieChartModern(
     val chartData = mutableListOf<Triple<String, Float, Color>>()
     // Hoisted out of the loop: it reads MaterialTheme, and the value is identical for every -1L item.
     val subsCategory = subscriptionsCategory()
+    // Legend labels are user-facing text, so they go through strings.xml like the rest of the
+    // screen (Issue #114) rather than being baked in as English literals.
+    val uncategorizedLabel = stringResource(R.string.budget_uncategorized)
+    val pendingLabel = stringResource(R.string.budget_pending_legend)
 
     itemsByCategory.forEach { (catId, catItems) ->
         val category = if (catId == -1L) {
@@ -392,11 +396,11 @@ fun ExpensePieChartModern(
         }
         val color = category?.let { parseColorSafe(it.colorHex) } ?: Color.Gray
         val amount = catItems.sumOf { it.amount }
-        chartData.add(Triple(category?.name ?: "Uncategorized", amount.toFloat(), color))
+        chartData.add(Triple(category?.name ?: uncategorizedLabel, amount.toFloat(), color))
     }
 
     if (totalPending > 0) {
-        chartData.add(Triple("Pending", totalPending.toFloat(), MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f)))
+        chartData.add(Triple(pendingLabel, totalPending.toFloat(), MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f)))
     }
 
     val sortedData = chartData.sortedByDescending { it.second }

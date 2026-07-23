@@ -180,7 +180,14 @@ fun DayBreakdownItem(item: BudgetItem, category: Category?) {
                     Box(modifier = Modifier.size(8.dp).background(parseColorSafe(category.colorHex), CircleShape))
                     Spacer(modifier = Modifier.width(4.dp))
                 }
-                Text(text = item.title, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = if (isSubscriptionItem(item)) {
+                        stringResource(R.string.budget_subscription_item_title, budgetItemBaseTitle(item.title))
+                    } else {
+                        budgetItemBaseTitle(item.title)
+                    },
+                    style = MaterialTheme.typography.bodyLarge
+                )
             }
             if (!item.description.isNullOrBlank()) Text(text = item.description, style = MaterialTheme.typography.bodySmall)
         }

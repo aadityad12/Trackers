@@ -100,6 +100,9 @@
          its own untranslated literal; see the comment there. -->
     <string name="budget_category_subscriptions">Subscriptions</string>
     <string name="budget_pending_category">Pending: %1$s</string>
+    <string name="budget_uncategorized">Uncategorized</string>
+    <string name="budget_subscription_item_title">[Subscription] %1$s</string>
+    <string name="budget_pending_legend">Pending</string>
     <string name="label_title">Title</string>
     <string name="label_amount">Amount</string>
     <string name="label_name">Name</string>
