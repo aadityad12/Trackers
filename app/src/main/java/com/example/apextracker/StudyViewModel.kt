@@ -221,6 +221,18 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Records (or overwrites) the total for a past [date] and [subject] — the manual backfill path
+     * for a session the timer never saw (Issue #122). Today is deliberately excluded: the running
+     * timer owns today's row and would overwrite anything written here on its next tick.
+     * [durationSeconds] of 0 clears that day's entry for the subject.
+     */
+    fun logManualSession(date: LocalDate, subject: String, durationSeconds: Long): Boolean {
+        if (!date.isBefore(LocalDate.now()) || durationSeconds < 0) return false
+        saveSessionForDate(date, normalizeSubject(subject), durationSeconds, forcePush = true)
+        return true
+    }
+
     fun getAllSessions() = studySessionDao.getAllSessions()
 
     // Logic: Pause if user leaves app while screen is ON (Interactive).

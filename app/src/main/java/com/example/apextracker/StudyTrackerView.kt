@@ -3,6 +3,7 @@ package com.example.apextracker
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -11,6 +12,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.platform.LocalContext
+import android.app.DatePickerDialog
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -96,6 +101,21 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
         )
     }
 
+    // Manual backfill of a missed past session (Issue #122). Non-null while the dialog is open;
+    // the value seeds the date/subject/duration fields (an existing row when opened from history).
+    var manualEntry by remember { mutableStateOf<ManualSessionSeed?>(null) }
+    manualEntry?.let { seed ->
+        ManualSessionDialog(
+            seed = seed,
+            knownSubjects = knownSubjects,
+            onDismiss = { manualEntry = null },
+            onSave = { date, subject, seconds ->
+                viewModel.logManualSession(date, subject, seconds)
+                manualEntry = null
+            }
+        )
+    }
+
     var showSubjectPicker by remember { mutableStateOf(false) }
     if (showSubjectPicker) {
         SubjectPickerDialog(
@@ -174,7 +194,16 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Black
                     )
-                    Icon(Icons.Default.History, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { manualEntry = ManualSessionSeed(LocalDate.now().minusDays(1), "", 0L) }) {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = stringResource(R.string.study_log_past_session),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Icon(Icons.Default.History, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -189,7 +218,9 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(pastDays) { day ->
-                            DayStudyItem(day)
+                            DayStudyItem(day, onEditSubject = { subject, seconds ->
+                                manualEntry = ManualSessionSeed(day.date, subject, seconds)
+                            })
                         }
                     }
                 }
@@ -386,7 +417,7 @@ fun StudyTimerDisplay(seconds: Long, isRunning: Boolean) {
 
 /** One day's card: the date + grand total, with a per-subject breakdown beneath it. */
 @Composable
-fun DayStudyItem(day: DayStudy) {
+fun DayStudyItem(day: DayStudy, onEditSubject: (String, Long) -> Unit = { _, _ -> }) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -427,6 +458,7 @@ fun DayStudyItem(day: DayStudy) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clickable { onEditSubject(subjectTotal.subject, subjectTotal.seconds) }
                             .padding(vertical = 2.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -454,4 +486,111 @@ fun formatTime(seconds: Long): String {
     val s = seconds % 60
     return if (h > 0) String.format(Locale.getDefault(), "%02d:%02d:%02d", h, m, s)
     else String.format(Locale.getDefault(), "%02d:%02d", m, s)
+}
+
+/** Seed values for [ManualSessionDialog] — a blank new entry or an existing row being edited. */
+data class ManualSessionSeed(val date: LocalDate, val subject: String, val seconds: Long)
+
+/**
+ * Manual entry/edit of a past day's study time (Issue #122). Writes through
+ * [StudyViewModel.logManualSession], which keys on (date, subject) exactly like the timer, so
+ * saving over an existing row replaces it and 0 clears it. Today isn't offered — the running timer
+ * owns today's totals.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ManualSessionDialog(
+    seed: ManualSessionSeed,
+    knownSubjects: List<String>,
+    onDismiss: () -> Unit,
+    onSave: (LocalDate, String, Long) -> Unit
+) {
+    val context = LocalContext.current
+    var date by remember { mutableStateOf(seed.date) }
+    var subject by remember { mutableStateOf(seed.subject) }
+    var hours by remember { mutableStateOf((seed.seconds / 3600).toString()) }
+    var minutes by remember { mutableStateOf(((seed.seconds % 3600) / 60).toString()) }
+
+    val parsedSeconds = parseManualDurationSeconds(hours, minutes)
+    val options = remember(knownSubjects, seed.subject) {
+        (listOf("") + knownSubjects + seed.subject).distinct()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.study_log_past_session)) },
+        text = {
+            Column {
+                OutlinedButton(
+                    onClick = {
+                        DatePickerDialog(
+                            context,
+                            { _, year, month, dayOfMonth ->
+                                val picked = LocalDate.of(year, month + 1, dayOfMonth)
+                                // Today and later belong to the timer, so clamp to yesterday.
+                                date = if (picked.isBefore(LocalDate.now())) picked else LocalDate.now().minusDays(1)
+                            },
+                            date.year, date.monthValue - 1, date.dayOfMonth
+                        ).also { dialog ->
+                            dialog.datePicker.maxDate = System.currentTimeMillis() - 86_400_000L
+                            dialog.show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(date.format(DateTimeFormatter.ofPattern("EEE, MMM d, yyyy")))
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(stringResource(R.string.study_subject_label), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    options.forEach { option ->
+                        FilterChip(
+                            selected = normalizeSubject(option) == normalizeSubject(subject),
+                            onClick = { subject = option },
+                            label = { Text(option.ifBlank { stringResource(R.string.study_no_subject) }) }
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = subject,
+                    onValueChange = { subject = it },
+                    label = { Text(stringResource(R.string.study_new_subject_hint)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = hours,
+                        onValueChange = { hours = it },
+                        label = { Text(stringResource(R.string.study_hours_label)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = minutes,
+                        onValueChange = { minutes = it },
+                        label = { Text(stringResource(R.string.study_minutes_label)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { parsedSeconds?.let { onSave(date, subject, it) } },
+                enabled = parsedSeconds != null
+            ) {
+                Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        }
+    )
 }

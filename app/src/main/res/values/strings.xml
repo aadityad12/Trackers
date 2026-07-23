@@ -126,6 +126,9 @@
     <string name="study_choose_subject">Choose subject</string>
     <string name="study_new_subject_hint">New subject</string>
     <string name="study_add_subject">Add</string>
+    <string name="study_log_past_session">Log past session</string>
+    <string name="study_hours_label">Hours</string>
+    <string name="study_minutes_label">Minutes</string>
     <string name="cd_choose_subject">Choose study subject</string>
 
     <!-- Screen time -->
