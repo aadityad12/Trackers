@@ -82,7 +82,7 @@ fun DashboardView(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item { StreakRow(state.perfectStreak) }
-            item { TodayCard(state.todayGoals, onToggle = viewModel::toggleTodayGoal, onManageGoals = onManageGoals) }
+            item { TodayCard(state.todayGoals, state.loaded, onToggle = viewModel::toggleTodayGoal, onManageGoals = onManageGoals) }
             item { HeatmapSection(state.weeks, state.today, onDayClick = { selectedDay = it }) }
         }
     }
@@ -117,7 +117,7 @@ private fun StreakRow(streak: Int) {
 }
 
 @Composable
-private fun TodayCard(todayGoals: List<GoalStatus>, onToggle: (Goal) -> Unit, onManageGoals: () -> Unit) {
+private fun TodayCard(todayGoals: List<GoalStatus>, loaded: Boolean, onToggle: (Goal) -> Unit, onManageGoals: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
@@ -127,12 +127,17 @@ private fun TodayCard(todayGoals: List<GoalStatus>, onToggle: (Goal) -> Unit, on
             Text(stringResource(R.string.dashboard_today), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, letterSpacing = 1.5.sp)
             Spacer(Modifier.height(8.dp))
             if (todayGoals.isEmpty()) {
-                Text(
-                    stringResource(R.string.dashboard_no_goals),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.clickable { onManageGoals() }
-                )
+                // Only claim "no goals" once the Room flows have actually emitted — the seeded
+                // EMPTY state would otherwise flash the empty message on launch for a user who
+                // does have goals (Issue #118), same gate GoalsView already uses.
+                if (loaded) {
+                    Text(
+                        stringResource(R.string.dashboard_no_goals),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.clickable { onManageGoals() }
+                    )
+                }
             } else {
                 todayGoals.forEach { status -> GoalStatusRow(status, onToggle) }
             }
