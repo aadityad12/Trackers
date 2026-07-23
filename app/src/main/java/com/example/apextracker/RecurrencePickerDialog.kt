@@ -9,7 +9,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -39,7 +38,7 @@ fun RecurrencePickerDialog(
                 ExposedDropdownMenuBox(expanded = frequencyExpanded, onExpandedChange = { frequencyExpanded = it })
                  {
                     OutlinedTextField(
-                        value = frequency.name,
+                        value = stringResource(frequencyLabelRes(frequency)),
                         onValueChange = {},
                         readOnly = true,
                         label = { Text(stringResource(R.string.recurrence_frequency)) },
@@ -49,7 +48,7 @@ fun RecurrencePickerDialog(
                     ExposedDropdownMenu(expanded = frequencyExpanded, onDismissRequest = { frequencyExpanded = false }) {
                         RecurrenceFrequency.values().forEach { freq ->
                             DropdownMenuItem(
-                                text = { Text(freq.name) },
+                                text = { Text(stringResource(frequencyLabelRes(freq))) },
                                 onClick = { frequency = freq; frequencyExpanded = false }
                             )
                         }
@@ -66,13 +65,17 @@ fun RecurrencePickerDialog(
                                 modifier = Modifier
                                     .size(32.dp)
                                     .clip(CircleShape)
-                                    .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray)
+                                    .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
                                     .clickable { 
                                         customDays = if (isSelected) customDays - day else customDays + day
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(day.getDisplayName(TextStyle.SHORT, locale))
+                                Text(
+                                    day.getDisplayName(TextStyle.SHORT, locale),
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
@@ -82,7 +85,7 @@ fun RecurrencePickerDialog(
                 ExposedDropdownMenuBox(expanded = endTypeExpanded, onExpandedChange = { endTypeExpanded = it })
                 {
                    OutlinedTextField(
-                       value = endType.name,
+                       value = stringResource(endTypeLabelRes(endType)),
                        onValueChange = {},
                        readOnly = true,
                        label = { Text(stringResource(R.string.recurrence_ends)) },
@@ -92,7 +95,7 @@ fun RecurrencePickerDialog(
                     ExposedDropdownMenu(expanded = endTypeExpanded, onDismissRequest = { endTypeExpanded = false }) {
                         RecurrenceEndType.values().forEach { type ->
                             DropdownMenuItem(
-                                text = { Text(type.name) },
+                                text = { Text(stringResource(endTypeLabelRes(type))) },
                                 onClick = { endType = type; endTypeExpanded = false }
                             )
                         }

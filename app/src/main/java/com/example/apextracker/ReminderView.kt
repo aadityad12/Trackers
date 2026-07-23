@@ -442,7 +442,7 @@ fun ReminderEditDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(stringResource(R.string.reminders_recurrence_prefix, recurrence?.frequency?.name ?: stringResource(R.string.reminders_recurrence_none)), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.reminders_recurrence_prefix, recurrence?.frequency?.let { stringResource(frequencyLabelRes(it)) } ?: stringResource(R.string.reminders_recurrence_none)), style = MaterialTheme.typography.bodyMedium)
                     TextButton(onClick = { showRecurrencePicker = true }) {
                         Text(stringResource(if (recurrence == null) R.string.action_set else R.string.action_change))
                     }

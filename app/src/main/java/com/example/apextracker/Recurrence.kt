@@ -1,5 +1,6 @@
 package com.example.apextracker
 
+import androidx.annotation.StringRes
 import java.time.DayOfWeek
 import java.time.LocalDate
 
@@ -83,4 +84,25 @@ fun calculateNextDate(currentDate: LocalDate, recurrence: Recurrence): LocalDate
             null
         }
     }
+}
+
+/**
+ * Display names for the recurrence enums (Issue #112) — the pickers and the reminder summary used
+ * to render raw constant names ("AFTER_OCCURRENCES"), which never localize. Same pattern as
+ * GoalsView's goal-enum labels.
+ */
+@StringRes
+fun frequencyLabelRes(frequency: RecurrenceFrequency): Int = when (frequency) {
+    RecurrenceFrequency.DAILY -> R.string.recurrence_freq_daily
+    RecurrenceFrequency.WEEKLY -> R.string.recurrence_freq_weekly
+    RecurrenceFrequency.MONTHLY -> R.string.recurrence_freq_monthly
+    RecurrenceFrequency.YEARLY -> R.string.recurrence_freq_yearly
+    RecurrenceFrequency.CUSTOM -> R.string.recurrence_freq_custom
+}
+
+@StringRes
+fun endTypeLabelRes(endType: RecurrenceEndType): Int = when (endType) {
+    RecurrenceEndType.NEVER -> R.string.recurrence_end_never
+    RecurrenceEndType.UNTIL_DATE -> R.string.recurrence_end_until_date
+    RecurrenceEndType.AFTER_OCCURRENCES -> R.string.recurrence_end_after_occurrences
 }

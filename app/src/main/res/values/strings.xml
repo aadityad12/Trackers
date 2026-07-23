@@ -182,6 +182,14 @@
     <string name="recurrence_repeat_on">Repeat on:</string>
     <string name="recurrence_ends">Ends</string>
     <string name="recurrence_after_occurrences">After Occurrences</string>
+    <string name="recurrence_freq_daily">Daily</string>
+    <string name="recurrence_freq_weekly">Weekly</string>
+    <string name="recurrence_freq_monthly">Monthly</string>
+    <string name="recurrence_freq_yearly">Yearly</string>
+    <string name="recurrence_freq_custom">Custom</string>
+    <string name="recurrence_end_never">Never</string>
+    <string name="recurrence_end_until_date">On a date</string>
+    <string name="recurrence_end_after_occurrences">After a number of times</string>
 
     <!-- Notes -->
     <string name="notes_title">Notes</string>
