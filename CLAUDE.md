@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Last full audit: 2026-07-07 (Firebase/auth follow-up: 2026-07-08; Known Issues fix pass + dependency bumps: 2026-07-09, branch `fix/known-issues-3-through-10`; Firebase sync unification (Issue #4): 2026-07-09, branch `fix/issue-4-firebase-sync`, merged as PR #16; bug-fix pass for issues #18–#31: 2026-07-10, merged as PRs #48/#50 — see "2026-07-10 Bug-Fix Pass" below; feature pass for issues #17/#32–#41/#53: 2026-07-11 → 2026-07-14, see "2026-07-11 → 2026-07-14 Feature Pass" below; doc-accuracy pass reconciling this file with the code: 2026-07-17; feature+verification pass 2026-07-18 → 2026-07-20: currency setting #76, category limits #75, notes export #77, screen-time app-list+chart #43, overview drill-in #47, subscriptions-colour #82, study subjects #78, and biometric lock #45 all merged, with the DB-migration (#78, v14) and biometric (#45) changes verified on-device — see the dated sections below; **Dashboard goal-tracking feature 2026-07-21 → 2026-07-22**, PRs #100–#103 merged + sync in progress, making the Dashboard the app home and bumping the DB to **v15** — see the "2026-07-21 → 2026-07-22 Dashboard" section). If you make significant architectural changes, update this file in the same session.
+Last full audit: 2026-07-07 (Firebase/auth follow-up: 2026-07-08; Known Issues fix pass + dependency bumps: 2026-07-09, branch `fix/known-issues-3-through-10`; Firebase sync unification (Issue #4): 2026-07-09, branch `fix/issue-4-firebase-sync`, merged as PR #16; bug-fix pass for issues #18–#31: 2026-07-10, merged as PRs #48/#50 — see "2026-07-10 Bug-Fix Pass" below; feature pass for issues #17/#32–#41/#53: 2026-07-11 → 2026-07-14, see "2026-07-11 → 2026-07-14 Feature Pass" below; doc-accuracy pass reconciling this file with the code: 2026-07-17; feature+verification pass 2026-07-18 → 2026-07-20: currency setting #76, category limits #75, notes export #77, screen-time app-list+chart #43, overview drill-in #47, subscriptions-colour #82, study subjects #78, and biometric lock #45 all merged, with the DB-migration (#78, v14) and biometric (#45) changes verified on-device — see the dated sections below; **Dashboard goal-tracking feature 2026-07-21 → 2026-07-22**, PRs #100–#103 merged + sync in progress, making the Dashboard the app home and bumping the DB to **v15** — see the "2026-07-21 → 2026-07-22 Dashboard" section; **bug/a11y/docs pass 2026-07-23** on branch `fix/issues-2026-07-23` covering issues #105–#120 and #97 — see the dated section at the end). If you make significant architectural changes, update this file in the same session.
 
 **Doc-accuracy note (2026-07-17)**: issues #68–#74 were all filed against *this file* for drifting out of sync with the code — stale DB version, a test roster missing three files, shipped features listed as open work. Enumerated lists here rot; prefer pointing at the source of truth (`gh issue list`, `find app/src/test -name '*Test.kt'`) over restating it.
 
@@ -107,7 +107,7 @@ Settings dialogs for each module live in `*Settings.kt` files (e.g., `BudgetSett
 - Firebase sync is fire-and-forget inside `viewModelScope.launch` via `safeCloudCall()`; local Room is always updated first. As of 2026-07-09 (Issue #4) this convention is actually implemented across all ViewModels — see "Authentication & Cloud Sync" above.
 - Light/dark mode detection in Composables uses the extension `Color.isLight()` defined at the bottom of `MainActivity.kt`.
 - The `BudgetViewModel` auto-creates `BudgetItem` entries for due subscriptions on init and on any subscription change (`checkAndAddSubscriptions()`), which back-fills one `BudgetItem` per elapsed month if a subscription's renewal date is far in the past.
-- "Xh Ym" duration formatting goes through the shared `formatDurationCompact(millis)` in `DurationFormat.kt` (consolidated 2026-07-09; `StudyTrackerView.formatTime` remains separate — it's the HH:MM:SS stopwatch display, a different format). Periodic 30s polling loops go through `CoroutineScope.launchPeriodic()` in `PeriodicRefresh.kt`. Currency rendering goes through `formatCurrency()` in `CurrencyFormat.kt` (fixed-USD until a currency setting exists; Issue #36). User-facing UI strings live in `res/values/strings.xml` via `stringResource()` (Issue #36) — add new UI strings there, keyed by screen (`budget_*`, `reminders_*`, shared `action_*`). contentDescriptions were extracted too (Issue #53, PR #54): every one is now either `stringResource(R.string.cd_*)` or `null` for decorative icons — keep it that way.
+- "Xh Ym" duration formatting goes through the shared `formatDurationCompact(millis)` in `DurationFormat.kt` (consolidated 2026-07-09; `StudyTrackerView.formatTime` remains separate — it's the HH:MM:SS stopwatch display, a different format). Periodic 30s polling loops go through `CoroutineScope.launchPeriodic()` in `PeriodicRefresh.kt`. Currency rendering goes through `formatCurrency(amount, currencyCode)` in `CurrencyFormat.kt` — the code comes from the user's stored setting (`CurrencySettings` DataStore, surfaced by `AppSettingsSheet`'s `CurrencyDropdown` and synced to Firestore; Issue #76). USD is only the fallback `parseCurrencySafe()`/`defaultCurrencyCode()` land on, not a hardcoded default. Duration axis labels for the trend charts go through `durationAxisLabels()` in the same file as `formatDurationCompact` (Issue #97). User-facing UI strings live in `res/values/strings.xml` via `stringResource()` (Issue #36) — add new UI strings there, keyed by screen (`budget_*`, `reminders_*`, shared `action_*`). contentDescriptions were extracted too (Issue #53, PR #54): every one is now either `stringResource(R.string.cd_*)` or `null` for decorative icons — keep it that way.
 
 ## Known Issues (as of 2026-07-07 audit)
 
@@ -226,7 +226,38 @@ New home surface: a GitHub-contribution-style heatmap scoring each day by the fr
 - Fixed Google Sign-In actually completing on real devices: `AuthViewModel.handleSignIn()` only matched `credential is GoogleIdTokenCredential`, but Credential Manager's `GetGoogleIdOption` returns the token wrapped in a `CustomCredential` (type `TYPE_GOOGLE_ID_TOKEN_CREDENTIAL`) that must be unwrapped via `GoogleIdTokenCredential.createFrom(credential.data)` — Google's documented pattern. The old check never matched, so sign-in silently no-op'd: Credential Manager returned a response, `auth.signInWithCredential()` was never called, no error shown, no Firebase auth state persisted. Confirmed via live device testing (adb logs + inspecting the app's private storage for auth persistence files) before and after the fix. Verified working end-to-end on a physical Samsung device post-fix.
 - Filed the remaining Known Issues above as GitHub issues [#3](https://github.com/aadityad12/Trackers/issues/3)–[#10](https://github.com/aadityad12/Trackers/issues/10), numbered in recommended fix order.
 
+## 2026-07-23 Bug / accessibility / docs pass (issues #97, #105–#120)
+
+Each fix is one commit on `fix/issues-2026-07-23`, built + unit-tested and driven on the
+**Android emulator** (`Medium_Phone` AVD, adb — CLAUDE.md's older "no device available" notes are
+obsolete; see the `android-emulator-available` memory).
+
+- **`NavRoutes.kt` is the intent-extra gate (#105)** — `MainActivity` is exported, so the
+  `navigate_to` extra is untrusted input; `sanitizeRequestedRoute()` drops anything outside
+  `APP_ROUTES` before it reaches `navController.navigate()`, which used to crash the app on cold
+  start (`am start … --es navigate_to garbage`). **Add every new NavHost route to `APP_ROUTES`.**
+- **Accessibility (#106, #107)** — heatmap cells, theme swatches, and category-colour swatches were
+  text-free clickable `Box`es invisible to TalkBack. They now carry `semantics { contentDescription }`
+  (+ `selectable(selected = …)` for the two pickers). Colour names come from the pure
+  `swatchHueOf()` classifier in `ColorUtils.kt`. Verify a11y work with
+  `adb shell uiautomator dump` and grep for `content-desc`.
+- **Goal-completion race (#111)** — `DashboardViewModel` now holds a `togglesInFlight` set keyed on
+  `(goalCloudId, date)`, the same guard `ReminderViewModel` uses (#25).
+- **Localization pass (#112, #114, #119, #120)** — recurrence enums render via
+  `frequencyLabelRes()`/`endTypeLabelRes()` in `Recurrence.kt`; the pie legend uses
+  `budget_uncategorized`/`budget_pending_legend`; the heatmap weekday header derives from
+  `DayOfWeek.getDisplayName(NARROW, locale)`. **Subscription budget items no longer persist the
+  `"[Subscription] "` prefix** — `BudgetViewModel` stores the bare name and the label is composed at
+  render time; `BudgetItemTitle.kt` holds the `-1L` category sentinel plus `budgetItemBaseTitle()`,
+  which strips the prefix from rows written by older builds (and from Firestore copies).
+- **Theme tokens (#113)** and the Today-card `loaded` gate (#118) are one-liners in the same spirit.
+- **Chart axis labels (#97)** — `durationAxisLabels()` in `DurationFormat.kt` picks one unit (h m /
+  m / s) from the max, so a sub-minute week no longer renders three "0m"s.
+- **Bonus crash fix** — revoking Usage Access on a running app made `queryEvents` throw
+  `SecurityException` and killed the process on the next 30s poll; `calculateAppSpecificUsage()`
+  now catches it and reports no usage.
+
 ## Developer's own TODO list (from notes.txt, still current)
 - Budget: "Extract from receipt" (OCR/receipt-parsing) — not started.
 - Study Timer: "Always on display" support — not started.
-- Ideas floated for later: home screen widgets, animated ring-chart visualizations (Canvas-based, like `ApexLogo`), biometric lock for Budget/Notes, Gemini API "Daily Apex Tip" insights.
+- Ideas floated for later: home screen widgets (Glance — issues #44, #130–#132), animated ring-chart visualizations (Canvas-based, like `ApexLogo`), Gemini API "Daily Apex Tip" insights. (Biometric lock shipped 2026-07-20 — see the Issue #45 section above.)
