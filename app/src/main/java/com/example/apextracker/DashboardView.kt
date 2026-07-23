@@ -22,14 +22,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -189,16 +192,21 @@ private fun GoalStatusRow(status: GoalStatus, onToggle: (Goal) -> Unit) {
     }
 }
 
-private val WEEKDAY_LETTERS = listOf("S", "M", "T", "W", "T", "F", "S")
 private val GUTTER_WIDTH = 30.dp
 private val HEATCELL_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM d, yyyy")
 
 @Composable
 private fun HeatmapSection(weeks: List<List<DayCell?>>, today: LocalDate, onDayClick: (LocalDate) -> Unit) {
+    // Sunday-first to match the grid the ViewModel builds, but the letters themselves come from the
+    // locale rather than a hardcoded English list (Issue #120), same pattern as BudgetCalendar.
+    val locale = LocalLocale.current.platformLocale
+    val weekdayLetters = remember(locale) {
+        (0L..6L).map { DayOfWeek.SUNDAY.plus(it).getDisplayName(TextStyle.NARROW, locale) }
+    }
     Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
             Spacer(Modifier.width(GUTTER_WIDTH))
-            WEEKDAY_LETTERS.forEach { letter ->
+            weekdayLetters.forEach { letter ->
                 Text(
                     letter,
                     modifier = Modifier.weight(1f),
