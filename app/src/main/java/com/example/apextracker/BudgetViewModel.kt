@@ -4,6 +4,9 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -23,6 +26,16 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
     private val firebaseManager = FirebaseManager(application)
 
     val allItems: Flow<List<BudgetItem>> = budgetDao.getAllItems()
+
+    // Transaction-list search (Issue #123). Filtering happens in the view over the month's
+    // already-loaded items, same as Notes/Reminders — see ListSearch.kt.
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    fun setSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+
     val allCategories: Flow<List<Category>> = categoryDao.getAllCategories()
     val allSubscriptions: Flow<List<Subscription>> = subscriptionDao.getAllSubscriptions()
 

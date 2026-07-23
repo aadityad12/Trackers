@@ -169,6 +169,10 @@
     <string name="reminders_edit_title">Edit Reminder</string>
     <string name="reminders_set_all_day">Set as All Day</string>
     <string name="reminders_all_day">All Day</string>
+    <string name="reminders_search_hint">Search reminders</string>
+    <string name="reminders_search_no_results">No reminders match \"%1$s\"</string>
+    <string name="budget_search_hint">Search transactions</string>
+    <string name="budget_search_no_results">No transactions match \"%1$s\"</string>
     <string name="reminders_recurrence_prefix">Recurrence: %1$s</string>
     <string name="reminders_recurrence_none">None</string>
     <string name="reminders_remove_recurrence">Remove Recurrence</string>
