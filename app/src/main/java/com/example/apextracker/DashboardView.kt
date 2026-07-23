@@ -23,11 +23,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -183,6 +186,7 @@ private fun GoalStatusRow(status: GoalStatus, onToggle: (Goal) -> Unit) {
 
 private val WEEKDAY_LETTERS = listOf("S", "M", "T", "W", "T", "F", "S")
 private val GUTTER_WIDTH = 30.dp
+private val HEATCELL_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM d, yyyy")
 
 @Composable
 private fun HeatmapSection(weeks: List<List<DayCell?>>, today: LocalDate, onDayClick: (LocalDate) -> Unit) {
@@ -229,6 +233,17 @@ private fun HeatCell(cell: DayCell?, today: LocalDate, modifier: Modifier, onDay
     ) {
         if (cell != null) {
             val isToday = cell.date == today
+            // The cell has no text content of its own, so TalkBack needs the date and completion
+            // state spelled out — tapping a cell is the only way into the day sheet (Issue #106).
+            val dateText = cell.date.format(HEATCELL_DATE_FORMAT)
+            val label = stringResource(
+                R.string.cd_dashboard_day,
+                if (isToday) stringResource(R.string.cd_dashboard_day_today, dateText) else dateText,
+                cell.fraction?.let {
+                    stringResource(R.string.cd_dashboard_day_percent, (it * 100).roundToInt())
+                } ?: stringResource(R.string.cd_dashboard_day_untracked)
+            )
+            val actionLabel = stringResource(R.string.cd_dashboard_day_action)
             Box(
                 Modifier
                     .fillMaxSize()
@@ -238,7 +253,8 @@ private fun HeatCell(cell: DayCell?, today: LocalDate, modifier: Modifier, onDay
                         if (isToday) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp))
                         else Modifier
                     )
-                    .clickable { onDayClick(cell.date) }
+                    .clickable(onClickLabel = actionLabel) { onDayClick(cell.date) }
+                    .semantics { contentDescription = label }
             )
         }
     }

@@ -292,4 +292,8 @@
     <string name="goal_rule_spend_over">Spend over %1$s</string>
     <string name="goal_rule_subject_suffix"> · %1$s</string>
     <string name="cd_dashboard_day">%1$s: %2$s</string>
+    <string name="cd_dashboard_day_today">Today, %1$s</string>
+    <string name="cd_dashboard_day_untracked">no goals tracked</string>
+    <string name="cd_dashboard_day_percent">%1$d percent of goals completed</string>
+    <string name="cd_dashboard_day_action">View this day\'s goals</string>
 </resources>
