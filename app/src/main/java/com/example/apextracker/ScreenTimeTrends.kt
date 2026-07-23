@@ -74,9 +74,11 @@ fun ScreenTimeTrendsCard(sessions: List<ScreenTimeSession>) {
                         verticalArrangement = Arrangement.SpaceBetween,
                         horizontalAlignment = Alignment.End
                     ) {
-                        Text(formatDurationCompact(maxTotal), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                        Text(formatDurationCompact(maxTotal / 2), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                        Text(formatDurationCompact(0L), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                        // One unit for all three labels, chosen from the max — a sub-minute
+                        // busiest day used to collapse to three "0m"s (Issue #97).
+                        durationAxisLabels(maxTotal).forEach { label ->
+                            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                        }
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     val primaryColor = MaterialTheme.colorScheme.primary

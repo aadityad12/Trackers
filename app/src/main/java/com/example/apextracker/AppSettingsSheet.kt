@@ -3,6 +3,7 @@ package com.example.apextracker
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,8 +22,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.annotation.StringRes
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.apextracker.ui.theme.ApexTheme
@@ -193,6 +197,10 @@ fun AppSettingsSheet(
                         ApexTheme.ROYAL -> RoyalPrimary
                     }
 
+                    // Colour is the only thing distinguishing these swatches, so name the theme
+                    // for TalkBack and expose the selected state (Issue #107).
+                    val isSelected = currentTheme == theme
+                    val themeLabel = stringResource(R.string.cd_theme_swatch, stringResource(themeNameRes(theme)))
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
@@ -201,10 +209,11 @@ fun AppSettingsSheet(
                             .background(themeColor.copy(alpha = 0.1f))
                             .border(
                                 width = 2.dp,
-                                color = if (currentTheme == theme) themeColor else Color.Transparent,
+                                color = if (isSelected) themeColor else Color.Transparent,
                                 shape = CircleShape
                             )
-                            .clickable { onThemeChange(theme) }
+                            .selectable(selected = isSelected, onClick = { onThemeChange(theme) })
+                            .semantics { contentDescription = themeLabel }
                     ) {
                         Box(
                             modifier = Modifier
@@ -240,4 +249,13 @@ fun AppSettingsSheet(
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
+}
+
+/** Display name for an accent theme — used for the swatches' accessibility labels (Issue #107). */
+@StringRes
+private fun themeNameRes(theme: ApexTheme): Int = when (theme) {
+    ApexTheme.EMERALD -> R.string.theme_name_emerald
+    ApexTheme.OCEAN -> R.string.theme_name_ocean
+    ApexTheme.MAGMA -> R.string.theme_name_magma
+    ApexTheme.ROYAL -> R.string.theme_name_royal
 }

@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.ViewAgenda
@@ -53,6 +54,9 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
     var itemToEdit by remember { mutableStateOf<BudgetItem?>(null) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showCalendar by rememberSaveable { mutableStateOf(false) }
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val overallLimit by viewModel.overallMonthlyLimit.collectAsState(initial = null)
+    var isSearching by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val resources = LocalResources.current
@@ -64,16 +68,45 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
         topBar = {
             CenterAlignedTopAppBar(
                 title = { 
-                    Text(stringResource(R.string.budget_title), 
-                        style = MaterialTheme.typography.titleSmall
-                    )
+                    if (isSearching) {
+                        TextField(
+                            value = searchQuery,
+                            onValueChange = { viewModel.setSearchQuery(it) },
+                            placeholder = { Text(stringResource(R.string.budget_search_hint)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            )
+                        )
+                    } else {
+                        Text(stringResource(R.string.budget_title), 
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                    }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBackToMenu) {
-                        Icon(Icons.Default.Home, contentDescription = stringResource(R.string.cd_home))
+                    IconButton(onClick = {
+                        if (isSearching) {
+                            isSearching = false
+                            viewModel.setSearchQuery("")
+                        } else onBackToMenu()
+                    }) {
+                        Icon(
+                            if (isSearching) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Home,
+                            contentDescription = if (isSearching) stringResource(R.string.cd_back) else stringResource(R.string.cd_home)
+                        )
                     }
                 },
                 actions = {
+                    if (!isSearching) {
+                        IconButton(onClick = { isSearching = true }) {
+                            Icon(Icons.Default.Search, contentDescription = stringResource(R.string.cd_search))
+                        }
+                    }
                     IconButton(onClick = { showCalendar = !showCalendar }) {
                         Icon(
                             if (showCalendar) Icons.Default.ViewAgenda else Icons.Default.CalendarMonth,
@@ -121,7 +154,9 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
                     items, categories, subscriptions,
                     selectedMonth = selectedMonth,
                     onMonthChange = { selectedMonth = it },
-                    onEdit = { itemToEdit = it }
+                    onEdit = { itemToEdit = it },
+                    searchQuery = searchQuery,
+                    overallLimit = overallLimit
                 )
             }
         }
@@ -141,7 +176,7 @@ fun BudgetTrackerApp(onBackToMenu: () -> Unit, viewModel: BudgetViewModel = view
         if (itemToEdit != null) {
             BudgetItemDialog(
                 title = stringResource(R.string.budget_edit_item_title),
-                initialTitle = itemToEdit!!.title,
+                initialTitle = budgetItemBaseTitle(itemToEdit!!.title),
                 initialAmount = itemToEdit!!.amount.toString(),
                 initialDescription = itemToEdit!!.description ?: "",
                 initialDate = itemToEdit!!.date,
@@ -203,17 +238,24 @@ fun BudgetOverview(
     subscriptions: List<Subscription>,
     selectedMonth: YearMonth,
     onMonthChange: (YearMonth) -> Unit,
-    onEdit: (BudgetItem) -> Unit
+    onEdit: (BudgetItem) -> Unit,
+    searchQuery: String = "",
+    overallLimit: Double? = null
 ) {
     val availableMonths = items.map { YearMonth.from(it.date) }.distinct().sortedDescending()
     val monthToDisplay = if (availableMonths.contains(selectedMonth)) selectedMonth 
                          else availableMonths.firstOrNull() ?: selectedMonth
 
     val monthItems = items.filter { YearMonth.from(it.date) == monthToDisplay }
+    // Only the transactions list narrows to the query — the totals, pie, limits and trend chart
+    // keep describing the whole month, which is what those summaries are for (Issue #123).
+    val categoryNames = categories.associate { it.id to it.name }
+    val visibleItems = filterBudgetItems(monthItems, categoryNames, searchQuery)
     
     val pendingSubs = if (monthToDisplay == YearMonth.now()) {
         subscriptions.filter { sub ->
-            YearMonth.from(sub.renewalDate) == monthToDisplay && sub.renewalDate.isAfter(LocalDate.now())
+            YearMonth.from(sub.renewalDate) == monthToDisplay && sub.renewalDate.isAfter(LocalDate.now()) &&
+                matchesQuery(searchQuery, sub.name, sub.notes)
         }
     } else emptyList()
 
@@ -237,10 +279,15 @@ fun BudgetOverview(
             // Sits above trends: a cap the user set is more actionable than history.
             // Gated here as well as inside the card so the spacer doesn't leave a gap
             // for users who have never set a limit.
-            if (categories.any { it.effectiveMonthlyLimit() != null }) {
+            if (categories.any { it.effectiveMonthlyLimit() != null } || overallLimit != null) {
                 item {
                     Spacer(modifier = Modifier.height(12.dp))
-                    BudgetLimitsCard(items = items, categories = categories, month = monthToDisplay)
+                    BudgetLimitsCard(
+                        items = items,
+                        categories = categories,
+                        month = monthToDisplay,
+                        overallLimit = overallLimit
+                    )
                 }
             }
 
@@ -249,8 +296,8 @@ fun BudgetOverview(
                 BudgetTrendsCard(items = items, selectedMonth = monthToDisplay, onMonthSelected = onMonthChange)
             }
 
-            if (monthItems.isNotEmpty() || pendingSubs.isNotEmpty()) {
-                val sortedItems = monthItems.sortedByDescending { it.date }
+            if (visibleItems.isNotEmpty() || pendingSubs.isNotEmpty()) {
+                val sortedItems = visibleItems.sortedByDescending { it.date }
                 
                 item { 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -278,7 +325,14 @@ fun BudgetOverview(
             } else {
                 item {
                     Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                        Text(stringResource(R.string.budget_no_data), color = MaterialTheme.colorScheme.outline)
+                        Text(
+                            if (searchQuery.isNotBlank() && monthItems.isNotEmpty()) {
+                                stringResource(R.string.budget_search_no_results, searchQuery)
+                            } else {
+                                stringResource(R.string.budget_no_data)
+                            },
+                            color = MaterialTheme.colorScheme.outline
+                        )
                     }
                 }
             }
@@ -383,6 +437,10 @@ fun ExpensePieChartModern(
     val chartData = mutableListOf<Triple<String, Float, Color>>()
     // Hoisted out of the loop: it reads MaterialTheme, and the value is identical for every -1L item.
     val subsCategory = subscriptionsCategory()
+    // Legend labels are user-facing text, so they go through strings.xml like the rest of the
+    // screen (Issue #114) rather than being baked in as English literals.
+    val uncategorizedLabel = stringResource(R.string.budget_uncategorized)
+    val pendingLabel = stringResource(R.string.budget_pending_legend)
 
     itemsByCategory.forEach { (catId, catItems) ->
         val category = if (catId == -1L) {
@@ -392,11 +450,11 @@ fun ExpensePieChartModern(
         }
         val color = category?.let { parseColorSafe(it.colorHex) } ?: Color.Gray
         val amount = catItems.sumOf { it.amount }
-        chartData.add(Triple(category?.name ?: "Uncategorized", amount.toFloat(), color))
+        chartData.add(Triple(category?.name ?: uncategorizedLabel, amount.toFloat(), color))
     }
 
     if (totalPending > 0) {
-        chartData.add(Triple("Pending", totalPending.toFloat(), MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f)))
+        chartData.add(Triple(pendingLabel, totalPending.toFloat(), MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f)))
     }
 
     val sortedData = chartData.sortedByDescending { it.second }

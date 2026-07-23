@@ -12,6 +12,7 @@ import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Process
 import android.provider.Settings
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -20,6 +21,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.util.Calendar
+
+private const val TAG = "ScreenTimeViewModel"
 
 data class AppUsageInfo(
     val packageName: String,
@@ -206,7 +209,16 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
         val startTime = calendar.timeInMillis
         val endTime = System.currentTimeMillis()
 
-        val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
+        // Usage access can be revoked while the app is running (Settings > Special app access),
+        // and queryEvents then throws SecurityException from the binder — which crashed the app
+        // on the next 30s poll. Treat a revoked permission as "no data"; the screen already has a
+        // permission banner driven by checkPermission().
+        val usageEvents = try {
+            usageStatsManager.queryEvents(startTime, endTime)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Usage access unavailable; reporting no app usage", e)
+            return@withContext emptyMap()
+        }
         val event = UsageEvents.Event()
 
         val events = mutableListOf<ForegroundEvent>()

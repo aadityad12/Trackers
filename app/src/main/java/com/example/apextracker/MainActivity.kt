@@ -98,7 +98,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        pendingRoute = intent.getStringExtra(EXTRA_NAVIGATE_TO)
+        pendingRoute = sanitizeRequestedRoute(intent.getStringExtra(EXTRA_NAVIGATE_TO))
     }
 
     override fun onStop() {
@@ -113,7 +113,7 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        pendingRoute = intent?.getStringExtra(EXTRA_NAVIGATE_TO)
+        pendingRoute = sanitizeRequestedRoute(intent?.getStringExtra(EXTRA_NAVIGATE_TO))
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED

@@ -3,6 +3,7 @@ package com.example.apextracker
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,8 +18,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.res.stringResource
@@ -39,6 +41,8 @@ fun BudgetSettingsDialog(
 ) {
     var activeSubScreen by remember { mutableStateOf<String?>(null) }
     var showExportDialog by remember { mutableStateOf(false) }
+    var showOverallLimitDialog by remember { mutableStateOf(false) }
+    val overallLimit by viewModel.overallMonthlyLimit.collectAsState(initial = null)
     val context = LocalContext.current
     val securitySettings = remember { SecuritySettings(context) }
     val budgetLocked by securitySettings.budgetLockEnabled.collectAsState(initial = false)
@@ -83,6 +87,11 @@ fun BudgetSettingsDialog(
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             BudgetSettingsItem(stringResource(R.string.budget_manage_categories)) { activeSubScreen = "categories" }
                             BudgetSettingsItem(stringResource(R.string.budget_manage_subscriptions)) { activeSubScreen = "subscriptions" }
+                            BudgetSettingsItem(
+                                stringResource(R.string.budget_overall_limit_setting),
+                                value = overallLimit?.let { formatCurrency(it, LocalCurrencyCode.current) }
+                                    ?: stringResource(R.string.budget_limit_none)
+                            ) { showOverallLimitDialog = true }
                             BudgetSettingsItem(stringResource(R.string.budget_export_csv)) { showExportDialog = true }
                             HorizontalDivider()
                             ModuleLockSetting(
@@ -101,6 +110,17 @@ fun BudgetSettingsDialog(
             }
         }
     )
+
+    if (showOverallLimitDialog) {
+        OverallLimitDialog(
+            current = overallLimit,
+            onDismiss = { showOverallLimitDialog = false },
+            onSave = {
+                viewModel.setOverallMonthlyLimit(it)
+                showOverallLimitDialog = false
+            }
+        )
+    }
 
     if (showExportDialog) {
         BudgetExportScopeDialog(
@@ -141,7 +161,7 @@ fun BudgetExportScopeDialog(onDismiss: () -> Unit, onExport: (scopeToCurrentMont
 }
 
 @Composable
-fun BudgetSettingsItem(label: String, onClick: () -> Unit) {
+fun BudgetSettingsItem(label: String, value: String? = null, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = MaterialTheme.shapes.medium,
@@ -153,7 +173,13 @@ fun BudgetSettingsItem(label: String, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(label, style = MaterialTheme.typography.bodyLarge)
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (value != null) {
+                    Text(value, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline)
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
+            }
         }
     }
 }
@@ -316,16 +342,24 @@ fun ColorGrid(colors: List<String>, selectedColor: String, onColorSelected: (Str
         colors.chunked(columns).forEach { rowColors ->
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 rowColors.forEach { color ->
+                    // Swatches have no text of their own; name the hue so TalkBack can tell them
+                    // apart, and mark the selected one (Issue #107).
+                    val isSelected = selectedColor == color
+                    val colorLabel = stringResource(
+                        R.string.cd_color_swatch,
+                        stringResource(swatchHueLabelRes(swatchHueOf(color)))
+                    )
                     Box(
                         modifier = Modifier
                             .size(32.dp)
                             .background(parseColorSafe(color), CircleShape)
                             .border(
-                                width = if (selectedColor == color) 2.dp else 1.dp,
-                                color = if (selectedColor == color) MaterialTheme.colorScheme.primary else Color.LightGray.copy(alpha = 0.5f),
+                                width = if (isSelected) 2.dp else 1.dp,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                                 shape = CircleShape
                             )
-                            .clickable { onColorSelected(color) }
+                            .selectable(selected = isSelected, onClick = { onColorSelected(color) })
+                            .semantics { contentDescription = colorLabel }
                     )
                 }
             }
@@ -444,6 +478,43 @@ fun SubscriptionDialog(
         },
         confirmButton = {
             Button(onClick = { if (name.isNotBlank()) onConfirm(name, amount.toDoubleOrNull() ?: 0.0, date, notes.ifBlank { null }); onDismiss() }) {
+                Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } }
+    )
+}
+
+/**
+ * Sets the overall monthly spending ceiling (Issue #125). Blank/zero clears it — same
+ * normalization as the per-category cap field, via [parseMonthlyLimitInput].
+ */
+@Composable
+fun OverallLimitDialog(current: Double?, onDismiss: () -> Unit, onSave: (Double?) -> Unit) {
+    var text by remember { mutableStateOf(current?.let { formatLimitForInput(it) } ?: "") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.budget_overall_limit_setting)) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text(stringResource(R.string.budget_overall_limit_label)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.budget_limit_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onSave(parseMonthlyLimitInput(text)) }) {
                 Text(stringResource(R.string.action_save))
             }
         },

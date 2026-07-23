@@ -43,6 +43,9 @@ import java.time.format.DateTimeFormatter
 fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewModel()) {
     val activeReminders by viewModel.activeReminders.collectAsState(initial = emptyList())
     val completedReminders by viewModel.completedReminders.collectAsState(initial = emptyList())
+    val allActiveReminders by viewModel.allActiveReminders.collectAsState(initial = emptyList())
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    var isSearching by remember { mutableStateOf(false) }
     val notificationsEnabled by viewModel.notificationsEnabled.collectAsState(initial = true)
     val allDayTime by viewModel.allDayNotificationTime.collectAsState(initial = LocalTime.NOON)
     val offset by viewModel.specificTimeOffsetMinutes.collectAsState(initial = 30)
@@ -91,6 +94,21 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                 title = { 
                     if (isSelectionMode) {
                         Text(stringResource(R.string.reminders_selected_count, selectedCompletedIds.size), style = MaterialTheme.typography.titleSmall)
+                    } else if (isSearching) {
+                        // Same in-top-bar search field Notes uses (Issue #123).
+                        TextField(
+                            value = searchQuery,
+                            onValueChange = { viewModel.setSearchQuery(it) },
+                            placeholder = { Text(stringResource(R.string.reminders_search_hint)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            )
+                        )
                     } else {
                         Text(stringResource(R.string.reminders_title), 
                             style = MaterialTheme.typography.titleSmall
@@ -106,7 +124,12 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                             Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_exit_selection))
                         }
                     } else {
-                        IconButton(onClick = onBackToMenu) {
+                        IconButton(onClick = {
+                            if (isSearching) {
+                                isSearching = false
+                                viewModel.setSearchQuery("")
+                            } else onBackToMenu()
+                        }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                         }
                     }
@@ -120,7 +143,10 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                         }) {
                             Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.cd_delete_selected))
                         }
-                    } else {
+                    } else if (!isSearching) {
+                        IconButton(onClick = { isSearching = true }) {
+                            Icon(Icons.Default.Search, contentDescription = stringResource(R.string.cd_search))
+                        }
                         IconButton(onClick = { showSettingsDialog = true }) {
                             Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.menu_settings))
                         }
@@ -201,7 +227,16 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Text(stringResource(R.string.reminders_all_done), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+                            // Distinguish "nothing left to do" from "nothing matched the search".
+                            Text(
+                                if (searchQuery.isNotBlank() && allActiveReminders.isNotEmpty()) {
+                                    stringResource(R.string.reminders_search_no_results, searchQuery)
+                                } else {
+                                    stringResource(R.string.reminders_all_done)
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.outline
+                            )
                         }
                     }
                 }
@@ -442,7 +477,7 @@ fun ReminderEditDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(stringResource(R.string.reminders_recurrence_prefix, recurrence?.frequency?.name ?: stringResource(R.string.reminders_recurrence_none)), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.reminders_recurrence_prefix, recurrence?.frequency?.let { stringResource(frequencyLabelRes(it)) } ?: stringResource(R.string.reminders_recurrence_none)), style = MaterialTheme.typography.bodyMedium)
                     TextButton(onClick = { showRecurrencePicker = true }) {
                         Text(stringResource(if (recurrence == null) R.string.action_set else R.string.action_change))
                     }

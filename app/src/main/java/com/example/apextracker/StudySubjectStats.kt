@@ -55,3 +55,22 @@ fun knownSubjects(sessions: List<StudySession>): List<String> =
         .distinctBy { it.lowercase() }
         .sortedBy { it.lowercase() }
         .toList()
+
+/**
+ * Parses the hours/minutes fields of the manual-entry dialog (Issue #122) into a duration in
+ * seconds. Blank means zero, so "2h" and "90m" are both valid shorthand and minutes above 59 just
+ * roll into hours. Returns null when either field isn't a non-negative whole number (which the
+ * dialog treats as "can't save yet"); zero is a legitimate result — it clears that day's entry.
+ */
+fun parseManualDurationSeconds(hoursText: String, minutesText: String): Long? {
+    val hours = parseNonNegativeInt(hoursText) ?: return null
+    val minutes = parseNonNegativeInt(minutesText) ?: return null
+    return hours * 3600L + minutes * 60L
+}
+
+private fun parseNonNegativeInt(text: String): Long? {
+    val trimmed = text.trim()
+    if (trimmed.isEmpty()) return 0L
+    val value = trimmed.toLongOrNull() ?: return null
+    return if (value < 0) null else value
+}

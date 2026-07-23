@@ -4,6 +4,9 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -23,6 +26,24 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
     private val firebaseManager = FirebaseManager(application)
 
     val allItems: Flow<List<BudgetItem>> = budgetDao.getAllItems()
+
+    // Transaction-list search (Issue #123). Filtering happens in the view over the month's
+    // already-loaded items, same as Notes/Reminders — see ListSearch.kt.
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    fun setSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+
+    // Overall monthly spending ceiling (Issue #125) — a DataStore pref, not a DB row; see BudgetPrefs.
+    private val budgetPrefs = BudgetPrefs(application)
+    val overallMonthlyLimit: Flow<Double?> = budgetPrefs.overallMonthlyLimit
+
+    fun setOverallMonthlyLimit(limit: Double?) {
+        viewModelScope.launch { budgetPrefs.setOverallMonthlyLimit(limit) }
+    }
+
     val allCategories: Flow<List<Category>> = categoryDao.getAllCategories()
     val allSubscriptions: Flow<List<Subscription>> = subscriptionDao.getAllSubscriptions()
 
@@ -50,7 +71,9 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
 
                     while (currentRenewal.isBefore(today) || currentRenewal.isEqual(today)) {
                         val item = BudgetItem(
-                            title = "[Subscription] ${updatedSub.name}",
+                            // Just the name: the "[Subscription]" label is composed at render
+                            // time from strings.xml so it localizes (Issue #119).
+                            title = updatedSub.name,
                             amount = updatedSub.amount,
                             description = updatedSub.notes,
                             date = currentRenewal,
