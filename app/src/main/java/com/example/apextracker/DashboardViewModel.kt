@@ -144,6 +144,9 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         )
     }
 
+    /** (goalCloudId, date) pairs whose toggle is mid-flight — see [toggleGoalForDate]. */
+    private val togglesInFlight = mutableSetOf<Pair<String, LocalDate>>()
+
     /** Toggle today's completion for a MANUAL goal (AUTO goals are computed, never toggled). */
     fun toggleTodayGoal(goal: Goal) = toggleGoalForDate(goal, LocalDate.now())
 
@@ -155,16 +158,26 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         if (goal.type != GoalType.MANUAL || goal.cloudId.isEmpty()) return
         if (goal.startDate.isAfter(date)) return
         if (goal.archivedDate != null && !date.isBefore(goal.archivedDate)) return
+        // Double-tapping the checklist would otherwise launch two coroutines that both read the
+        // same pre-write state, so one tap gets swallowed or immediately undone (Issue #111).
+        // Same guard as ReminderViewModel.toggleCompletion; keyed on the completion's own
+        // (goalCloudId, date) primary key. Only touched from the main thread.
+        val key = goal.cloudId to date
+        if (!togglesInFlight.add(key)) return
         viewModelScope.launch {
-            val existing = completionDao.getByGoalAndDate(goal.cloudId, date)
-            val completion = GoalCompletion(
-                goalCloudId = goal.cloudId,
-                date = date,
-                done = !(existing?.done ?: false),
-                modifiedAt = System.currentTimeMillis()
-            )
-            completionDao.upsert(completion)
-            safeCloudCall(TAG, "pushGoalCompletion") { firebaseManager.pushGoalCompletion(completion) }
+            try {
+                val existing = completionDao.getByGoalAndDate(goal.cloudId, date)
+                val completion = GoalCompletion(
+                    goalCloudId = goal.cloudId,
+                    date = date,
+                    done = !(existing?.done ?: false),
+                    modifiedAt = System.currentTimeMillis()
+                )
+                completionDao.upsert(completion)
+                safeCloudCall(TAG, "pushGoalCompletion") { firebaseManager.pushGoalCompletion(completion) }
+            } finally {
+                togglesInFlight.remove(key)
+            }
         }
     }
 
