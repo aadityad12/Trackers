@@ -3,6 +3,7 @@ package com.example.apextracker
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,6 +20,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.res.stringResource
@@ -316,16 +319,24 @@ fun ColorGrid(colors: List<String>, selectedColor: String, onColorSelected: (Str
         colors.chunked(columns).forEach { rowColors ->
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 rowColors.forEach { color ->
+                    // Swatches have no text of their own; name the hue so TalkBack can tell them
+                    // apart, and mark the selected one (Issue #107).
+                    val isSelected = selectedColor == color
+                    val colorLabel = stringResource(
+                        R.string.cd_color_swatch,
+                        stringResource(swatchHueLabelRes(swatchHueOf(color)))
+                    )
                     Box(
                         modifier = Modifier
                             .size(32.dp)
                             .background(parseColorSafe(color), CircleShape)
                             .border(
-                                width = if (selectedColor == color) 2.dp else 1.dp,
-                                color = if (selectedColor == color) MaterialTheme.colorScheme.primary else Color.LightGray.copy(alpha = 0.5f),
+                                width = if (isSelected) 2.dp else 1.dp,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.LightGray.copy(alpha = 0.5f),
                                 shape = CircleShape
                             )
-                            .clickable { onColorSelected(color) }
+                            .selectable(selected = isSelected, onClick = { onColorSelected(color) })
+                            .semantics { contentDescription = colorLabel }
                     )
                 }
             }
