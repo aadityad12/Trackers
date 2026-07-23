@@ -284,6 +284,7 @@
     <string name="goal_update">Save</string>
     <string name="dashboard_auto_met">Met</string>
     <string name="dashboard_auto_unmet">Not yet</string>
+    <string name="dashboard_window_rolling">Last 12 months</string>
     <string name="dashboard_legend_less">Less</string>
     <string name="dashboard_legend_more">More</string>
     <string name="dashboard_add_goal">Add goal</string>

@@ -3,6 +3,9 @@ package com.example.apextracker
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,6 +19,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +50,8 @@ fun DashboardView(
 ) {
     val state by viewModel.uiState.collectAsState()
     var selectedDay by remember { mutableStateOf<LocalDate?>(null) }
+    // null = rolling last 12 months (the default window), otherwise a specific calendar year.
+    var selectedYear by rememberSaveable { mutableStateOf<Int?>(null) }
 
     Scaffold(
         topBar = {
@@ -76,17 +82,29 @@ fun DashboardView(
             )
         }
     ) { innerPadding ->
-        LazyColumn(
+        // A Column (not a LazyColumn): the heatmap takes whatever height is left and sizes its
+        // cells to fit, so a full year is on screen with no page scrolling (Issue #128).
+        Column(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .background(MaterialTheme.colorScheme.background)
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            item { StreakRow(state.perfectStreak) }
-            item { TodayCard(state.todayGoals, state.loaded, onToggle = viewModel::toggleTodayGoal, onManageGoals = onManageGoals) }
-            item { HeatmapSection(state.weeks, state.today, onDayClick = { selectedDay = it }) }
+            StreakRow(state.perfectStreak)
+            // The checklist is capped and scrolls internally so a long goal list can never push
+            // the graph off screen.
+            Box(Modifier.heightIn(max = 220.dp).verticalScroll(rememberScrollState())) {
+                TodayCard(state.todayGoals, state.loaded, onToggle = viewModel::toggleTodayGoal, onManageGoals = onManageGoals)
+            }
+            HeatmapSection(
+                state = state,
+                selectedYear = selectedYear,
+                onSelectYear = { selectedYear = it },
+                onDayClick = { selectedDay = it },
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 
@@ -193,56 +211,125 @@ private fun GoalStatusRow(status: GoalStatus, onToggle: (Goal) -> Unit) {
 }
 
 private val GUTTER_WIDTH = 30.dp
+private val HEADER_ROW_HEIGHT = 16.dp
+private val MAX_CELL = 20.dp
+private val MIN_CELL = 7.dp
+private val GRID_SPACING = 8.dp
+private val MONTH_LABEL_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM")
 private val HEATCELL_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM d, yyyy")
 
 @Composable
-private fun HeatmapSection(weeks: List<List<DayCell?>>, today: LocalDate, onDayClick: (LocalDate) -> Unit) {
-    // Sunday-first to match the grid the ViewModel builds, but the letters themselves come from the
+private fun HeatmapSection(
+    state: DashboardUiState,
+    selectedYear: Int?,
+    onSelectYear: (Int?) -> Unit,
+    onDayClick: (LocalDate) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val today = state.today
+    val (rangeStart, rangeEnd) = remember(selectedYear, today) { heatmapRange(selectedYear, today) }
+    val weeks = remember(state, rangeStart, rangeEnd) {
+        heatmapWeeks(rangeStart, rangeEnd) { date -> state.dayCell(date) }
+    }
+    val years = remember(state.earliestGoalStart, today) { heatmapYears(state.earliestGoalStart, today) }
+
+    // Sunday-first to match the rows heatmapWeeks builds, but the letters themselves come from the
     // locale rather than a hardcoded English list (Issue #120), same pattern as BudgetCalendar.
     val locale = LocalLocale.current.platformLocale
     val weekdayLetters = remember(locale) {
         (0L..6L).map { DayOfWeek.SUNDAY.plus(it).getDisplayName(TextStyle.NARROW, locale) }
     }
-    Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
-            Spacer(Modifier.width(GUTTER_WIDTH))
-            weekdayLetters.forEach { letter ->
-                Text(
-                    letter,
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline
-                )
-            }
-        }
 
-        weeks.forEach { week ->
-            val monthLabel = week.firstOrNull { it?.date?.dayOfMonth == 1 }?.date
-                ?.format(DateTimeFormatter.ofPattern("MMM"))?.uppercase() ?: ""
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.width(GUTTER_WIDTH)) {
-                    if (monthLabel.isNotEmpty()) {
-                        Text(monthLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline, fontSize = 9.sp)
+    Column(modifier.fillMaxWidth()) {
+        YearSelector(years = years, selectedYear = selectedYear, onSelectYear = onSelectYear)
+        Spacer(Modifier.height(8.dp))
+
+        // Cells shrink to whatever fits the remaining height, capped so a short window (a new
+        // user's first weeks) doesn't blow them up into giant squares.
+        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.TopCenter) {
+            val rows = weeks.size.coerceAtLeast(1)
+            // Height left for the cells once the weekday header, the legend and their spacing are
+            // accounted for. Floored at MIN_CELL so cells stay visible/tappable on a short screen —
+            // the grid scrolls in that case rather than being clipped.
+            val byHeight = (maxHeight - HEADER_ROW_HEIGHT - GRID_SPACING) / rows
+            val byWidth = (maxWidth - GUTTER_WIDTH) / 7
+            val cellSize = minOf(byWidth, byHeight, MAX_CELL).coerceAtLeast(MIN_CELL)
+            val gridWidth = GUTTER_WIDTH + cellSize * 7
+
+            Column(Modifier.width(gridWidth).verticalScroll(rememberScrollState())) {
+                Row(Modifier.fillMaxWidth().height(HEADER_ROW_HEIGHT)) {
+                    Spacer(Modifier.width(GUTTER_WIDTH))
+                    weekdayLetters.forEach { letter ->
+                        Text(
+                            letter,
+                            modifier = Modifier.weight(1f),
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
                     }
                 }
-                week.forEach { cell ->
-                    HeatCell(cell, today, Modifier.weight(1f), onDayClick)
+
+                weeks.forEach { week ->
+                    val monthLabel = week.firstOrNull { it?.date?.dayOfMonth == 1 }?.date
+                        ?.format(MONTH_LABEL_FORMAT)?.uppercase() ?: ""
+                    // Fixed row height: the month label must not inflate the twelve rows it
+                    // lands on, or a full year stops fitting on screen.
+                    Row(Modifier.fillMaxWidth().height(cellSize), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.width(GUTTER_WIDTH), contentAlignment = Alignment.CenterEnd) {
+                            if (monthLabel.isNotEmpty()) {
+                                Text(
+                                    monthLabel,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                    maxLines = 1,
+                                    fontSize = 8.sp,
+                                    lineHeight = 8.sp,
+                                    modifier = Modifier.padding(end = 4.dp)
+                                )
+                            }
+                        }
+                        week.forEach { cell ->
+                            HeatCell(cell, today, Modifier.size(cellSize), onDayClick)
+                        }
+                    }
                 }
+
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        // Outside the grid column: it is only ~7 cells wide, which would wrap the legend's text.
+        Spacer(Modifier.height(4.dp))
         HeatmapLegend()
+    }
+}
+
+/** "Last 12 months" plus one chip per calendar year with history (Issue #128). */
+@Composable
+private fun YearSelector(years: List<Int>, selectedYear: Int?, onSelectYear: (Int?) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        FilterChip(
+            selected = selectedYear == null,
+            onClick = { onSelectYear(null) },
+            label = { Text(stringResource(R.string.dashboard_window_rolling)) }
+        )
+        years.forEach { year ->
+            FilterChip(
+                selected = selectedYear == year,
+                onClick = { onSelectYear(year) },
+                label = { Text(year.toString()) }
+            )
+        }
     }
 }
 
 @Composable
 private fun HeatCell(cell: DayCell?, today: LocalDate, modifier: Modifier, onDayClick: (LocalDate) -> Unit) {
     Box(
-        modifier = modifier
-            .aspectRatio(1f)
-            .padding(2.dp)
+        modifier = modifier.padding(1.dp)
     ) {
         if (cell != null) {
             val isToday = cell.date == today
