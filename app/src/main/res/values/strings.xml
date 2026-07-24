@@ -146,6 +146,16 @@
     <string name="screen_trends_empty">No screen time recorded yet</string>
     <string name="screen_show_all">Show all (%1$d)</string>
     <string name="screen_show_less">Show less</string>
+    <string name="screen_limit_set">Limit: %1$dm</string>
+    <string name="screen_limit_over">Over limit · %1$dm</string>
+    <string name="screen_limit_dialog_title">Daily limit — %1$s</string>
+    <string name="screen_limit_dialog_desc">Get a notification when this app passes the limit today.</string>
+    <string name="screen_limit_minutes_label">Minutes per day</string>
+    <string name="screen_limit_clear">Remove limit</string>
+    <string name="screen_limit_channel_name">Screen time limits</string>
+    <string name="screen_limit_channel_desc">Alerts when an app passes its daily limit</string>
+    <string name="screen_limit_notif_title">%1$s daily limit reached</string>
+    <string name="screen_limit_notif_text">You\'ve used more than %1$d minutes today.</string>
     <string name="screen_no_usage">No app usage detected</string>
     <string name="screen_no_history">No history recorded yet</string>
     <string name="screen_total_apex_time">Total Apex Time</string>

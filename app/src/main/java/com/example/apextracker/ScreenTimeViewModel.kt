@@ -29,13 +29,19 @@ data class AppUsageInfo(
     val appName: String,
     val icon: Drawable?,
     val isExcluded: Boolean,
-    val usageTimeMillis: Long = 0L
-)
+    val usageTimeMillis: Long = 0L,
+    // Per-app daily budget in minutes, or null if uncapped (Issue #124).
+    val limitMinutes: Int? = null
+) {
+    val isOverLimit: Boolean
+        get() = limitMinutes != null && isOverLimit(usageTimeMillis, limitMinutes)
+}
 
 class ScreenTimeViewModel(application: Application) : AndroidViewModel(application) {
     private val database = AppDatabase.getDatabase(application)
     private val screenTimeDao = database.screenTimeSessionDao()
     private val excludedAppDao = database.excludedAppDao()
+    private val appUsageLimitDao = database.appUsageLimitDao()
     private val firebaseManager = FirebaseManager(application)
 
     private val _hasPermission = MutableStateFlow(false)
@@ -56,16 +62,43 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
     private val _excludedApps = excludedAppDao.getExcludedApps()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    private val _limits = appUsageLimitDao.getLimits()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     private val _installedApps = MutableStateFlow<List<AppUsageInfo>>(emptyList())
-    val installedApps: StateFlow<List<AppUsageInfo>> = combine(_installedApps, _excludedApps, _todayScreenTimeMillis) { installed, excluded, _ ->
+    val installedApps: StateFlow<List<AppUsageInfo>> = combine(_installedApps, _excludedApps, _limits, _todayScreenTimeMillis) { installed, excluded, limits, _ ->
         val currentStats = calculateAppSpecificUsage()
+        val limitByPackage = limits.associate { it.packageName to it.dailyLimitMinutes }
         installed.map { app ->
             app.copy(
                 isExcluded = excluded.any { it.packageName == app.packageName },
-                usageTimeMillis = currentStats[app.packageName] ?: 0L
+                usageTimeMillis = currentStats[app.packageName] ?: 0L,
+                limitMinutes = limitByPackage[app.packageName]
             )
         }.sortedByDescending { it.usageTimeMillis }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Sets (or updates) a per-app daily limit; a non-positive value clears it (Issue #124). */
+    fun setAppLimit(app: AppUsageInfo, minutes: Int?) {
+        viewModelScope.launch {
+            if (minutes == null || minutes <= 0) {
+                appUsageLimitDao.clearLimit(app.packageName)
+            } else {
+                // Preserve lastNotifiedDate on edit so raising a limit mid-day doesn't re-alert; a
+                // genuinely new/lowered limit that's already exceeded will alert on the next poll
+                // because today's usage still clears the bar and the guard only blocks same-day
+                // repeats for the *existing* record.
+                val existing = appUsageLimitDao.getLimit(app.packageName)
+                appUsageLimitDao.setLimit(
+                    AppUsageLimit(
+                        packageName = app.packageName,
+                        dailyLimitMinutes = minutes,
+                        lastNotifiedDate = existing?.lastNotifiedDate
+                    )
+                )
+            }
+        }
+    }
 
     init {
         checkPermission()
@@ -183,7 +216,24 @@ class ScreenTimeViewModel(application: Application) : AndroidViewModel(applicati
         if (firebaseManager.userId != null) {
             firebaseManager.uploadScreenTimeSession(ScreenTimeSession(date = LocalDate.now(), durationMillis = totalFilteredTime))
         }
+        checkAppLimits(usageMap)
         refreshAggregatedUsage(totalFilteredTime)
+    }
+
+    /**
+     * Alerts once per day for each app that has crossed its per-app limit (Issue #124). Reads the
+     * DAO directly (not the throttled _limits flow) so a limit set moments ago is seen immediately,
+     * and stamps lastNotifiedDate so the 30s loop doesn't re-alert until tomorrow.
+     */
+    private suspend fun checkAppLimits(usageMap: Map<String, Long>) {
+        val today = LocalDate.now().toString()
+        val limits = appUsageLimitDao.getLimitsOneShot()
+        val nameByPackage = _installedApps.value.associate { it.packageName to it.appName }
+        limitsToNotify(usageMap, limits, today).forEach { limit ->
+            val appName = nameByPackage[limit.packageName] ?: limit.packageName
+            postAppLimitNotification(getApplication(), limit.packageName, appName, limit.dailyLimitMinutes)
+            appUsageLimitDao.markNotified(limit.packageName, today)
+        }
     }
 
     private fun refreshAggregatedUsage(currentDeviceMillis: Long) {

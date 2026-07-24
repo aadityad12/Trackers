@@ -84,7 +84,18 @@ val MIGRATION_16_17 = object : Migration(16, 17) {
     }
 }
 
-@Database(entities = [BudgetItem::class, Category::class, Subscription::class, StudySession::class, ScreenTimeSession::class, ExcludedApp::class, Reminder::class, Note::class, Goal::class, GoalCompletion::class], version = 17, exportSchema = true)
+// Issue #124: per-app daily screen-time limits. New table, additive.
+val MIGRATION_17_18 = object : Migration(17, 18) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `app_usage_limits` (`packageName` TEXT NOT NULL, " +
+                "`dailyLimitMinutes` INTEGER NOT NULL, `lastNotifiedDate` TEXT, " +
+                "PRIMARY KEY(`packageName`))"
+        )
+    }
+}
+
+@Database(entities = [BudgetItem::class, Category::class, Subscription::class, StudySession::class, ScreenTimeSession::class, ExcludedApp::class, Reminder::class, Note::class, Goal::class, GoalCompletion::class, AppUsageLimit::class], version = 18, exportSchema = true)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun budgetDao(): BudgetDao
@@ -97,6 +108,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao
     abstract fun goalDao(): GoalDao
     abstract fun goalCompletionDao(): GoalCompletionDao
+    abstract fun appUsageLimitDao(): AppUsageLimitDao
 
     companion object {
         @Volatile
@@ -109,7 +121,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "budget_database"
                 )
-                .addMigrations(MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
+                .addMigrations(MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance
