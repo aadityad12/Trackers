@@ -3,6 +3,8 @@ package com.example.apextracker
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -17,6 +19,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
@@ -40,6 +44,19 @@ fun ScreenTimeTrackerView(onBackToMenu: () -> Unit, viewModel: ScreenTimeViewMod
     
     var showSettings by remember { mutableStateOf(false) }
     var showAllApps by rememberSaveable { mutableStateOf(false) }
+    // Non-null while the per-app limit dialog is open (Issue #124).
+    var appForLimit by remember { mutableStateOf<AppUsageInfo?>(null) }
+
+    appForLimit?.let { app ->
+        AppLimitDialog(
+            app = app,
+            onDismiss = { appForLimit = null },
+            onSave = { minutes ->
+                viewModel.setAppLimit(app, minutes)
+                appForLimit = null
+            }
+        )
+    }
 
     LifecycleEffect(onEvent = { viewModel.checkPermission() })
 
@@ -118,7 +135,7 @@ fun ScreenTimeTrackerView(onBackToMenu: () -> Unit, viewModel: ScreenTimeViewMod
                     } else {
                         val visibleApps = if (showAllApps) activeApps else activeApps.take(5)
                         items(visibleApps, key = { it.packageName }) { app ->
-                            AppUsageItem(app)
+                            AppUsageItem(app, onClick = { appForLimit = app })
                         }
                         if (activeApps.size > 5) {
                             item {
@@ -234,9 +251,9 @@ fun DeviceBreakdownItem(usage: DeviceSession) {
 }
 
 @Composable
-fun AppUsageItem(app: AppUsageInfo) {
+fun AppUsageItem(app: AppUsageInfo, onClick: () -> Unit = {}) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         app.icon?.let {
@@ -247,9 +264,66 @@ fun AppUsageItem(app: AppUsageInfo) {
             )
         }
         Spacer(modifier = Modifier.width(12.dp))
-        Text(app.appName, modifier = Modifier.weight(1f), maxLines = 1)
-        Text(formatDurationCompact(app.usageTimeMillis), fontWeight = FontWeight.Bold)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(app.appName, maxLines = 1)
+            app.limitMinutes?.let { minutes ->
+                // Limit badge (Issue #124): "Limit: 30m" normally, "Over limit · 30m" in error red.
+                Text(
+                    text = if (app.isOverLimit) {
+                        stringResource(R.string.screen_limit_over, minutes)
+                    } else {
+                        stringResource(R.string.screen_limit_set, minutes)
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (app.isOverLimit) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+        Text(
+            formatDurationCompact(app.usageTimeMillis),
+            fontWeight = FontWeight.Bold,
+            color = if (app.isOverLimit) MaterialTheme.colorScheme.error else Color.Unspecified
+        )
     }
+}
+
+/** Set or clear a per-app daily screen-time limit (Issue #124). */
+@Composable
+fun AppLimitDialog(app: AppUsageInfo, onDismiss: () -> Unit, onSave: (Int?) -> Unit) {
+    var text by remember { mutableStateOf(app.limitMinutes?.toString() ?: "") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.screen_limit_dialog_title, app.appName)) },
+        text = {
+            Column {
+                Text(stringResource(R.string.screen_limit_dialog_desc), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it.filter { c -> c.isDigit() }.take(4) },
+                    label = { Text(stringResource(R.string.screen_limit_minutes_label)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onSave(text.toIntOrNull()) }) {
+                Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = {
+            Row {
+                if (app.limitMinutes != null) {
+                    TextButton(onClick = { onSave(null) }) {
+                        Text(stringResource(R.string.screen_limit_clear), color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+            }
+        }
+    )
 }
 
 @Composable

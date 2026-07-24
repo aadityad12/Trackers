@@ -37,7 +37,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         _searchQuery.value = query
     }
 
-    fun addNote(title: String, content: String) {
+    fun addNote(title: String, content: String, attachments: String = "") {
         viewModelScope.launch {
             val now = LocalDateTime.now()
             val note = Note(
@@ -45,7 +45,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 content = content,
                 createdAt = now,
                 modifiedAt = now,
-                cloudId = UUID.randomUUID().toString()
+                cloudId = UUID.randomUUID().toString(),
+                attachments = attachments
             )
             noteDao.insert(note)
             safeCloudCall(TAG, "push note") {
@@ -113,6 +114,9 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deletePermanently(note: Note) {
         viewModelScope.launch {
+            // The note's own image files are device-local and unreferenced once the row is gone,
+            // so clean them up rather than leaking them in app storage (Issue #127).
+            attachmentList(note.attachments).forEach { deleteNoteAttachment(getApplication(), it) }
             noteDao.deletePermanently(note)
             safeCloudCall(TAG, "hard-delete note") {
                 firebaseManager.hardDeleteNote(note.cloudId)
