@@ -19,13 +19,14 @@ class ReminderWorker(
         val reminderName = inputData.getString("reminder_name") ?: "Reminder"
         val reminderDescription = inputData.getString("reminder_description")
         val reminderId = inputData.getLong("reminder_id", 0)
+        val priority = parseReminderPriority(inputData.getString("reminder_priority"))
 
-        sendNotification(reminderName, reminderDescription, reminderId)
+        sendNotification(reminderName, reminderDescription, reminderId, priority)
 
         return Result.success()
     }
 
-    private fun sendNotification(name: String, description: String?, id: Long) {
+    private fun sendNotification(name: String, description: String?, id: Long, priority: ReminderPriority) {
         val channelId = "reminder_channel"
         val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
@@ -87,7 +88,7 @@ class ReminderWorker(
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle("Reminder: $name")
             .setContentText(description ?: "Your task is due!")
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(notificationPriorityFor(priority))
             .setAutoCancel(true)
             .setContentIntent(contentIntent)
             .addAction(android.R.drawable.checkbox_on_background, applicationContext.getString(R.string.reminders_notif_done), completePendingIntent)
@@ -95,4 +96,15 @@ class ReminderWorker(
 
         notificationManager.notify(id.toInt(), builder.build())
     }
+}
+
+/**
+ * Maps a reminder's importance onto the notification priority (Issue #126). Every notification
+ * used to be PRIORITY_HIGH regardless of the task — a low-importance reminder should not
+ * heads-up over whatever the user is doing.
+ */
+fun notificationPriorityFor(priority: ReminderPriority): Int = when (priority) {
+    ReminderPriority.HIGH -> NotificationCompat.PRIORITY_HIGH
+    ReminderPriority.NORMAL -> NotificationCompat.PRIORITY_DEFAULT
+    ReminderPriority.LOW -> NotificationCompat.PRIORITY_LOW
 }

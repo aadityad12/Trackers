@@ -43,6 +43,9 @@ import java.time.format.DateTimeFormatter
 fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewModel()) {
     val activeReminders by viewModel.activeReminders.collectAsState(initial = emptyList())
     val completedReminders by viewModel.completedReminders.collectAsState(initial = emptyList())
+    val allActiveReminders by viewModel.allActiveReminders.collectAsState(initial = emptyList())
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    var isSearching by remember { mutableStateOf(false) }
     val notificationsEnabled by viewModel.notificationsEnabled.collectAsState(initial = true)
     val allDayTime by viewModel.allDayNotificationTime.collectAsState(initial = LocalTime.NOON)
     val offset by viewModel.specificTimeOffsetMinutes.collectAsState(initial = 30)
@@ -91,6 +94,21 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                 title = { 
                     if (isSelectionMode) {
                         Text(stringResource(R.string.reminders_selected_count, selectedCompletedIds.size), style = MaterialTheme.typography.titleSmall)
+                    } else if (isSearching) {
+                        // Same in-top-bar search field Notes uses (Issue #123).
+                        TextField(
+                            value = searchQuery,
+                            onValueChange = { viewModel.setSearchQuery(it) },
+                            placeholder = { Text(stringResource(R.string.reminders_search_hint)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            )
+                        )
                     } else {
                         Text(stringResource(R.string.reminders_title), 
                             style = MaterialTheme.typography.titleSmall
@@ -106,7 +124,12 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                             Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_exit_selection))
                         }
                     } else {
-                        IconButton(onClick = onBackToMenu) {
+                        IconButton(onClick = {
+                            if (isSearching) {
+                                isSearching = false
+                                viewModel.setSearchQuery("")
+                            } else onBackToMenu()
+                        }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                         }
                     }
@@ -120,7 +143,10 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                         }) {
                             Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.cd_delete_selected))
                         }
-                    } else {
+                    } else if (!isSearching) {
+                        IconButton(onClick = { isSearching = true }) {
+                            Icon(Icons.Default.Search, contentDescription = stringResource(R.string.cd_search))
+                        }
                         IconButton(onClick = { showSettingsDialog = true }) {
                             Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.menu_settings))
                         }
@@ -201,7 +227,16 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Text(stringResource(R.string.reminders_all_done), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+                            // Distinguish "nothing left to do" from "nothing matched the search".
+                            Text(
+                                if (searchQuery.isNotBlank() && allActiveReminders.isNotEmpty()) {
+                                    stringResource(R.string.reminders_search_no_results, searchQuery)
+                                } else {
+                                    stringResource(R.string.reminders_all_done)
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.outline
+                            )
                         }
                     }
                 }
@@ -280,8 +315,8 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
             ReminderEditDialog(
                 title = stringResource(R.string.reminders_new_title),
                 onDismiss = { showAddDialog = false },
-                onConfirm = { name, date, time, description, recurrence ->
-                    viewModel.addReminder(name, date, time, description, recurrence)
+                onConfirm = { name, date, time, description, recurrence, priority ->
+                    viewModel.addReminder(name, date, time, description, recurrence, priority)
                     showAddDialog = false
                 }
             )
@@ -295,14 +330,16 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                 initialDate = reminderToEdit!!.date,
                 initialTime = reminderToEdit!!.time,
                 initialRecurrence = reminderToEdit!!.recurrence,
+                initialPriority = parseReminderPriority(reminderToEdit!!.priority),
                 onDismiss = { reminderToEdit = null },
-                onConfirm = { name, date, time, description, recurrence ->
+                onConfirm = { name, date, time, description, recurrence, priority ->
                     viewModel.updateReminder(reminderToEdit!!.copy(
                         name = name,
                         date = date,
                         time = time,
                         description = description,
-                        recurrence = recurrence
+                        recurrence = recurrence,
+                        priority = priority.name
                     ))
                     reminderToEdit = null
                 },
@@ -372,10 +409,12 @@ fun ReminderEditDialog(
     initialDate: LocalDate = LocalDate.now(),
     initialTime: LocalTime? = null,
     initialRecurrence: Recurrence? = null,
+    initialPriority: ReminderPriority = ReminderPriority.NORMAL,
     onDismiss: () -> Unit,
-    onConfirm: (String, LocalDate, LocalTime?, String, Recurrence?) -> Unit,
+    onConfirm: (String, LocalDate, LocalTime?, String, Recurrence?, ReminderPriority) -> Unit,
     onDelete: (() -> Unit)? = null
 ) {
+    var priority by remember { mutableStateOf(initialPriority) }
     var name by remember { mutableStateOf(initialName) }
     var description by remember { mutableStateOf(initialDescription) }
     var date by remember { mutableStateOf(initialDate) }
@@ -429,6 +468,19 @@ fun ReminderEditDialog(
                     }
                 }
                 
+                // Importance (Issue #126): orders the list within a day and sets the
+                // notification's priority.
+                Text(stringResource(R.string.reminders_priority_label), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ReminderPriority.entries.forEach { option ->
+                        FilterChip(
+                            selected = priority == option,
+                            onClick = { priority = option },
+                            label = { Text(stringResource(reminderPriorityLabelRes(option))) }
+                        )
+                    }
+                }
+
                 if (time != null) {
                     TextButton(onClick = { time = null }) {
                         Text(stringResource(R.string.reminders_set_all_day))
@@ -442,7 +494,7 @@ fun ReminderEditDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(stringResource(R.string.reminders_recurrence_prefix, recurrence?.frequency?.name ?: stringResource(R.string.reminders_recurrence_none)), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.reminders_recurrence_prefix, recurrence?.frequency?.let { stringResource(frequencyLabelRes(it)) } ?: stringResource(R.string.reminders_recurrence_none)), style = MaterialTheme.typography.bodyMedium)
                     TextButton(onClick = { showRecurrencePicker = true }) {
                         Text(stringResource(if (recurrence == null) R.string.action_set else R.string.action_change))
                     }
@@ -456,7 +508,7 @@ fun ReminderEditDialog(
         },
         confirmButton = {
             Button(
-                onClick = { if (name.isNotBlank()) onConfirm(name, date, time, description, recurrence) },
+                onClick = { if (name.isNotBlank()) onConfirm(name, date, time, description, recurrence, priority) },
                 enabled = name.isNotBlank()
             ) {
                 Text(stringResource(R.string.action_save))
@@ -613,6 +665,19 @@ fun ReminderItemModern(
                             tint = MaterialTheme.colorScheme.outline
                         )
                     }
+                    // Only non-default importance is marked — NORMAL is the vast majority and a
+                    // badge on every row would be noise (Issue #126).
+                    val priority = parseReminderPriority(reminder.priority)
+                    if (priority != ReminderPriority.NORMAL && !reminder.isCompleted) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(reminderPriorityLabelRes(priority)).uppercase(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Black,
+                            color = if (priority == ReminderPriority.HIGH) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outline
+                        )
+                    }
                 }
                 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
@@ -658,4 +723,12 @@ fun ReminderItemModern(
             }
         }
     }
+}
+
+/** Display name for a reminder priority (Issue #126). */
+@androidx.annotation.StringRes
+fun reminderPriorityLabelRes(priority: ReminderPriority): Int = when (priority) {
+    ReminderPriority.LOW -> R.string.reminders_priority_low
+    ReminderPriority.NORMAL -> R.string.reminders_priority_normal
+    ReminderPriority.HIGH -> R.string.reminders_priority_high
 }

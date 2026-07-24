@@ -21,6 +21,7 @@ object ReminderScheduler {
     const val EXTRA_REMINDER_ID = "reminder_id"
     const val EXTRA_REMINDER_NAME = "reminder_name"
     const val EXTRA_REMINDER_DESCRIPTION = "reminder_description"
+    const val EXTRA_REMINDER_PRIORITY = "reminder_priority"
 
     fun computeTriggerTime(
         reminder: Reminder,
@@ -80,7 +81,7 @@ object ReminderScheduler {
 
     fun schedule(context: Context, reminder: Reminder, triggerAtMillis: Long) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val pendingIntent = buildPendingIntent(context, reminder.id, reminder.name, reminder.description)
+        val pendingIntent = buildPendingIntent(context, reminder.id, reminder.name, reminder.description, reminder.priority)
 
         if (canScheduleExactAlarms(context)) {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
@@ -91,16 +92,23 @@ object ReminderScheduler {
 
     fun cancel(context: Context, reminderId: Long) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val pendingIntent = buildPendingIntent(context, reminderId, name = "", description = null)
+        val pendingIntent = buildPendingIntent(context, reminderId, name = "", description = null, priority = null)
         alarmManager.cancel(pendingIntent)
         pendingIntent.cancel()
     }
 
-    private fun buildPendingIntent(context: Context, reminderId: Long, name: String, description: String?): PendingIntent {
+    private fun buildPendingIntent(
+        context: Context,
+        reminderId: Long,
+        name: String,
+        description: String?,
+        priority: String?
+    ): PendingIntent {
         val intent = Intent(context, ReminderAlarmReceiver::class.java).apply {
             putExtra(EXTRA_REMINDER_ID, reminderId)
             putExtra(EXTRA_REMINDER_NAME, name)
             putExtra(EXTRA_REMINDER_DESCRIPTION, description)
+            putExtra(EXTRA_REMINDER_PRIORITY, priority)
         }
         return PendingIntent.getBroadcast(
             context,

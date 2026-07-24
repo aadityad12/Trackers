@@ -1,6 +1,7 @@
 package com.example.apextracker
 
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 
 /**
  * Pure scoring for the Dashboard heatmap — no Android, no Room, no coroutines — so every rule is
@@ -140,4 +141,53 @@ fun goalStreak(
         }
     }
     return streak
+}
+
+// --- Heatmap windowing (Issue #128) -------------------------------------------------------
+
+/** Sunday of [date]'s week — the heatmap's rows are Sunday-first. */
+fun weekSunday(date: LocalDate): LocalDate =
+    date.minusDays((date.dayOfWeek.value % 7).toLong()) // ISO MON=1..SUN=7; SUN%7=0
+
+/**
+ * The inclusive day range the heatmap shows: the rolling last 365 days when [year] is null
+ * (GitHub's default), otherwise that calendar year, never running past [today].
+ */
+fun heatmapRange(year: Int?, today: LocalDate): Pair<LocalDate, LocalDate> {
+    if (year == null) return today.minusDays(364) to today
+    val start = LocalDate.of(year, 1, 1)
+    val end = LocalDate.of(year, 12, 31)
+    return start to if (end.isAfter(today)) today else end
+}
+
+/**
+ * The years a user can switch to — every calendar year from [earliestStart] to [today], newest
+ * first. The current year is included; "rolling last 12 months" is offered separately by the UI.
+ */
+fun heatmapYears(earliestStart: LocalDate?, today: LocalDate): List<Int> {
+    val first = (earliestStart ?: today).year
+    return (today.year downTo first).toList()
+}
+
+/**
+ * Lays a day range out as heatmap rows: one row per week, **newest week first**, each row seven
+ * cells Sunday..Saturday. Cells outside the range (leading/trailing padding, and future days) are
+ * null so the grid stays rectangular. [cellFor] supplies each in-range day's cell.
+ */
+fun heatmapWeeks(
+    start: LocalDate,
+    end: LocalDate,
+    cellFor: (LocalDate) -> DayCell
+): List<List<DayCell?>> {
+    if (end.isBefore(start)) return emptyList()
+    val topSunday = weekSunday(end)
+    val firstSunday = weekSunday(start)
+    val weekCount = ChronoUnit.WEEKS.between(firstSunday, topSunday).toInt() + 1
+    return (0 until weekCount).map { row ->
+        val sunday = topSunday.minusWeeks(row.toLong())
+        (0 until 7).map { col ->
+            val date = sunday.plusDays(col.toLong())
+            if (date.isBefore(start) || date.isAfter(end)) null else cellFor(date)
+        }
+    }
 }

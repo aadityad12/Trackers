@@ -87,3 +87,32 @@ fun categoryLimitStatuses(
                 .thenBy { it.category.name }
         )
 }
+
+/** Spend-vs-ceiling for a whole month across every category (Issue #125). */
+data class OverallLimitStatus(
+    val spent: Double,
+    val limit: Double,
+    val fraction: Float,
+    val remaining: Double,
+    val isOver: Boolean
+)
+
+/**
+ * Spend-vs-ceiling for [month] across all items, or null when no ceiling is set.
+ *
+ * Deliberately counts *every* item, including uncategorized ones and auto-created subscription
+ * items — the point of an overall budget is "everything I spent this month", unlike the
+ * per-category caps which only see their own category. Same "at the cap exactly is not over"
+ * rule as [categoryLimitStatuses].
+ */
+fun overallLimitStatus(items: List<BudgetItem>, month: YearMonth, limit: Double?): OverallLimitStatus? {
+    val effective = limit?.takeIf { it > 0.0 && it.isFinite() } ?: return null
+    val spent = items.filter { YearMonth.from(it.date) == month }.sumOf { it.amount }
+    return OverallLimitStatus(
+        spent = spent,
+        limit = effective,
+        fraction = (spent / effective).toFloat().coerceIn(0f, 1f),
+        remaining = effective - spent,
+        isOver = spent > effective
+    )
+}

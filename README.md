@@ -34,10 +34,10 @@ A single Android app that consolidates the trackers you'd otherwise juggle acros
 
 ## Overview
 
-ApexTracker is an MVVM Android app organized as six independent tracker modules living behind a single bottom-level menu screen. Every module works fully offline first (Room is the source of truth); signing in with Google adds optional Firestore-backed sync so data can follow you across devices.
+ApexTracker is an MVVM Android app built around a goal-tracking **Dashboard** home — a contribution-graph-style heatmap scoring each day by the share of your active goals met — with six independent tracker modules reachable from a bottom navigation bar. Every module works fully offline first (Room is the source of truth); signing in with Google adds optional Firestore-backed sync so data can follow you across devices.
 
 <p align="center">
-  <img src="docs/screenshots/splash-to-menu.gif" alt="Splash screen transitioning into the main menu" width="260">
+  <img src="docs/screenshots/splash-to-menu.gif" alt="Splash screen transitioning into the dashboard" width="260">
 </p>
 
 ## Screenshots
@@ -57,6 +57,11 @@ ApexTracker is an MVVM Android app organized as six independent tracker modules 
 > Screenshots and GIFs above are placeholders — drop your own captures into `docs/screenshots/` using the same filenames (or update the paths) before publishing.
 
 ## Features
+
+**Dashboard (home)**
+- Goal-completion heatmap: each day is scored by the fraction of that day's active goals met, drawn as a GitHub-contribution-style grid in the active accent colour.
+- Goals are either *manual* (check them off yourself) or *automatic* — evaluated on read against the Study, Screen Time, and Budget data you already record (e.g. "screen time under 3h", "study over 1h of Maths", "spend under $20").
+- Perfect-day streak counter, a Today checklist, and a tap-a-day sheet for backfilling past days.
 
 **Budget Tracker**
 - Track one-off budget items alongside recurring subscriptions, grouped by category.
@@ -91,7 +96,8 @@ MainActivity
    -> AuthViewModel (Google Sign-In / FirebaseAuth)
    -> FirebaseManager (Firestore read/write)
    -> AppNavigation (NavHost)
-        -> menu
+        -> dashboard        -> DashboardView       -> DashboardViewModel  (start destination)
+        -> goals            -> GoalsView           -> DashboardViewModel
         -> overview        -> OverviewView        -> OverviewViewModel
         -> budget_tracker   -> BudgetTrackerView    -> BudgetViewModel
         -> study_tracker    -> StudyTrackerView     -> StudyViewModel
@@ -102,8 +108,12 @@ MainActivity
 
 Each module follows the same shape: a Compose `View`, an `AndroidViewModel`, and a Room `Entity` + `Dao` pair, all backed by a single `AppDatabase` singleton.
 
+The `dashboard`, `study_tracker`, `screen_time`, and `budget_tracker` routes are the bottom bar's tabs; `overview`, `reminders`, and `notes` sit behind its **More** sheet, and `goals` opens from the Dashboard. `budget_tracker` and `notes` are additionally wrapped in a biometric `LockGate` when the user enables the per-module lock.
+
 | Route | View | ViewModel | Entities |
 |---|---|---|---|
+| `dashboard` (home) | `DashboardView.kt` | `DashboardViewModel.kt` | `Goal`, `GoalCompletion` |
+| `goals` | `GoalsView.kt` | `DashboardViewModel.kt` | `Goal` |
 | `overview` | `OverviewView.kt` | `OverviewViewModel.kt` | Aggregates all DAOs |
 | `budget_tracker` | `BudgetTrackerView.kt` | `BudgetViewModel.kt` | `BudgetItem`, `Category`, `Subscription` |
 | `study_tracker` | `StudyTrackerView.kt` | `StudyViewModel.kt` | `StudySession` |
@@ -133,7 +143,7 @@ For the full, continuously updated architecture notes (including known limitatio
 
 ### Prerequisites
 
-- Android Studio (recent stable channel), which bundles a JDK 17+ JBR runtime.
+- Android Studio **Quail 1 (2026.1.1) or newer**, which bundles a JDK 17+ JBR runtime. The project is pinned to AGP 9.2.1; older Studio builds (e.g. Otter 3 / 2025.2.3) cap IDE sync at AGP 9.0.0 and fail with an "incompatible version" error. Command-line Gradle is unaffected — you can build, test, lint, and `installDebug` from the terminal on any Studio version.
 - An Android device or emulator running API 26 (Android 8.0) or higher.
 - JDK 17+ available on your `PATH` or via Android Studio's bundled JBR — the system default `java` on some machines is older and will not run Gradle for this project.
 
@@ -197,7 +207,8 @@ app/src/main/java/com/example/apextracker/
 ├── ScreenTime*.kt                # Screen time module
 ├── Reminder*.kt                 # Reminders module + AlarmManager/WorkManager plumbing
 ├── Note*.kt                     # Notes module
-├── Overview*.kt                 # Cross-module aggregate dashboard
+├── Dashboard*.kt                # Goal heatmap home (+ GoalsView.kt, DashboardScoring.kt)
+├── Overview*.kt                 # Cross-module aggregate summary
 ├── DurationFormat.kt            # Shared "Xh Ym" formatting
 ├── PeriodicRefresh.kt           # Shared 30s polling helper
 └── ui/theme/                    # Theme, color tokens, typography
@@ -205,12 +216,13 @@ app/src/main/java/com/example/apextracker/
 
 ## Roadmap
 
-- Route Budget Tracker's Firestore sync through the same `cloudId` scheme the rest of the app uses.
-- Move cloud sync from "once at sign-in" to continuous, per-entity sync.
-- Wire the currently-unreachable `BudgetCalendarView` into a navigable tab.
 - Receipt OCR for the Budget Tracker ("extract from receipt").
 - Always-on-display support for the Study Tracker.
-- Home screen widgets, Canvas-based ring-chart visualizations, biometric lock for Budget/Notes, and Gemini-powered daily insights.
+- Home screen widgets (Glance), Canvas-based ring-chart visualizations, and Gemini-powered daily insights.
+
+Cloud sync (per-mutation `cloudId`-keyed pushes plus live Firestore listeners), the navigable
+Budget calendar view, and the biometric lock for Budget/Notes have all shipped — see
+[CLAUDE.md](CLAUDE.md) for when and how.
 
 See [CLAUDE.md](CLAUDE.md) for the full, current list of known issues and their fix status.
 

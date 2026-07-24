@@ -180,6 +180,8 @@ internal fun parseSubscriptionDoc(data: Map<String, Any?>): Subscription = Subsc
     renewalDate = LocalDate.parse(data.requireString("renewalDate")),
     notes = data.optString("notes"),
     lastAddedDate = data.optString("lastAddedDate")?.let { LocalDate.parse(it) },
+    // Absent on pre-#79 docs, which are by definition active.
+    isPaused = data["isPaused"] as? Boolean ?: false,
     cloudId = data.requireCloudId(),
     modifiedAt = data.optLong("modifiedAt")
 )
@@ -205,7 +207,9 @@ internal fun parseReminderDoc(data: Map<String, Any?>, gson: Gson): Reminder = R
     occurrencesCompleted = (data["occurrencesCompleted"] as? Number)?.toInt() ?: 0,
     cloudId = data.requireCloudId(),
     parentCloudId = data.optString("parentCloudId"),
-    modifiedAt = data.optLong("modifiedAt")
+    modifiedAt = data.optLong("modifiedAt"),
+    // Absent on pre-#126 docs, and any unrecognized value normalizes to NORMAL.
+    priority = parseReminderPriority(data.optString("priority")).name
 )
 
 internal fun parseStudySessionDoc(data: Map<String, Any?>): StudySession = StudySession(
@@ -410,6 +414,7 @@ class FirebaseManager(private val context: Context) {
                     "renewalDate" to subscription.renewalDate.toString(),
                     "notes" to subscription.notes,
                     "lastAddedDate" to subscription.lastAddedDate?.toString(),
+                    "isPaused" to subscription.isPaused,
                     "modifiedAt" to subscription.modifiedAt
                 ),
                 SetOptions.merge()
@@ -488,6 +493,7 @@ class FirebaseManager(private val context: Context) {
                     "recurrence" to reminder.recurrence?.let { gson.toJson(it) },
                     "parentCloudId" to reminder.parentCloudId,
                     "occurrencesCompleted" to reminder.occurrencesCompleted,
+                    "priority" to reminder.priority,
                     "modifiedAt" to reminder.modifiedAt
                 ),
                 SetOptions.merge()

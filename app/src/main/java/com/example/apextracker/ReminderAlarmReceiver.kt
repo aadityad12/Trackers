@@ -12,11 +12,13 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         val reminderId = intent.getLongExtra(ReminderScheduler.EXTRA_REMINDER_ID, 0)
         val reminderName = intent.getStringExtra(ReminderScheduler.EXTRA_REMINDER_NAME) ?: "Reminder"
         val reminderDescription = intent.getStringExtra(ReminderScheduler.EXTRA_REMINDER_DESCRIPTION)
+        val reminderPriority = intent.getStringExtra(ReminderScheduler.EXTRA_REMINDER_PRIORITY)
 
         val inputData = Data.Builder()
             .putString("reminder_name", reminderName)
             .putString("reminder_description", reminderDescription)
             .putLong("reminder_id", reminderId)
+            .putString("reminder_priority", reminderPriority)
             .build()
 
         val workRequest = OneTimeWorkRequestBuilder<ReminderWorker>()

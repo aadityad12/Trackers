@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -23,8 +24,22 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
     private val settingsRepository = ReminderSettings(application)
     private val firebaseManager = FirebaseManager(application)
 
-    val activeReminders: Flow<List<Reminder>> = reminderDao.getActiveReminders()
-    val completedReminders: Flow<List<Reminder>> = reminderDao.getCompletedReminders()
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    // Unfiltered lists stay available so the UI can tell "no reminders" from "no matches",
+    // exactly like NoteViewModel's activeNotes/filteredNotes split (Issue #123).
+    val allActiveReminders: Flow<List<Reminder>> = reminderDao.getActiveReminders()
+    val allCompletedReminders: Flow<List<Reminder>> = reminderDao.getCompletedReminders()
+
+    val activeReminders: Flow<List<Reminder>> =
+        combine(allActiveReminders, _searchQuery) { list, query -> filterReminders(list, query) }
+    val completedReminders: Flow<List<Reminder>> =
+        combine(allCompletedReminders, _searchQuery) { list, query -> filterReminders(list, query) }
+
+    fun setSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
     
     val notificationsEnabled: Flow<Boolean> = settingsRepository.notificationsEnabled
     val allDayNotificationTime: Flow<LocalTime> = settingsRepository.allDayNotificationTime
@@ -35,7 +50,8 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
         date: LocalDate,
         time: LocalTime?,
         description: String?,
-        recurrence: Recurrence? = null
+        recurrence: Recurrence? = null,
+        priority: ReminderPriority = ReminderPriority.NORMAL
     ) {
         viewModelScope.launch {
             val reminder = Reminder(
@@ -44,6 +60,7 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
                 time = time,
                 description = description,
                 recurrence = recurrence,
+                priority = priority.name,
                 cloudId = UUID.randomUUID().toString(),
                 modifiedAt = System.currentTimeMillis()
             )

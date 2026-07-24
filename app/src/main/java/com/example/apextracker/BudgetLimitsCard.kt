@@ -24,9 +24,15 @@ private val BAR_HEIGHT = 8.dp
  * card would be permanent noise for users who never set one.
  */
 @Composable
-fun BudgetLimitsCard(items: List<BudgetItem>, categories: List<Category>, month: YearMonth) {
+fun BudgetLimitsCard(
+    items: List<BudgetItem>,
+    categories: List<Category>,
+    month: YearMonth,
+    overallLimit: Double? = null
+) {
     val statuses = remember(items, categories, month) { categoryLimitStatuses(items, categories, month) }
-    if (statuses.isEmpty()) return
+    val overall = remember(items, month, overallLimit) { overallLimitStatus(items, month, overallLimit) }
+    if (statuses.isEmpty() && overall == null) return
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -40,6 +46,9 @@ fun BudgetLimitsCard(items: List<BudgetItem>, categories: List<Category>, month:
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary
             )
+            // The whole-month ceiling reads first — it's the number the per-category rows add up
+            // against (Issue #125).
+            overall?.let { OverallLimitRow(it) }
             statuses.forEach { status ->
                 CategoryLimitRow(status)
             }
@@ -51,12 +60,27 @@ fun BudgetLimitsCard(items: List<BudgetItem>, categories: List<Category>, month:
 private fun CategoryLimitRow(status: CategoryLimitStatus) {
     // Over-limit switches to the theme's error color; under-limit keeps the category's own
     // color so the row still reads as that category at a glance.
-    val barColor = if (status.isOver) {
-        MaterialTheme.colorScheme.error
-    } else {
-        parseColorSafe(status.category.colorHex)
-    }
+    LimitRow(
+        label = status.category.name,
+        spent = status.spent,
+        limit = status.limit,
+        fraction = status.fraction,
+        remaining = status.remaining,
+        isOver = status.isOver,
+        barColor = if (status.isOver) MaterialTheme.colorScheme.error else parseColorSafe(status.category.colorHex)
+    )
+}
 
+@Composable
+private fun LimitRow(
+    label: String,
+    spent: Double,
+    limit: Double,
+    fraction: Float,
+    remaining: Double,
+    isOver: Boolean,
+    barColor: androidx.compose.ui.graphics.Color
+) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -64,15 +88,15 @@ private fun CategoryLimitRow(status: CategoryLimitStatus) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = status.category.name,
+                text = label,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.weight(1f)
             )
             Text(
                 text = stringResource(
                     R.string.budget_limit_spent_of,
-                    formatCurrency(status.spent, LocalCurrencyCode.current),
-                    formatCurrency(status.limit, LocalCurrencyCode.current)
+                    formatCurrency(spent, LocalCurrencyCode.current),
+                    formatCurrency(limit, LocalCurrencyCode.current)
                 ),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -80,7 +104,7 @@ private fun CategoryLimitRow(status: CategoryLimitStatus) {
         }
 
         LinearProgressIndicator(
-            progress = { status.fraction },
+            progress = { fraction },
             modifier = Modifier.fillMaxWidth().height(BAR_HEIGHT),
             color = barColor,
             trackColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -89,14 +113,28 @@ private fun CategoryLimitRow(status: CategoryLimitStatus) {
         )
 
         Text(
-            text = if (status.isOver) {
+            text = if (isOver) {
                 // remaining is negative once over; the string already says "over".
-                stringResource(R.string.budget_limit_over_by, formatCurrency(abs(status.remaining), LocalCurrencyCode.current))
+                stringResource(R.string.budget_limit_over_by, formatCurrency(abs(remaining), LocalCurrencyCode.current))
             } else {
-                stringResource(R.string.budget_limit_remaining, formatCurrency(status.remaining, LocalCurrencyCode.current))
+                stringResource(R.string.budget_limit_remaining, formatCurrency(remaining, LocalCurrencyCode.current))
             },
             style = MaterialTheme.typography.labelSmall,
-            color = if (status.isOver) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline
+            color = if (isOver) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline
         )
     }
+}
+
+/** The overall monthly ceiling, styled like a category row but named and coloured for the total. */
+@Composable
+private fun OverallLimitRow(status: OverallLimitStatus) {
+    LimitRow(
+        label = stringResource(R.string.budget_overall_limit_label_row),
+        spent = status.spent,
+        limit = status.limit,
+        fraction = status.fraction,
+        remaining = status.remaining,
+        isOver = status.isOver,
+        barColor = if (status.isOver) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    )
 }

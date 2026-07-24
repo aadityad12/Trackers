@@ -5,7 +5,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ReminderDao {
-    @Query("SELECT * FROM reminders WHERE isCompleted = 0 ORDER BY date ASC, COALESCE(time, '00:00:00') ASC")
+    @Query("SELECT * FROM reminders WHERE isCompleted = 0 ORDER BY date ASC, " +
+        // HIGH first within a day, then NORMAL, then LOW (Issue #126); time breaks the tie.
+        "CASE priority WHEN 'HIGH' THEN 0 WHEN 'LOW' THEN 2 ELSE 1 END ASC, " +
+        "COALESCE(time, '00:00:00') ASC")
     fun getActiveReminders(): Flow<List<Reminder>>
 
     @Query("SELECT * FROM reminders WHERE isCompleted = 1 ORDER BY date ASC, COALESCE(time, '00:00:00') ASC")

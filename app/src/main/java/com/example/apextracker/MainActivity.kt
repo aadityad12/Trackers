@@ -21,6 +21,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -98,7 +99,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        pendingRoute = intent.getStringExtra(EXTRA_NAVIGATE_TO)
+        pendingRoute = sanitizeRequestedRoute(intent.getStringExtra(EXTRA_NAVIGATE_TO))
     }
 
     override fun onStop() {
@@ -113,7 +114,7 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        pendingRoute = intent?.getStringExtra(EXTRA_NAVIGATE_TO)
+        pendingRoute = sanitizeRequestedRoute(intent?.getStringExtra(EXTRA_NAVIGATE_TO))
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -397,29 +398,61 @@ private val PRIMARY_ROUTES = setOf("dashboard", "study_tracker", "screen_time", 
 
 private data class BottomDest(val route: String, val icon: ImageVector, @StringRes val label: Int)
 
+/**
+ * Study · Screen | **Dashboard** | Budget · More — the home surface sits in the middle as a raised
+ * accent button rather than a flat left-most tab (Issue #129). Selection/navigation semantics are
+ * unchanged: every slot still calls [onSelectPrimary] (which does the popUpTo("dashboard")
+ * saveState dance) or [onMore].
+ */
 @Composable
 private fun AppBottomBar(
     currentRoute: String?,
     onSelectPrimary: (String) -> Unit,
     onMore: () -> Unit
 ) {
-    val primaries = remember {
+    val left = remember {
         listOf(
-            BottomDest("dashboard", Icons.Default.Dashboard, R.string.module_dashboard),
             BottomDest("study_tracker", Icons.Default.Timer, R.string.module_study),
-            BottomDest("screen_time", Icons.Default.Monitor, R.string.module_screen),
-            BottomDest("budget_tracker", Icons.Default.AccountBalanceWallet, R.string.module_budget)
+            BottomDest("screen_time", Icons.Default.Monitor, R.string.module_screen)
         )
     }
     NavigationBar(containerColor = MaterialTheme.colorScheme.background) {
-        primaries.forEach { dest ->
-            NavigationBarItem(
-                selected = currentRoute == dest.route,
-                onClick = { onSelectPrimary(dest.route) },
-                icon = { Icon(dest.icon, contentDescription = null) },
-                label = { Text(stringResource(dest.label)) }
-            )
+        left.forEach { dest -> FlatTab(dest, currentRoute, onSelectPrimary) }
+
+        // The center slot is a plain weighted Box, not a NavigationBarItem: it hosts the raised
+        // button and must not get the item's own ripple/indicator on top of it.
+        val onDashboard = currentRoute == "dashboard"
+        // No fillMaxHeight here: inside NavigationBar's row that resolves against an unbounded
+        // height constraint and stretches the whole bar over the screen.
+        Box(
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.Center
+        ) {
+            Surface(
+                onClick = { onSelectPrimary("dashboard") },
+                shape = CircleShape,
+                color = if (onDashboard) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.primaryContainer,
+                contentColor = if (onDashboard) MaterialTheme.colorScheme.onPrimary
+                else MaterialTheme.colorScheme.onPrimaryContainer,
+                shadowElevation = 6.dp,
+                modifier = Modifier.size(52.dp).offset(y = (-10).dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Dashboard,
+                        contentDescription = stringResource(R.string.module_dashboard),
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+            }
         }
+
+        FlatTab(
+            BottomDest("budget_tracker", Icons.Default.AccountBalanceWallet, R.string.module_budget),
+            currentRoute,
+            onSelectPrimary
+        )
         NavigationBarItem(
             selected = false,
             onClick = onMore,
@@ -427,6 +460,20 @@ private fun AppBottomBar(
             label = { Text(stringResource(R.string.nav_more)) }
         )
     }
+}
+
+@Composable
+private fun RowScope.FlatTab(
+    dest: BottomDest,
+    currentRoute: String?,
+    onSelectPrimary: (String) -> Unit
+) {
+    NavigationBarItem(
+        selected = currentRoute == dest.route,
+        onClick = { onSelectPrimary(dest.route) },
+        icon = { Icon(dest.icon, contentDescription = null) },
+        label = { Text(stringResource(dest.label)) }
+    )
 }
 
 /** The overflow sheet from the bottom bar's "More" tab — routes not given a primary slot. */

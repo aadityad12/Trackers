@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 /** One rendered heatmap cell. [fraction] is null when no goals were active that day (empty cell). */
@@ -26,12 +25,15 @@ data class GoalStatus(
 )
 
 data class DashboardUiState(
-    val weeks: List<List<DayCell?>>, // row 0 = current week (newest on top); inner list length 7 (Sun..Sat); null = future/padding
+    // The heatmap grid itself is built in the view from the raw inputs below, so switching the
+    // visible year (Issue #128) doesn't need a round-trip through the ViewModel.
     val todayGoals: List<GoalStatus>,
     val activeGoals: List<Goal>,
     val perfectStreak: Int,
     val today: LocalDate,
     val loaded: Boolean,
+    /** Earliest goal start, for offering per-year heatmap buttons; null when there are no goals. */
+    val earliestGoalStart: LocalDate? = null,
     // Raw inputs so any day's breakdown (the tap-a-day sheet) can be computed reactively off the
     // same state via dayGoalStatuses(), instead of re-querying Room.
     val allGoals: List<Goal> = emptyList(),
@@ -41,7 +43,7 @@ data class DashboardUiState(
     val spendByDate: Map<LocalDate, Double> = emptyMap()
 ) {
     companion object {
-        val EMPTY = DashboardUiState(emptyList(), emptyList(), emptyList(), 0, LocalDate.now(), loaded = false)
+        val EMPTY = DashboardUiState(emptyList(), emptyList(), 0, LocalDate.now(), loaded = false)
     }
 }
 
@@ -51,6 +53,12 @@ fun DashboardUiState.metricsFor(date: LocalDate): DayMetrics = DayMetrics(
     screenMillis = screenByDate[date] ?: 0L,
     spend = spendByDate[date] ?: 0.0
 )
+
+/** One heatmap cell for [date], computed from the same snapshot the day sheet uses. */
+fun DashboardUiState.dayCell(date: LocalDate): DayCell {
+    val fraction = dayFraction(date, allGoals, completions, metricsFor(date))
+    return DayCell(date, fraction, fraction?.let { intensityBucket(it) } ?: -1)
+}
 
 /** Live status of every goal active on [date] — powers the day-detail sheet (today or any past day). */
 fun DashboardUiState.dayGoalStatuses(date: LocalDate): List<GoalStatus> {
@@ -105,37 +113,17 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             )
         }
 
-        // Grid spans from the earliest goal's week down to today, clamped so a brand-new user still
-        // sees a proper graph and a long-running one doesn't render an unbounded history.
-        val topSunday = weekSunday(today)
-        val earliestStart = goals.minOfOrNull { it.startDate } ?: today
-        val spanWeeks = ChronoUnit.WEEKS.between(weekSunday(earliestStart), topSunday).toInt() + 1
-        val weekCount = spanWeeks.coerceIn(MIN_WEEKS, MAX_WEEKS)
-
-        val weeks = (0 until weekCount).map { r ->
-            val sunday = topSunday.minusWeeks(r.toLong())
-            (0 until 7).map { c ->
-                val date = sunday.plusDays(c.toLong())
-                if (date.isAfter(today)) {
-                    null
-                } else {
-                    val fraction = dayFraction(date, goals, completions, metricsFor(date))
-                    DayCell(date, fraction, fraction?.let { intensityBucket(it) } ?: -1)
-                }
-            }
-        }
-
         val active = activeGoalsOn(today, goals).sortedWith(compareBy({ it.sortOrder }, { it.id }))
         val todayGoals = active.map { GoalStatus(it, isGoalSatisfied(it, today, completions, metricsFor(today))) }
         val streak = perfectDayStreak(today, goals, completions, metricsFor)
 
         return DashboardUiState(
-            weeks = weeks,
             todayGoals = todayGoals,
             activeGoals = active,
             perfectStreak = streak,
             today = today,
             loaded = true,
+            earliestGoalStart = goals.minOfOrNull { it.startDate },
             allGoals = goals,
             completions = completions,
             studyByDate = studyByDate,
@@ -143,6 +131,9 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             spendByDate = spendByDate
         )
     }
+
+    /** (goalCloudId, date) pairs whose toggle is mid-flight — see [toggleGoalForDate]. */
+    private val togglesInFlight = mutableSetOf<Pair<String, LocalDate>>()
 
     /** Toggle today's completion for a MANUAL goal (AUTO goals are computed, never toggled). */
     fun toggleTodayGoal(goal: Goal) = toggleGoalForDate(goal, LocalDate.now())
@@ -155,16 +146,26 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         if (goal.type != GoalType.MANUAL || goal.cloudId.isEmpty()) return
         if (goal.startDate.isAfter(date)) return
         if (goal.archivedDate != null && !date.isBefore(goal.archivedDate)) return
+        // Double-tapping the checklist would otherwise launch two coroutines that both read the
+        // same pre-write state, so one tap gets swallowed or immediately undone (Issue #111).
+        // Same guard as ReminderViewModel.toggleCompletion; keyed on the completion's own
+        // (goalCloudId, date) primary key. Only touched from the main thread.
+        val key = goal.cloudId to date
+        if (!togglesInFlight.add(key)) return
         viewModelScope.launch {
-            val existing = completionDao.getByGoalAndDate(goal.cloudId, date)
-            val completion = GoalCompletion(
-                goalCloudId = goal.cloudId,
-                date = date,
-                done = !(existing?.done ?: false),
-                modifiedAt = System.currentTimeMillis()
-            )
-            completionDao.upsert(completion)
-            safeCloudCall(TAG, "pushGoalCompletion") { firebaseManager.pushGoalCompletion(completion) }
+            try {
+                val existing = completionDao.getByGoalAndDate(goal.cloudId, date)
+                val completion = GoalCompletion(
+                    goalCloudId = goal.cloudId,
+                    date = date,
+                    done = !(existing?.done ?: false),
+                    modifiedAt = System.currentTimeMillis()
+                )
+                completionDao.upsert(completion)
+                safeCloudCall(TAG, "pushGoalCompletion") { firebaseManager.pushGoalCompletion(completion) }
+            } finally {
+                togglesInFlight.remove(key)
+            }
         }
     }
 
@@ -254,12 +255,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    private fun weekSunday(date: LocalDate): LocalDate =
-        date.minusDays((date.dayOfWeek.value % 7).toLong()) // ISO MON=1..SUN=7; SUN%7=0
-
     companion object {
         private const val TAG = "DashboardViewModel"
-        private const val MIN_WEEKS = 13 // ~a quarter, so a new user still sees a real graph
-        private const val MAX_WEEKS = 53 // ~a year cap
     }
 }

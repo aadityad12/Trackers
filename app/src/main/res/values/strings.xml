@@ -72,17 +72,23 @@
     <string name="budget_new_category">New Category</string>
     <string name="budget_edit_category">Edit Category</string>
     <string name="budget_select_color">Select Color:</string>
-    <string name="budget_category_limits_title">CATEGORY LIMITS</string>
+    <string name="budget_category_limits_title">SPENDING LIMITS</string>
+    <string name="budget_overall_limit_label_row">All spending</string>
     <string name="budget_limit_spent_of">%1$s of %2$s</string>
     <string name="budget_limit_remaining">%1$s left</string>
     <string name="budget_limit_over_by">%1$s over</string>
     <string name="budget_limit_none">No limit</string>
     <string name="budget_limit_label">Monthly limit (optional)</string>
     <string name="budget_limit_hint">Leave blank for no limit</string>
+    <string name="budget_overall_limit_setting">Monthly budget</string>
+    <string name="budget_overall_limit_label">Overall monthly budget</string>
     <string name="budget_limit_summary">%1$s / month</string>
     <string name="budget_add_subscription">Add New Subscription</string>
     <string name="budget_new_subscription">New Subscription</string>
     <string name="budget_edit_subscription">Edit Subscription</string>
+    <string name="budget_subscription_paused">Paused</string>
+    <string name="budget_subscription_pause">Pause subscription</string>
+    <string name="budget_subscription_resume">Resume subscription</string>
     <string name="budget_renews_prefix">Renews: %1$s</string>
     <string name="budget_next_renewal">Next Renewal: %1$s</string>
     <string name="budget_breakdown_title">Breakdown for %1$s</string>
@@ -100,6 +106,9 @@
          its own untranslated literal; see the comment there. -->
     <string name="budget_category_subscriptions">Subscriptions</string>
     <string name="budget_pending_category">Pending: %1$s</string>
+    <string name="budget_uncategorized">Uncategorized</string>
+    <string name="budget_subscription_item_title">[Subscription] %1$s</string>
+    <string name="budget_pending_legend">Pending</string>
     <string name="label_title">Title</string>
     <string name="label_amount">Amount</string>
     <string name="label_name">Name</string>
@@ -123,6 +132,9 @@
     <string name="study_choose_subject">Choose subject</string>
     <string name="study_new_subject_hint">New subject</string>
     <string name="study_add_subject">Add</string>
+    <string name="study_log_past_session">Log past session</string>
+    <string name="study_hours_label">Hours</string>
+    <string name="study_minutes_label">Minutes</string>
     <string name="cd_choose_subject">Choose study subject</string>
 
     <!-- Screen time -->
@@ -166,6 +178,14 @@
     <string name="reminders_edit_title">Edit Reminder</string>
     <string name="reminders_set_all_day">Set as All Day</string>
     <string name="reminders_all_day">All Day</string>
+    <string name="reminders_priority_label">PRIORITY</string>
+    <string name="reminders_priority_low">Low</string>
+    <string name="reminders_priority_normal">Normal</string>
+    <string name="reminders_priority_high">High</string>
+    <string name="reminders_search_hint">Search reminders</string>
+    <string name="reminders_search_no_results">No reminders match \"%1$s\"</string>
+    <string name="budget_search_hint">Search transactions</string>
+    <string name="budget_search_no_results">No transactions match \"%1$s\"</string>
     <string name="reminders_recurrence_prefix">Recurrence: %1$s</string>
     <string name="reminders_recurrence_none">None</string>
     <string name="reminders_remove_recurrence">Remove Recurrence</string>
@@ -182,6 +202,14 @@
     <string name="recurrence_repeat_on">Repeat on:</string>
     <string name="recurrence_ends">Ends</string>
     <string name="recurrence_after_occurrences">After Occurrences</string>
+    <string name="recurrence_freq_daily">Daily</string>
+    <string name="recurrence_freq_weekly">Weekly</string>
+    <string name="recurrence_freq_monthly">Monthly</string>
+    <string name="recurrence_freq_yearly">Yearly</string>
+    <string name="recurrence_freq_custom">Custom</string>
+    <string name="recurrence_end_never">Never</string>
+    <string name="recurrence_end_until_date">On a date</string>
+    <string name="recurrence_end_after_occurrences">After a number of times</string>
 
     <!-- Notes -->
     <string name="notes_title">Notes</string>
@@ -263,6 +291,7 @@
     <string name="goal_update">Save</string>
     <string name="dashboard_auto_met">Met</string>
     <string name="dashboard_auto_unmet">Not yet</string>
+    <string name="dashboard_window_rolling">Last 12 months</string>
     <string name="dashboard_legend_less">Less</string>
     <string name="dashboard_legend_more">More</string>
     <string name="dashboard_add_goal">Add goal</string>
@@ -292,4 +321,24 @@
     <string name="goal_rule_spend_over">Spend over %1$s</string>
     <string name="goal_rule_subject_suffix"> · %1$s</string>
     <string name="cd_dashboard_day">%1$s: %2$s</string>
+    <string name="cd_dashboard_day_today">Today, %1$s</string>
+    <string name="cd_dashboard_day_untracked">no goals tracked</string>
+    <string name="cd_dashboard_day_percent">%1$d percent of goals completed</string>
+    <string name="cd_dashboard_day_action">View this day\'s goals</string>
+    <string name="cd_theme_swatch">%1$s theme</string>
+    <string name="cd_color_swatch">%1$s</string>
+    <string name="theme_name_emerald">Emerald</string>
+    <string name="theme_name_ocean">Ocean</string>
+    <string name="theme_name_magma">Magma</string>
+    <string name="theme_name_royal">Royal</string>
+    <string name="color_name_red">Red</string>
+    <string name="color_name_orange">Orange</string>
+    <string name="color_name_yellow">Yellow</string>
+    <string name="color_name_green">Green</string>
+    <string name="color_name_teal">Teal</string>
+    <string name="color_name_blue">Blue</string>
+    <string name="color_name_purple">Purple</string>
+    <string name="color_name_pink">Pink</string>
+    <string name="color_name_grey">Grey</string>
+    <string name="color_name_other">Colour</string>
 </resources>

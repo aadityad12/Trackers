@@ -114,8 +114,16 @@ fun BudgetListItemHeader(item: BudgetItem, category: Category?, isPending: Boole
                 Box(modifier = Modifier.size(12.dp).background(if (isPending) color.copy(alpha = 0.4f) else color, CircleShape))
                 Spacer(modifier = Modifier.width(8.dp))
             }
+            // Auto-created subscription items get their "[Subscription]" label here rather than
+            // baked into the stored title; rows written by older builds still carry the old
+            // English prefix, which budgetItemBaseTitle() strips (Issue #119).
+            val baseTitle = budgetItemBaseTitle(item.title)
             Text(
-                text = item.title, 
+                text = if (isSubscriptionItem(item) && !isPending) {
+                    stringResource(R.string.budget_subscription_item_title, baseTitle)
+                } else {
+                    baseTitle
+                },
                 style = MaterialTheme.typography.titleMedium
             )
         }
