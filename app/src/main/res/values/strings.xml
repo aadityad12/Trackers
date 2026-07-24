@@ -137,6 +137,11 @@
     <string name="study_ready">READY</string>
     <string name="study_pause_session">PAUSE SESSION</string>
     <string name="study_start_studying">START STUDYING</string>
+    <string name="study_goal_setting">Daily goal</string>
+    <string name="study_goal_desc">A minutes-per-day study target. Set 0 to turn it off.</string>
+    <string name="study_goal_minutes_label">Minutes per day</string>
+    <string name="study_goal_progress">%1$d / %2$d min</string>
+    <string name="study_streak">%1$d-day streak</string>
     <string name="study_no_subject">No subject</string>
     <string name="study_subject_label">SUBJECT</string>
     <string name="study_choose_subject">Choose subject</string>
