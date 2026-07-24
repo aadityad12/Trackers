@@ -17,4 +17,8 @@ interface StudySessionDao {
 
     @Query("SELECT * FROM study_sessions")
     suspend fun getAllSessionsOneShot(): List<StudySession>
+
+    /** Wipes the table — used by the full-dataset restore (Issue #121). */
+    @Query("DELETE FROM study_sessions")
+    suspend fun clearAll()
 }

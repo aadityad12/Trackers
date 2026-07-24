@@ -24,6 +24,16 @@
     <string name="menu_appearance">Appearance</string>
     <string name="menu_color_accent">Color Accent</string>
     <string name="menu_dark_mode">Dark Mode</string>
+    <string name="backup_section">Backup</string>
+    <string name="backup_export">Back up</string>
+    <string name="backup_import">Restore</string>
+    <string name="backup_export_done">Backup saved.</string>
+    <string name="backup_restore_done">Data restored.</string>
+    <string name="backup_failed">Couldn\'t access that file.</string>
+    <string name="backup_invalid">That file isn\'t a valid backup.</string>
+    <string name="backup_restore_confirm_title">Restore backup?</string>
+    <string name="backup_restore_confirm_text">This replaces all current data on this device with the backup\'s contents. This can\'t be undone.</string>
+    <string name="backup_restore_action">Replace</string>
     <string name="menu_currency">Currency</string>
     <string name="menu_currency_label">Display currency</string>
     <!-- Currency picker row, e.g. "USD ($)". Both placeholders are ISO 4217 data from the platform. -->

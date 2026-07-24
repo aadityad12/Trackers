@@ -22,4 +22,8 @@ interface SubscriptionDao {
 
     @Query("SELECT * FROM subscriptions WHERE cloudId = :cloudId LIMIT 1")
     suspend fun getByCloudId(cloudId: String): Subscription?
+
+    /** Wipes the table — used by the full-dataset restore (Issue #121). */
+    @Query("DELETE FROM subscriptions")
+    suspend fun clearAll()
 }

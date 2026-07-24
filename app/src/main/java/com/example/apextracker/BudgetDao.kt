@@ -30,4 +30,8 @@ interface BudgetDao {
 
     @Query("SELECT * FROM budget_items")
     suspend fun getAllItemsOneShot(): List<BudgetItem>
+
+    /** Wipes the table — used by the full-dataset restore (Issue #121). */
+    @Query("DELETE FROM budget_items")
+    suspend fun clearAll()
 }

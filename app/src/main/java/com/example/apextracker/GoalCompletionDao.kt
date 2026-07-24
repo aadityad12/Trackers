@@ -28,4 +28,8 @@ interface GoalCompletionDao {
 
     @Query("SELECT * FROM goal_completions")
     suspend fun getAllCompletionsOneShot(): List<GoalCompletion>
+
+    /** Wipes the table — used by the full-dataset restore (Issue #121). */
+    @Query("DELETE FROM goal_completions")
+    suspend fun clearAll()
 }

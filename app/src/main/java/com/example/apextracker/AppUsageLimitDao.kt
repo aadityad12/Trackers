@@ -22,4 +22,8 @@ interface AppUsageLimitDao {
 
     @Query("UPDATE app_usage_limits SET lastNotifiedDate = :date WHERE packageName = :packageName")
     suspend fun markNotified(packageName: String, date: String)
+
+    /** Wipes the table — used by the full-dataset restore (Issue #121). */
+    @Query("DELETE FROM app_usage_limits")
+    suspend fun clearAll()
 }

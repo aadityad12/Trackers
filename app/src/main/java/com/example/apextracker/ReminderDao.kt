@@ -51,4 +51,8 @@ interface ReminderDao {
 
     @Query("SELECT * FROM reminders WHERE id IN (:ids)")
     suspend fun getRemindersByIds(ids: List<Long>): List<Reminder>
+
+    /** Wipes the table — used by the full-dataset restore (Issue #121). */
+    @Query("DELETE FROM reminders")
+    suspend fun clearAll()
 }
