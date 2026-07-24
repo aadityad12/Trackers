@@ -348,6 +348,12 @@
     <string name="goal_rule_spend_under">Spend under %1$s</string>
     <string name="goal_rule_spend_over">Spend over %1$s</string>
     <string name="goal_rule_subject_suffix"> · %1$s</string>
+    <string name="widget_streak_day">day perfect streak</string>
+    <string name="widget_streak_days">day perfect streak</string>
+    <string name="widget_streak_desc">Perfect-day goal streak</string>
+    <string name="widget_goals_title">TODAY\'S GOALS</string>
+    <string name="widget_goals_empty">No goals yet</string>
+    <string name="widget_goals_desc">Today\'s goals checklist</string>
     <string name="cd_dashboard_day">%1$s: %2$s</string>
     <string name="cd_dashboard_day_today">Today, %1$s</string>
     <string name="cd_dashboard_day_untracked">no goals tracked</string>
