@@ -1,5 +1,18 @@
 package com.example.apextracker
 
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.window.Dialog
+import coil.compose.AsyncImage
+import kotlinx.coroutines.Dispatchers
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -57,11 +70,11 @@ fun NoteView(onBackToMenu: () -> Unit, viewModel: NoteViewModel = viewModel()) {
                 viewModel.togglePin(noteToEdit!!)
                 noteToEdit = noteToEdit!!.copy(isPinned = !noteToEdit!!.isPinned)
             },
-            onSave = { title, content ->
+            onSave = { title, content, attachments ->
                 if (noteToEdit!!.id == 0L) {
-                    viewModel.addNote(title, content)
+                    viewModel.addNote(title, content, attachments)
                 } else {
-                    viewModel.updateNote(noteToEdit!!.copy(title = title, content = content))
+                    viewModel.updateNote(noteToEdit!!.copy(title = title, content = content, attachments = attachments))
                 }
                 noteToEdit = null
             }
@@ -199,24 +212,59 @@ fun NoteCard(note: Note, onClick: () -> Unit, onDelete: () -> Unit, onTogglePin:
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = stringResource(R.string.notes_modified_prefix, note.modifiedAt.format(DateTimeFormatter.ofPattern("MMM dd, HH:mm"))),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.notes_modified_prefix, note.modifiedAt.format(DateTimeFormatter.ofPattern("MMM dd, HH:mm"))),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                // Image-attachment indicator (Issue #127).
+                val attachmentCount = attachmentList(note.attachments).size
+                if (attachmentCount > 0) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        Icons.Default.Image,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.outline
+                    )
+                    Text(
+                        text = attachmentCount.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.padding(start = 2.dp)
+                    )
+                }
+            }
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NoteEditor(note: Note, onDismiss: () -> Unit, onTogglePin: () -> Unit, onSave: (String, String) -> Unit) {
+fun NoteEditor(note: Note, onDismiss: () -> Unit, onTogglePin: () -> Unit, onSave: (String, String, String) -> Unit) {
     var title by remember { mutableStateOf(note.title) }
     var contentValue by remember {
         mutableStateOf(TextFieldValue(note.content, selection = TextRange(note.content.length)))
     }
     val context = LocalContext.current
     val untitledLabel = stringResource(R.string.notes_untitled)
+
+    // Image attachments (Issue #127). Held as the list of stored filenames; the picker copies the
+    // chosen image into app-private storage before adding it.
+    var attachments by remember { mutableStateOf(attachmentList(note.attachments)) }
+    val scope = rememberCoroutineScope()
+    val pickImage = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch(Dispatchers.IO) {
+                saveNoteAttachment(context, uri)?.let { filename ->
+                    attachments = attachments + filename
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -242,7 +290,7 @@ fun NoteEditor(note: Note, onDismiss: () -> Unit, onTogglePin: () -> Unit, onSav
                             )
                         }
                     }
-                    TextButton(onClick = { onSave(title, contentValue.text) }) {
+                    TextButton(onClick = { onSave(title, contentValue.text, joinAttachments(attachments)) }) {
                         Text(stringResource(R.string.action_save), fontWeight = FontWeight.Bold)
                     }
                 }
@@ -279,11 +327,26 @@ fun NoteEditor(note: Note, onDismiss: () -> Unit, onTogglePin: () -> Unit, onSav
                 )
             )
             
+            if (attachments.isNotEmpty()) {
+                NoteAttachmentStrip(
+                    filenames = attachments,
+                    onRemove = { filename ->
+                        attachments = attachments.filterNot { it == filename }
+                        // The row isn't committed until Save, but the file copy already happened, so
+                        // delete it now — a re-add would just copy a fresh one.
+                        deleteNoteAttachment(context, filename)
+                    }
+                )
+            }
+
             // Helper bar for lists
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                InputToolButton(icon = Icons.Default.Image, label = stringResource(R.string.notes_tool_attach)) {
+                    pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }
                 InputToolButton(icon = Icons.AutoMirrored.Filled.List, label = stringResource(R.string.notes_tool_bullet)) {
                     contentValue = modifyCurrentLine(contentValue) { line ->
                         val match = bulletRegex.find(line)
@@ -524,4 +587,59 @@ fun NoteSettingsDialog(viewModel: NoteViewModel, onDismiss: () -> Unit) {
             }
         }
     )
+}
+
+/** Horizontal thumbnail strip of a note's image attachments, each removable and tap-to-view. */
+@Composable
+fun NoteAttachmentStrip(filenames: List<String>, onRemove: (String) -> Unit) {
+    val context = LocalContext.current
+    var viewing by remember { mutableStateOf<String?>(null) }
+
+    LazyRow(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(filenames, key = { it }) { filename ->
+            Box {
+                AsyncImage(
+                    model = noteAttachmentFile(context, filename),
+                    contentDescription = stringResource(R.string.cd_note_attachment),
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(88.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { viewing = filename }
+                )
+                // Remove badge in the corner.
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
+                        .clickable { onRemove(filename) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = stringResource(R.string.cd_remove_attachment),
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
+    }
+
+    viewing?.let { filename ->
+        Dialog(onDismissRequest = { viewing = null }) {
+            AsyncImage(
+                model = noteAttachmentFile(context, filename),
+                contentDescription = stringResource(R.string.cd_note_attachment),
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+            )
+        }
+    }
 }

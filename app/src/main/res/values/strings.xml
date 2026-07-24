@@ -226,6 +226,9 @@
     <string name="notes_empty">No notes yet</string>
     <string name="notes_placeholder_title">Title</string>
     <string name="notes_placeholder_content">Start typing...</string>
+    <string name="notes_tool_attach">Image</string>
+    <string name="cd_note_attachment">Note attachment</string>
+    <string name="cd_remove_attachment">Remove attachment</string>
     <string name="notes_search_hint">Search notes</string>
     <string name="notes_search_no_results">No notes match \"%1$s\"</string>
     <string name="cd_search">Search</string>
