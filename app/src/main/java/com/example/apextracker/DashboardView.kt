@@ -3,6 +3,7 @@ package com.example.apextracker
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -240,6 +241,21 @@ private fun HeatmapSection(
         (0L..6L).map { DayOfWeek.SUNDAY.plus(it).getDisplayName(TextStyle.NARROW, locale) }
     }
 
+    // A year is ~365 cells. Resolving string resources per cell (and giving each its own ripple)
+    // made the first composition heavy enough to ANR on an emulator, so the templates are hoisted
+    // and formatted per cell, and the cells share one interaction source with no indication.
+    val labels = HeatCellLabels(
+        dayFormat = stringResource(R.string.cd_dashboard_day),
+        todayFormat = stringResource(R.string.cd_dashboard_day_today),
+        untracked = stringResource(R.string.cd_dashboard_day_untracked),
+        percentFormat = stringResource(R.string.cd_dashboard_day_percent),
+        action = stringResource(R.string.cd_dashboard_day_action)
+    )
+    val interactionSource = remember { MutableInteractionSource() }
+    // Resolve the six-step ramp once, not once per cell — ~371 MaterialTheme reads were part of
+    // what made the first composition heavy.
+    val ramp = cellColorRamp()
+
     Column(modifier.fillMaxWidth()) {
         YearSelector(years = years, selectedYear = selectedYear, onSelectYear = onSelectYear)
         Spacer(Modifier.height(8.dp))
@@ -290,7 +306,7 @@ private fun HeatmapSection(
                             }
                         }
                         week.forEach { cell ->
-                            HeatCell(cell, today, Modifier.size(cellSize), onDayClick)
+                            HeatCell(cell, today, labels, ramp, interactionSource, Modifier.size(cellSize), onDayClick)
                         }
                     }
                 }
@@ -326,38 +342,60 @@ private fun YearSelector(years: List<Int>, selectedYear: Int?, onSelectYear: (In
     }
 }
 
+/** Pre-resolved accessibility strings, so a 365-cell grid resolves them once, not once per cell. */
+private data class HeatCellLabels(
+    val dayFormat: String,
+    val todayFormat: String,
+    val untracked: String,
+    val percentFormat: String,
+    val action: String
+)
+
 @Composable
-private fun HeatCell(cell: DayCell?, today: LocalDate, modifier: Modifier, onDayClick: (LocalDate) -> Unit) {
-    Box(
-        modifier = modifier.padding(1.dp)
-    ) {
-        if (cell != null) {
-            val isToday = cell.date == today
-            // The cell has no text content of its own, so TalkBack needs the date and completion
-            // state spelled out — tapping a cell is the only way into the day sheet (Issue #106).
-            val dateText = cell.date.format(HEATCELL_DATE_FORMAT)
-            val label = stringResource(
-                R.string.cd_dashboard_day,
-                if (isToday) stringResource(R.string.cd_dashboard_day_today, dateText) else dateText,
-                cell.fraction?.let {
-                    stringResource(R.string.cd_dashboard_day_percent, (it * 100).roundToInt())
-                } ?: stringResource(R.string.cd_dashboard_day_untracked)
-            )
-            val actionLabel = stringResource(R.string.cd_dashboard_day_action)
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(cellColor(cell.bucket))
-                    .then(
-                        if (isToday) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp))
-                        else Modifier
-                    )
-                    .clickable(onClickLabel = actionLabel) { onDayClick(cell.date) }
-                    .semantics { contentDescription = label }
-            )
-        }
+private fun HeatCell(
+    cell: DayCell?,
+    today: LocalDate,
+    labels: HeatCellLabels,
+    ramp: List<Color>,
+    interactionSource: MutableInteractionSource,
+    modifier: Modifier,
+    onDayClick: (LocalDate) -> Unit
+) {
+    // Empty padding cell: a bare spacer, no decoration/semantics — the majority of a full-year
+    // grid, so keeping it to one trivial node matters for first-composition cost.
+    if (cell == null) {
+        Box(modifier)
+        return
     }
+    val isToday = cell.date == today
+    // The cell has no text content of its own, so TalkBack needs the date and completion state
+    // spelled out — tapping a cell is the only way into the day sheet (Issue #106).
+    val label = remember(cell, isToday, labels) {
+        val dateText = cell.date.format(HEATCELL_DATE_FORMAT)
+        val state = cell.fraction?.let { String.format(labels.percentFormat, (it * 100).roundToInt()) }
+            ?: labels.untracked
+        String.format(labels.dayFormat, if (isToday) String.format(labels.todayFormat, dateText) else dateText, state)
+    }
+    val borderColor = MaterialTheme.colorScheme.primary
+    // One Box per cell (padding folded in via a smaller inset), not two — halves the grid's node
+    // count. Ramp colours are pre-resolved by the caller.
+    Box(
+        modifier
+            .padding(1.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(rampColor(ramp, cell.bucket))
+            .then(
+                if (isToday) Modifier.border(1.5.dp, borderColor, RoundedCornerShape(4.dp))
+                else Modifier
+            )
+            // No indication: a ripple instance per cell is part of what made this grid expensive.
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClickLabel = labels.action
+            ) { onDayClick(cell.date) }
+            .semantics { contentDescription = label }
+    )
 }
 
 @Composable
@@ -365,13 +403,14 @@ private fun HeatmapLegend() {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
         Text(stringResource(R.string.dashboard_legend_less), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
         Spacer(Modifier.width(6.dp))
+        val ramp = cellColorRamp()
         (0..4).forEach { bucket ->
             Box(
                 Modifier
                     .padding(horizontal = 2.dp)
                     .size(12.dp)
                     .clip(RoundedCornerShape(3.dp))
-                    .background(cellColor(bucket))
+                    .background(rampColor(ramp, bucket))
             )
         }
         Spacer(Modifier.width(6.dp))
@@ -406,16 +445,22 @@ private fun DayDetailSheet(
     }
 }
 
-/** Theme-accent intensity ramp: empty/no-goals is neutral, then primary deepens toward a perfect day. */
+/**
+ * Theme-accent intensity ramp, indexed by bucket+1 (so index 0 = the -1 "no goals" neutral, then
+ * 0..4 deepening toward a perfect day). Resolved once per heatmap render — see [rampColor] — rather
+ * than reading MaterialTheme inside every one of ~371 cells.
+ */
 @Composable
-private fun cellColor(bucket: Int): Color {
+private fun cellColorRamp(): List<Color> {
     val cs = MaterialTheme.colorScheme
-    return when (bucket) {
-        -1 -> cs.surfaceVariant.copy(alpha = 0.30f) // no active goals that day
-        0 -> cs.onSurface.copy(alpha = 0.10f)       // tracked, none completed
-        1 -> cs.primary.copy(alpha = 0.35f)
-        2 -> cs.primary.copy(alpha = 0.55f)
-        3 -> cs.primary.copy(alpha = 0.78f)
-        else -> cs.primary                           // 4 = perfect day
-    }
+    return listOf(
+        cs.surfaceVariant.copy(alpha = 0.30f), // -1: no active goals that day
+        cs.onSurface.copy(alpha = 0.10f),      // 0: tracked, none completed
+        cs.primary.copy(alpha = 0.35f),        // 1
+        cs.primary.copy(alpha = 0.55f),        // 2
+        cs.primary.copy(alpha = 0.78f),        // 3
+        cs.primary                             // 4: perfect day
+    )
 }
+
+private fun rampColor(ramp: List<Color>, bucket: Int): Color = ramp[(bucket + 1).coerceIn(0, 5)]
