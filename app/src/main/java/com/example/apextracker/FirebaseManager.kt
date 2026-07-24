@@ -180,6 +180,8 @@ internal fun parseSubscriptionDoc(data: Map<String, Any?>): Subscription = Subsc
     renewalDate = LocalDate.parse(data.requireString("renewalDate")),
     notes = data.optString("notes"),
     lastAddedDate = data.optString("lastAddedDate")?.let { LocalDate.parse(it) },
+    // Absent on pre-#79 docs, which are by definition active.
+    isPaused = data["isPaused"] as? Boolean ?: false,
     cloudId = data.requireCloudId(),
     modifiedAt = data.optLong("modifiedAt")
 )
@@ -412,6 +414,7 @@ class FirebaseManager(private val context: Context) {
                     "renewalDate" to subscription.renewalDate.toString(),
                     "notes" to subscription.notes,
                     "lastAddedDate" to subscription.lastAddedDate?.toString(),
+                    "isPaused" to subscription.isPaused,
                     "modifiedAt" to subscription.modifiedAt
                 ),
                 SetOptions.merge()

@@ -65,6 +65,8 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
                 val today = LocalDate.now()
 
                 subscriptions.forEach { subscription ->
+                    // Paused subscriptions generate nothing and don't advance (Issue #79).
+                    if (subscription.isPaused) return@forEach
                     var currentRenewal = subscription.renewalDate
                     var updatedSub = subscription
                     val subscriptionCategoryId = -1L
@@ -239,6 +241,31 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
             )
             subscriptionDao.updateSubscription(updated)
             safeCloudCall(TAG, "update subscription") {
+                firebaseManager.pushSubscription(updated)
+            }
+            checkAndAddSubscriptions()
+        }
+    }
+
+    /**
+     * Pauses or resumes a subscription (Issue #79). Resuming rolls `renewalDate` forward to the
+     * next occurrence on or after today first, so the paused months are skipped rather than
+     * back-filled by [checkAndAddSubscriptions] on the next pass.
+     */
+    fun setSubscriptionPaused(subscription: Subscription, paused: Boolean) {
+        viewModelScope.launch {
+            val rolled = if (!paused) {
+                subscription.copy(renewalDate = nextRenewalOnOrAfter(subscription.renewalDate, LocalDate.now()))
+            } else {
+                subscription
+            }
+            val updated = rolled.copy(
+                isPaused = paused,
+                cloudId = rolled.cloudId.ifEmpty { UUID.randomUUID().toString() },
+                modifiedAt = System.currentTimeMillis()
+            )
+            subscriptionDao.updateSubscription(updated)
+            safeCloudCall(TAG, "pause subscription") {
                 firebaseManager.pushSubscription(updated)
             }
             checkAndAddSubscriptions()

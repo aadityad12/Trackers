@@ -254,7 +254,8 @@ fun BudgetOverview(
     
     val pendingSubs = if (monthToDisplay == YearMonth.now()) {
         subscriptions.filter { sub ->
-            YearMonth.from(sub.renewalDate) == monthToDisplay && sub.renewalDate.isAfter(LocalDate.now()) &&
+            !sub.isPaused &&
+                YearMonth.from(sub.renewalDate) == monthToDisplay && sub.renewalDate.isAfter(LocalDate.now()) &&
                 matchesQuery(searchQuery, sub.name, sub.notes)
         }
     } else emptyList()

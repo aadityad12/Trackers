@@ -14,6 +14,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -380,7 +382,11 @@ fun SubscriptionsView(viewModel: BudgetViewModel) {
         Spacer(modifier = Modifier.height(8.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(subscriptions) { sub ->
-                SubscriptionItem(sub) { subToEdit = sub }
+                SubscriptionItem(
+                    subscription = sub,
+                    onTogglePause = { viewModel.setSubscriptionPaused(sub, !sub.isPaused) },
+                    onClick = { subToEdit = sub }
+                )
             }
         }
     }
@@ -415,7 +421,7 @@ fun SubscriptionsView(viewModel: BudgetViewModel) {
 }
 
 @Composable
-fun SubscriptionItem(subscription: Subscription, onClick: () -> Unit) {
+fun SubscriptionItem(subscription: Subscription, onTogglePause: () -> Unit, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = MaterialTheme.shapes.small,
@@ -427,10 +433,37 @@ fun SubscriptionItem(subscription: Subscription, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(subscription.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                Text(stringResource(R.string.budget_renews_prefix, subscription.renewalDate.format(DateTimeFormatter.ofPattern("MMM dd"))), style = MaterialTheme.typography.bodySmall)
+                Text(
+                    subscription.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = if (subscription.isPaused) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = if (subscription.isPaused) {
+                        stringResource(R.string.budget_subscription_paused)
+                    } else {
+                        stringResource(R.string.budget_renews_prefix, subscription.renewalDate.format(DateTimeFormatter.ofPattern("MMM dd")))
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (subscription.isPaused) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-            Text(formatCurrency(subscription.amount, LocalCurrencyCode.current), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+            Text(
+                formatCurrency(subscription.amount, LocalCurrencyCode.current),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (subscription.isPaused) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary
+            )
+            IconButton(onClick = onTogglePause) {
+                Icon(
+                    imageVector = if (subscription.isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                    contentDescription = stringResource(
+                        if (subscription.isPaused) R.string.budget_subscription_resume
+                        else R.string.budget_subscription_pause
+                    ),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }

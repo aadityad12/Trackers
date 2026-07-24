@@ -86,6 +86,9 @@
     <string name="budget_add_subscription">Add New Subscription</string>
     <string name="budget_new_subscription">New Subscription</string>
     <string name="budget_edit_subscription">Edit Subscription</string>
+    <string name="budget_subscription_paused">Paused</string>
+    <string name="budget_subscription_pause">Pause subscription</string>
+    <string name="budget_subscription_resume">Resume subscription</string>
     <string name="budget_renews_prefix">Renews: %1$s</string>
     <string name="budget_next_renewal">Next Renewal: %1$s</string>
     <string name="budget_breakdown_title">Breakdown for %1$s</string>
