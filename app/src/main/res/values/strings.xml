@@ -175,6 +175,10 @@
     <string name="reminders_edit_title">Edit Reminder</string>
     <string name="reminders_set_all_day">Set as All Day</string>
     <string name="reminders_all_day">All Day</string>
+    <string name="reminders_priority_label">PRIORITY</string>
+    <string name="reminders_priority_low">Low</string>
+    <string name="reminders_priority_normal">Normal</string>
+    <string name="reminders_priority_high">High</string>
     <string name="reminders_search_hint">Search reminders</string>
     <string name="reminders_search_no_results">No reminders match \"%1$s\"</string>
     <string name="budget_search_hint">Search transactions</string>

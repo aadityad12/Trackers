@@ -50,7 +50,8 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
         date: LocalDate,
         time: LocalTime?,
         description: String?,
-        recurrence: Recurrence? = null
+        recurrence: Recurrence? = null,
+        priority: ReminderPriority = ReminderPriority.NORMAL
     ) {
         viewModelScope.launch {
             val reminder = Reminder(
@@ -59,6 +60,7 @@ class ReminderViewModel(application: Application) : AndroidViewModel(application
                 time = time,
                 description = description,
                 recurrence = recurrence,
+                priority = priority.name,
                 cloudId = UUID.randomUUID().toString(),
                 modifiedAt = System.currentTimeMillis()
             )

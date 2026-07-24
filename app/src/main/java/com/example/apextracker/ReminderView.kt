@@ -315,8 +315,8 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
             ReminderEditDialog(
                 title = stringResource(R.string.reminders_new_title),
                 onDismiss = { showAddDialog = false },
-                onConfirm = { name, date, time, description, recurrence ->
-                    viewModel.addReminder(name, date, time, description, recurrence)
+                onConfirm = { name, date, time, description, recurrence, priority ->
+                    viewModel.addReminder(name, date, time, description, recurrence, priority)
                     showAddDialog = false
                 }
             )
@@ -330,14 +330,16 @@ fun ReminderView(onBackToMenu: () -> Unit, viewModel: ReminderViewModel = viewMo
                 initialDate = reminderToEdit!!.date,
                 initialTime = reminderToEdit!!.time,
                 initialRecurrence = reminderToEdit!!.recurrence,
+                initialPriority = parseReminderPriority(reminderToEdit!!.priority),
                 onDismiss = { reminderToEdit = null },
-                onConfirm = { name, date, time, description, recurrence ->
+                onConfirm = { name, date, time, description, recurrence, priority ->
                     viewModel.updateReminder(reminderToEdit!!.copy(
                         name = name,
                         date = date,
                         time = time,
                         description = description,
-                        recurrence = recurrence
+                        recurrence = recurrence,
+                        priority = priority.name
                     ))
                     reminderToEdit = null
                 },
@@ -407,10 +409,12 @@ fun ReminderEditDialog(
     initialDate: LocalDate = LocalDate.now(),
     initialTime: LocalTime? = null,
     initialRecurrence: Recurrence? = null,
+    initialPriority: ReminderPriority = ReminderPriority.NORMAL,
     onDismiss: () -> Unit,
-    onConfirm: (String, LocalDate, LocalTime?, String, Recurrence?) -> Unit,
+    onConfirm: (String, LocalDate, LocalTime?, String, Recurrence?, ReminderPriority) -> Unit,
     onDelete: (() -> Unit)? = null
 ) {
+    var priority by remember { mutableStateOf(initialPriority) }
     var name by remember { mutableStateOf(initialName) }
     var description by remember { mutableStateOf(initialDescription) }
     var date by remember { mutableStateOf(initialDate) }
@@ -464,6 +468,19 @@ fun ReminderEditDialog(
                     }
                 }
                 
+                // Importance (Issue #126): orders the list within a day and sets the
+                // notification's priority.
+                Text(stringResource(R.string.reminders_priority_label), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ReminderPriority.entries.forEach { option ->
+                        FilterChip(
+                            selected = priority == option,
+                            onClick = { priority = option },
+                            label = { Text(stringResource(reminderPriorityLabelRes(option))) }
+                        )
+                    }
+                }
+
                 if (time != null) {
                     TextButton(onClick = { time = null }) {
                         Text(stringResource(R.string.reminders_set_all_day))
@@ -491,7 +508,7 @@ fun ReminderEditDialog(
         },
         confirmButton = {
             Button(
-                onClick = { if (name.isNotBlank()) onConfirm(name, date, time, description, recurrence) },
+                onClick = { if (name.isNotBlank()) onConfirm(name, date, time, description, recurrence, priority) },
                 enabled = name.isNotBlank()
             ) {
                 Text(stringResource(R.string.action_save))
@@ -648,6 +665,19 @@ fun ReminderItemModern(
                             tint = MaterialTheme.colorScheme.outline
                         )
                     }
+                    // Only non-default importance is marked — NORMAL is the vast majority and a
+                    // badge on every row would be noise (Issue #126).
+                    val priority = parseReminderPriority(reminder.priority)
+                    if (priority != ReminderPriority.NORMAL && !reminder.isCompleted) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(reminderPriorityLabelRes(priority)).uppercase(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Black,
+                            color = if (priority == ReminderPriority.HIGH) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outline
+                        )
+                    }
                 }
                 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
@@ -693,4 +723,12 @@ fun ReminderItemModern(
             }
         }
     }
+}
+
+/** Display name for a reminder priority (Issue #126). */
+@androidx.annotation.StringRes
+fun reminderPriorityLabelRes(priority: ReminderPriority): Int = when (priority) {
+    ReminderPriority.LOW -> R.string.reminders_priority_low
+    ReminderPriority.NORMAL -> R.string.reminders_priority_normal
+    ReminderPriority.HIGH -> R.string.reminders_priority_high
 }
