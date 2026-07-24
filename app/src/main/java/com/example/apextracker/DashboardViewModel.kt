@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.util.UUID
+import com.example.apextracker.widget.refreshApexWidgets
 
 /** One rendered heatmap cell. [fraction] is null when no goals were active that day (empty cell). */
 data class DayCell(
@@ -162,6 +163,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                     modifiedAt = System.currentTimeMillis()
                 )
                 completionDao.upsert(completion)
+                refreshApexWidgets(getApplication())
                 safeCloudCall(TAG, "pushGoalCompletion") { firebaseManager.pushGoalCompletion(completion) }
             } finally {
                 togglesInFlight.remove(key)
@@ -192,6 +194,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 modifiedAt = System.currentTimeMillis()
             )
             goalDao.insertGoal(goal)
+            refreshApexWidgets(getApplication())
             safeCloudCall(TAG, "pushGoal") { firebaseManager.pushGoal(goal) }
         }
     }
