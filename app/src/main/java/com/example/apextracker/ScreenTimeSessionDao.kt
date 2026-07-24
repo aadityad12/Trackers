@@ -17,4 +17,8 @@ interface ScreenTimeSessionDao {
 
     @Query("SELECT * FROM screen_time_sessions")
     suspend fun getAllSessionsOneShot(): List<ScreenTimeSession>
+
+    /** Wipes the table — used by the full-dataset restore (Issue #121). */
+    @Query("DELETE FROM screen_time_sessions")
+    suspend fun clearAll()
 }

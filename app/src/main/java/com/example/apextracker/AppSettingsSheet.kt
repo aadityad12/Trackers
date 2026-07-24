@@ -1,5 +1,12 @@
 package com.example.apextracker
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.LocalDateTime
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -64,6 +71,9 @@ fun AppSettingsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // Scrollable so every section (now incl. Backup, Issue #121) is reachable rather
+                // than falling below the sheet's fold.
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp)
         ) {
@@ -246,6 +256,16 @@ fun AppSettingsSheet(
 
             CurrencyDropdown(currencyCode = currencyCode, onCurrencySelected = onCurrencyChange)
 
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                stringResource(R.string.backup_section),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            BackupRestoreControls()
+
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
@@ -258,4 +278,87 @@ private fun themeNameRes(theme: ApexTheme): Int = when (theme) {
     ApexTheme.OCEAN -> R.string.theme_name_ocean
     ApexTheme.MAGMA -> R.string.theme_name_magma
     ApexTheme.ROYAL -> R.string.theme_name_royal
+}
+
+/**
+ * Back up / restore the whole local dataset to a JSON file via SAF (Issue #121). Export uses
+ * ACTION_CREATE_DOCUMENT (user picks where to save), restore uses ACTION_OPEN_DOCUMENT. Restore
+ * replaces all local data, so it's gated behind a confirmation. Works fully offline; no
+ * permissions needed.
+ */
+@Composable
+private fun BackupRestoreControls() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val db = remember { AppDatabase.getDatabase(context) }
+    var pendingRestoreJson by remember { mutableStateOf<String?>(null) }
+    var status by remember { mutableStateOf<String?>(null) }
+
+    // Pre-resolved here (not via context.getString in the launcher callbacks): stringResource is
+    // composable-only, and reading resources off LocalContext in a Composable is a lint error.
+    val exportDoneMsg = stringResource(R.string.backup_export_done)
+    val restoreDoneMsg = stringResource(R.string.backup_restore_done)
+    val failedMsg = stringResource(R.string.backup_failed)
+    val invalidMsg = stringResource(R.string.backup_invalid)
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val json = buildBackupJson(exportBackup(db, LocalDateTime.now().toString()))
+            val ok = writeBackupToUri(context, uri, json)
+            status = if (ok) exportDoneMsg else failedMsg
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val json = readBackupFromUri(context, uri)
+            if (json == null) { status = failedMsg; return@launch }
+            pendingRestoreJson = json
+        }
+    }
+
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        OutlinedButton(
+            onClick = { exportLauncher.launch("apextracker-backup-${LocalDate.now()}.json") },
+            modifier = Modifier.weight(1f)
+        ) { Text(stringResource(R.string.backup_export)) }
+        OutlinedButton(
+            onClick = { importLauncher.launch(arrayOf("application/json")) },
+            modifier = Modifier.weight(1f)
+        ) { Text(stringResource(R.string.backup_import)) }
+    }
+    status?.let {
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+    }
+
+    pendingRestoreJson?.let { json ->
+        AlertDialog(
+            onDismissRequest = { pendingRestoreJson = null },
+            title = { Text(stringResource(R.string.backup_restore_confirm_title)) },
+            text = { Text(stringResource(R.string.backup_restore_confirm_text)) },
+            confirmButton = {
+                Button(onClick = {
+                    pendingRestoreJson = null
+                    scope.launch {
+                        val data = try { parseBackupJson(json) } catch (e: Exception) { null }
+                        if (data == null) {
+                            status = invalidMsg
+                        } else {
+                            restoreBackup(db, data)
+                            status = restoreDoneMsg
+                        }
+                    }
+                }) { Text(stringResource(R.string.backup_restore_action)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRestoreJson = null }) { Text(stringResource(R.string.action_cancel)) }
+            }
+        )
+    }
 }

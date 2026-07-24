@@ -32,4 +32,8 @@ interface GoalDao {
 
     @Query("SELECT * FROM goals")
     suspend fun getAllGoalsOneShot(): List<Goal>
+
+    /** Wipes the table — used by the full-dataset restore (Issue #121). */
+    @Query("DELETE FROM goals")
+    suspend fun clearAll()
 }

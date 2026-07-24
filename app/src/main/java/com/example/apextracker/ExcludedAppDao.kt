@@ -16,4 +16,8 @@ interface ExcludedAppDao {
 
     @Query("SELECT * FROM excluded_apps")
     suspend fun getAllExcludedAppsOneShot(): List<ExcludedApp>
+
+    /** Wipes the table — used by the full-dataset restore (Issue #121). */
+    @Query("DELETE FROM excluded_apps")
+    suspend fun clearAll()
 }

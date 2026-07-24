@@ -30,4 +30,8 @@ interface CategoryDao {
 
     @Query("SELECT * FROM categories")
     suspend fun getAllCategoriesOneShot(): List<Category>
+
+    /** Wipes the table — used by the full-dataset restore (Issue #121). */
+    @Query("DELETE FROM categories")
+    suspend fun clearAll()
 }

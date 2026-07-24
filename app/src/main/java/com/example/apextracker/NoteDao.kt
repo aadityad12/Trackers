@@ -35,4 +35,8 @@ interface NoteDao {
 
     @Query("SELECT * FROM notes WHERE isDeleted = 1 AND deletedAt < :threshold")
     suspend fun getDeletedNotesBefore(threshold: LocalDateTime): List<Note>
+
+    /** Wipes the table — used by the full-dataset restore (Issue #121). */
+    @Query("DELETE FROM notes")
+    suspend fun clearAll()
 }
