@@ -9,6 +9,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -25,7 +29,32 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
     private val powerManager = application.getSystemService(Context.POWER_SERVICE) as PowerManager
     private val firebaseManager = FirebaseManager(application)
     private val timerStateStore = StudyTimerStateStore(application)
+    private val studySettings = StudySettings(application)
     private var lastCloudPushMillis = 0L
+
+    // Daily study goal in minutes (Issue #42); local-only device preference. 0 = off.
+    val dailyGoalMinutes: StateFlow<Int> = studySettings.dailyGoalMinutes
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), StudySettings.DEFAULT_GOAL_MINUTES)
+
+    fun setDailyGoalMinutes(minutes: Int) {
+        viewModelScope.launch { studySettings.setDailyGoalMinutes(minutes) }
+    }
+
+    // Today's grand total across every subject — drives the goal ring/label, whereas timeSeconds is
+    // only the currently-selected subject's total. Computed off the DB flow (not the view) so it
+    // stays stable across recompositions.
+    val todayTotalSeconds: StateFlow<Long> = studySessionDao.getAllSessions()
+        .map { sessions -> dailyTotalSecondsByDate(sessions)[LocalDate.now()] ?: 0L }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+
+    // Consecutive-day goal streak (Issue #42), off the DB + goal flows. In the ViewModel rather than
+    // the composable so it isn't recomputed against an unstable per-recomposition getAllSessions().
+    val studyStreak: StateFlow<Int> = combine(
+        studySessionDao.getAllSessions(),
+        studySettings.dailyGoalMinutes
+    ) { sessions, goalMinutes ->
+        computeStudyStreak(sessions, goalMinutes * 60L, LocalDate.now())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     private val _timeSeconds = MutableStateFlow(0L)
     val timeSeconds: StateFlow<Long> = _timeSeconds.asStateFlow()

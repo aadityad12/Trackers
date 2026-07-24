@@ -1,5 +1,9 @@
 package com.example.apextracker
 
+import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -55,6 +59,9 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
     val isRunning by viewModel.isRunning.collectAsState()
     val currentSubject by viewModel.currentSubject.collectAsState()
     val allSessions by viewModel.getAllSessions().collectAsState(initial = emptyList())
+    val dailyGoalMinutes by viewModel.dailyGoalMinutes.collectAsState()
+    val todayTotalSeconds by viewModel.todayTotalSeconds.collectAsState()
+    val studyStreak by viewModel.studyStreak.collectAsState()
 
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -116,6 +123,15 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
         )
     }
 
+    var showGoalDialog by remember { mutableStateOf(false) }
+    if (showGoalDialog) {
+        StudyGoalDialog(
+            currentMinutes = dailyGoalMinutes,
+            onDismiss = { showGoalDialog = false },
+            onSave = { viewModel.setDailyGoalMinutes(it); showGoalDialog = false }
+        )
+    }
+
     var showSubjectPicker by remember { mutableStateOf(false) }
     if (showSubjectPicker) {
         SubjectPickerDialog(
@@ -143,6 +159,9 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showGoalDialog = true }) {
+                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.study_goal_setting))
+                    }
                     IconButton(onClick = { showResetConfirm = true }) {
                         Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.action_reset))
                     }
@@ -162,17 +181,36 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
         ) {
             Box(
                 modifier = Modifier
-                    .weight(1.2f)
+                    .weight(1.45f)
                     .fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
+                val goalSeconds = dailyGoalMinutes * 60L
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    StudyTimerDisplay(timeSeconds, isRunning)
-                    Spacer(modifier = Modifier.height(20.dp))
-                    SubjectSelectorChip(
-                        subject = currentSubject,
-                        onClick = { showSubjectPicker = true }
+                    StudyTimerDisplay(
+                        seconds = timeSeconds,
+                        isRunning = isRunning,
+                        goalFraction = goalFraction(todayTotalSeconds, goalSeconds),
+                        goalLabel = if (dailyGoalMinutes > 0) {
+                            stringResource(R.string.study_goal_progress, (todayTotalSeconds / 60L).toInt(), dailyGoalMinutes)
+                        } else null
                     )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    // Streak + subject side by side (a Row, not stacked) so the goal ring above has
+                    // room — stacking them overflowed the centred timer box and hid the chips behind
+                    // the history card.
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (dailyGoalMinutes > 0 && studyStreak > 0) {
+                            StudyStreakChip(studyStreak)
+                        }
+                        SubjectSelectorChip(
+                            subject = currentSubject,
+                            onClick = { showSubjectPicker = true }
+                        )
+                    }
                 }
             }
 
@@ -184,6 +222,10 @@ fun StudyTrackerView(onBackToMenu: () -> Unit, viewModel: StudyViewModel = viewM
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                     .padding(24.dp)
             ) {
+                if (dailyGoalMinutes >= 0) {
+                    StudyWeeklyChart(sessions = allSessions, goalMinutes = dailyGoalMinutes)
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -355,7 +397,12 @@ fun SubjectPickerDialog(
 }
 
 @Composable
-fun StudyTimerDisplay(seconds: Long, isRunning: Boolean) {
+fun StudyTimerDisplay(
+    seconds: Long,
+    isRunning: Boolean,
+    goalFraction: Float = 0f,
+    goalLabel: String? = null
+) {
     val infiniteTransition = rememberInfiniteTransition(label = "timer")
     val rotation by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -371,7 +418,7 @@ fun StudyTimerDisplay(seconds: Long, isRunning: Boolean) {
 
     Box(contentAlignment = Alignment.Center) {
         // Decorative Rings
-        Canvas(modifier = Modifier.size(280.dp).rotate(if (isRunning) rotation else 0f)) {
+        Canvas(modifier = Modifier.size(250.dp).rotate(if (isRunning) rotation else 0f)) {
             drawArc(
                 brush = Brush.sweepGradient(
                     colors = listOf(
@@ -388,11 +435,24 @@ fun StudyTimerDisplay(seconds: Long, isRunning: Boolean) {
             )
         }
 
-        Canvas(modifier = Modifier.size(240.dp).rotate(if (isRunning) -rotation * 0.5f else 0f)) {
+        Canvas(modifier = Modifier.size(214.dp).rotate(if (isRunning) -rotation * 0.5f else 0f)) {
             drawCircle(
                 color = primaryColor.copy(alpha = 0.05f),
                 style = Stroke(width = 1.dp.toPx())
             )
+        }
+
+        // Determinate goal-progress arc (Issue #42): a track plus a primary sweep = today's
+        // fraction of the daily goal, starting at 12 o'clock. Non-rotating so it reads as progress.
+        if (goalLabel != null) {
+            val trackColor = primaryColor.copy(alpha = 0.12f)
+            Canvas(modifier = Modifier.size(232.dp)) {
+                val stroke = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round)
+                drawArc(color = trackColor, startAngle = -90f, sweepAngle = 360f, useCenter = false, style = stroke)
+                if (goalFraction > 0f) {
+                    drawArc(color = primaryColor, startAngle = -90f, sweepAngle = 360f * goalFraction, useCenter = false, style = stroke)
+                }
+            }
         }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -411,6 +471,126 @@ fun StudyTimerDisplay(seconds: Long, isRunning: Boolean) {
                 color = MaterialTheme.colorScheme.outline,
                 letterSpacing = 4.sp
             )
+            if (goalLabel != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = goalLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (goalFraction >= 1f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+/** Flame + consecutive-day count for the study goal streak (Issue #42). */
+@Composable
+fun StudyStreakChip(streak: Int) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.LocalFireDepartment,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = stringResource(R.string.study_streak, streak),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+/** Set the daily study goal in minutes; 0 turns the goal/streak UI off (Issue #42). */
+@Composable
+fun StudyGoalDialog(currentMinutes: Int, onDismiss: () -> Unit, onSave: (Int) -> Unit) {
+    var text by remember { mutableStateOf(currentMinutes.toString()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.study_goal_setting)) },
+        text = {
+            Column {
+                Text(stringResource(R.string.study_goal_desc), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it.filter { c -> c.isDigit() }.take(4) },
+                    label = { Text(stringResource(R.string.study_goal_minutes_label)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onSave(text.toIntOrNull() ?: 0) }) { Text(stringResource(R.string.action_save)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } }
+    )
+}
+
+/** 7-day bar chart of study minutes with the daily goal as a dashed line (Issue #42). */
+@Composable
+fun StudyWeeklyChart(sessions: List<StudySession>, goalMinutes: Int) {
+    val today = remember { LocalDate.now() }
+    val bars = remember(sessions) { weeklyStudyMinutes(sessions, 7, today) }
+    val maxMinutes = (bars.maxOfOrNull { it.second } ?: 0).coerceAtLeast(goalMinutes).coerceAtLeast(1)
+    val locale = LocalLocale.current.platformLocale
+
+    val primary = MaterialTheme.colorScheme.primary
+    val muted = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+    val goalColor = MaterialTheme.colorScheme.outline
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(modifier = Modifier.fillMaxWidth().height(120.dp)) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val barCount = bars.size
+                val slot = size.width / barCount
+                val barWidth = slot * 0.5f
+                bars.forEachIndexed { i, (_, minutes) ->
+                    val h = size.height * (minutes.toFloat() / maxMinutes)
+                    val left = i * slot + (slot - barWidth) / 2
+                    drawRoundRect(
+                        color = if (i == barCount - 1) primary else muted,
+                        topLeft = androidx.compose.ui.geometry.Offset(left, size.height - h),
+                        size = androidx.compose.ui.geometry.Size(barWidth, h),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(6.dp.toPx())
+                    )
+                }
+                // Goal line (dashed).
+                if (goalMinutes > 0) {
+                    val y = size.height * (1f - goalMinutes.toFloat() / maxMinutes)
+                    drawLine(
+                        color = goalColor,
+                        start = androidx.compose.ui.geometry.Offset(0f, y),
+                        end = androidx.compose.ui.geometry.Offset(size.width, y),
+                        strokeWidth = 2.dp.toPx(),
+                        pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(12f, 8f))
+                    )
+                }
+            }
+        }
+        Row(modifier = Modifier.fillMaxWidth()) {
+            bars.forEach { (day, _) ->
+                Text(
+                    text = day.dayOfWeek.getDisplayName(java.time.format.TextStyle.NARROW, locale),
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (day == today) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                )
+            }
         }
     }
 }
